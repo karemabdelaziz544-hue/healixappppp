@@ -1,6 +1,6 @@
 // @ts-nocheck
 // analyze-inbody — Supabase Edge Function
-// تستقبل مسار الصورة من Supabase Storage، تجلبها وترسلها لـ Groq (Llama 4 Scout) لتحليلها
+// تستقبل مسار الصورة من Supabase Storage، تجلبها وترسلها لـ Groq (Llama 3.2 90B Vision) لتحليلها
 // هذا الملف يعمل في بيئة Deno على Supabase — أخطاء IDE طبيعية
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -63,7 +63,7 @@ Deno.serve(async (req: Request) => {
 
     const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg';
 
-    // ——— 4. إرسال الصورة لـ Groq Vision (Llama 4 Scout) ———
+    // ——— 4. إرسال الصورة لـ Groq Vision (Llama 3.2 90B Vision) ———
     const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -71,36 +71,32 @@ Deno.serve(async (req: Request) => {
         'Authorization': `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        model: "llama-3.2-90b-vision-preview", // 🔴 استخدام موديل الرؤية الجديد من Groq
         messages: [
           {
             role: 'user',
             content: [
+              {
+                type: 'text',
+                text: `أنت كوتش تغذية وطبيب متخصص. انظر لهذه الصورة من فحص InBody واستخرج الأرقام بدقة، ثم قدم تقييم ونصيحة.
+أجب بالعربية فقط والتزم حرفياً بهذا التنسيق بدون أي إضافات أخرى:
+الوزن: [الرقم]
+العضلات: [الرقم]
+الدهون: [الرقم]
+التقييم: [جملة أو جملتين]
+التوصية: [جملة]`,
+              },
               {
                 type: 'image_url',
                 image_url: {
                   url: `data:${mimeType};base64,${imageBase64}`,
                 },
               },
-              {
-                type: 'text',
-                text: `أنت كوتش تغذية متخصص. انظر لهذه الصورة من جهاز InBody وقدم:
-1. الأرقام التي تراها: الوزن (كجم)، كتلة العضل (كجم)، نسبة الدهون (%)
-2. تقييم سريع للنتيجة (جملة أو جملتين)
-3. توصية مختصرة
-
-أجب بالعربية فقط وبهذا الشكل الدقيق:
-الوزن: [الرقم]
-العضلات: [الرقم]
-الدهون: [الرقم]%
-التقييم: [جملة أو جملتين]
-التوصية: [جملة]`,
-              },
             ],
           },
         ],
-        temperature: 0.2,
-        max_tokens: 400,
+        temperature: 0.1, // 🔴 تقليل درجة الإبداع لزيادة الدقة في استخراج الأرقام
+        max_tokens: 500,
       }),
     });
 

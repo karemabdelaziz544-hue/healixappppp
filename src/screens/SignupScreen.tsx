@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Animated, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Image } from 'react-native';
-import { supabase } from '../lib/supabase';
-import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { handleError } from '../lib/errorHandler';
+import { supabase } from '../lib/supabase';
+// 🔴 إضافة استدعاء showToast
 
 export default function SignupScreen() {
   const [name, setName] = useState('');
@@ -83,9 +84,13 @@ export default function SignupScreen() {
         updated_at: new Date().toISOString(),
       });
 
-      // 4. توجيه مباشر (المايسترو اللي في _layout.tsx هيشعر بالدخول ويوجهك للتابات)
-      router.replace('/(tabs)');
-      
+      // 🔴 التعديل هنا: توجيه المستخدم لصفحة إدخال الكود بدل الدخول المباشر للتابات
+      Alert.alert('نجاح 🎉', 'تم إنشاء الحساب! تفقد بريدك لإدخال الكود.');
+      router.push({
+        pathname: '/verify',
+        params: { email: email.trim() }
+      });
+
     } catch (error: any) {
       handleError(error, 'Signup');
     } finally {
@@ -94,8 +99,8 @@ export default function SignupScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
+    <KeyboardAvoidingView
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {/* دوائر الخلفية التجميلية */}
@@ -103,9 +108,9 @@ export default function SignupScreen() {
       <View style={[styles.bgCircle, styles.circleBottomLeft]} />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
+
         <Animated.View style={[styles.formCard, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
-          
+
           <View style={styles.header}>
             <Image source={require('../../assets/images/icon.png')} style={styles.logo} resizeMode="contain" />
             <Text style={styles.title}>انضم لعائلة هيليكس</Text>
@@ -132,14 +137,14 @@ export default function SignupScreen() {
             <View style={[styles.inputGroup, { flex: 1 }]}>
               <Text style={styles.label}>النوع</Text>
               <View style={styles.genderToggle}>
-                <TouchableOpacity 
-                  style={[styles.genderBtn, gender === 'male' && styles.genderBtnActive]} 
+                <TouchableOpacity
+                  style={[styles.genderBtn, gender === 'male' && styles.genderBtnActive]}
                   onPress={() => setGender('male')}
                 >
                   <Text style={[styles.genderText, gender === 'male' && styles.genderTextActive]}>ذكر</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.genderBtn, gender === 'female' && styles.genderBtnActive]} 
+                <TouchableOpacity
+                  style={[styles.genderBtn, gender === 'female' && styles.genderBtnActive]}
                   onPress={() => setGender('female')}
                 >
                   <Text style={[styles.genderText, gender === 'female' && styles.genderTextActive]}>أنثى</Text>
@@ -195,13 +200,13 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9F6F0' },
   scrollContent: { flexGrow: 1, justifyContent: 'center', padding: 20 },
-  
+
   bgCircle: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.4 },
   circleTopRight: { backgroundColor: '#DEF7EC', top: -100, right: -150 },
   circleBottomLeft: { backgroundColor: '#FFEDD5', bottom: -100, left: -150 },
 
   formCard: { backgroundColor: '#FFF', padding: 30, borderRadius: 30, elevation: 10, shadowColor: '#2A4B46', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20 },
-  
+
   header: { alignItems: 'center', marginBottom: 30 },
   logo: { width: 70, height: 70, marginBottom: 15, borderRadius: 20 },
   title: { fontSize: 28, fontWeight: '900', color: '#2A4B46', marginBottom: 5 },
@@ -211,7 +216,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row-reverse', gap: 15 },
   label: { fontSize: 13, fontWeight: 'bold', color: '#4B5563', textAlign: 'right', marginBottom: 8 },
   input: { backgroundColor: '#F3F4F6', height: 55, borderRadius: 15, paddingHorizontal: 15, textAlign: 'right', fontSize: 14, color: '#1F2937' },
-  
+
   passwordContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', height: 55, borderRadius: 15 },
   eyeIcon: { padding: 12 },
 

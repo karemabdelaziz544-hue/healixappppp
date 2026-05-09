@@ -6,9 +6,10 @@ import { supabase } from '../../src/lib/supabase';
 import { useRouter } from 'expo-router';
 import { useFamily } from '../../src/context/FamilyContext';
 import { useSubscriptionGuard } from '../../hooks/useSubscriptionGuard';
-import ExpiredState from '../../components/ExpiredState';
+import LockedTabView from '../../components/LockedTabView';
 import Skeleton from '../../components/Skeleton';
 import type { Plan } from '../../src/types';
+import { AppColors } from '../../constants/AppTheme';
 
 // ✅ أيقونة الـ chevron دائماً تشير لليسار كما طلب المستخدم
 const chevronIcon = 'chevron-back';
@@ -18,7 +19,7 @@ export default function HistoryScreen() {
   const { currentProfile } = useFamily();
   const currentUserId = currentProfile?.id;
   const router = useRouter();
-  const { isSubscribed, isGuardLoading } = useSubscriptionGuard();
+  const { userLifecycleState, isGuardLoading } = useSubscriptionGuard();
   const insets = useSafeAreaInsets();
   
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -55,9 +56,34 @@ export default function HistoryScreen() {
     setRefreshing(false);
   }, [fetchHistory]);
 
-  // 🛡️ حماية الاشتراك تظهر فقط بعد انتهاء فحص الحارس
-  if (!isGuardLoading && !isSubscribed) {
-    return <ExpiredState />;
+  // 🔒 Lead — مقفول بالكامل
+  if (!isGuardLoading && userLifecycleState === 'lead') {
+    return (
+      <LockedTabView
+        icon="time"
+        iconColor="#F97316"
+        iconBg="#FFF7ED"
+        title="اشترك لتتبع رحلتك 📊"
+        subtitle="سجل اشتراكك في Healix لتتمكن من متابعة سجل خططك وإنجازاتك الصحية بالكامل."
+        buttonText="اشترك الآن"
+        onPress={() => router.push('/subscriptions')}
+      />
+    );
+  }
+
+  // 🔒 Onboarding — مقفول برسالة خاصة
+  if (!isGuardLoading && userLifecycleState === 'onboarding') {
+    return (
+      <LockedTabView
+        icon="clipboard"
+        iconColor={AppColors.primary}
+        iconBg={AppColors.primaryLight}
+        title="أكمل بياناتك أولاً 📋"
+        subtitle="أكمل بياناتك الطبية ليتم تصميم خطتك الشخصية وتسجيل تاريخك الصحي."
+        buttonText="ارجع للداشبورد"
+        onPress={() => router.push('/(tabs)')}
+      />
+    );
   }
 
   return (

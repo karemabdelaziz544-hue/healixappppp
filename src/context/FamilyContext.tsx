@@ -11,6 +11,7 @@ export interface Profile {
   manager_id: string | null;
   subscription_status: string;
   subscription_end_date: string | null;
+  is_onboarded: boolean;
   gender?: string;
   birth_date?: string;
   weight?: number;
@@ -57,18 +58,35 @@ export const FamilyProvider = ({ children }: { children: React.ReactNode }) => {
         const profilesData = data as Profile[];
         const manager = profilesData.find(p => p.id === userId);
 
-        // توريث حالة الاشتراك من الحساب الرئيسي للفرعي
+        // توريث حالة الاشتراك من الحساب الرئيسي للفرعي + تأمين is_onboarded
         const processedMembers = profilesData.map(member => {
-          if (member.manager_id && manager) {
-            const isManagerExpired = manager.subscription_status === 'expired';
-            const isMemberExpired = member.subscription_status === 'expired';
+          // 🔥 Coerce is_onboarded from null to false
+          const safeMember = { ...member, is_onboarded: !!member.is_onboarded };
+
+          if (safeMember.manager_id && manager) {
+            // الفرعي يرث حالة الاشتراك من المدير
+            const managerStatus = manager.subscription_status;
+            const memberStatus = safeMember.subscription_status;
+
+            let inheritedStatus = memberStatus;
+            if (managerStatus === 'new') {
+              // المدير لسه جديد (lead) — الفرعي يرث 'new'
+              inheritedStatus = 'new';
+            } else if (managerStatus === 'expired' || memberStatus === 'expired') {
+              // لو المدير أو العضو منتهي — expired
+              inheritedStatus = 'expired';
+            } else if (managerStatus === 'active') {
+              // المدير نشط — الفرعي يرث 'active'
+              inheritedStatus = 'active';
+            }
+
             return {
-              ...member,
-              subscription_status: (isManagerExpired || isMemberExpired) ? 'expired' : 'active',
+              ...safeMember,
+              subscription_status: inheritedStatus,
               subscription_end_date: manager.subscription_end_date,
             };
           }
-          return member;
+          return safeMember;
         });
 
         setFamilyMembers(processedMembers);

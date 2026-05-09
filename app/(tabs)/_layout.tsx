@@ -1,44 +1,19 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions } from 'react-native';
-import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useFamily } from '../../src/context/FamilyContext';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { Tabs } from 'expo-router';
+import React from 'react';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { AppColors } from '../../constants/AppTheme';
-
-const { width } = Dimensions.get('window');
-const TAB_BAR_WIDTH = width - 40;
-
-// ✅ الـ labels النصية الظاهرة تحت الأيقونة المفعلة
-const TAB_LABELS: Record<string, string> = {
-  index: 'الرئيسية',
-  chat: 'المحادثة',
-  medical: 'الطبي',
-  history: 'التاريخ',
-  profile: 'الحساب',
-};
+import { useFamily } from '../../src/context/FamilyContext';
 
 function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const { currentProfile, switchProfile } = useFamily();
   const isSubAccount = currentProfile?.manager_id !== null && currentProfile?.manager_id !== undefined;
 
+  // استبعاد صفحة تفاصيل الخطة من البار السفلي
   const visibleRoutes = state.routes.filter((route: any) => route.name !== 'plan-details');
-  const TAB_WIDTH = TAB_BAR_WIDTH / visibleRoutes.length;
-  const translateX = useRef(new Animated.Value(0)).current;
   const currentRouteName = state.routes[state.index].name;
-  
-  const activeIndex = visibleRoutes.findIndex((r: any) => r.name === currentRouteName);
-  // 🛡️ حماية الأنيميشن: لو الصفحة مخفية نثبت المؤشر على الرئيسية
-  const safeActiveIndex = activeIndex !== -1 ? activeIndex : 0; 
-
-  useEffect(() => {
-    Animated.spring(translateX, {
-      toValue: safeActiveIndex * TAB_WIDTH,
-      useNativeDriver: true,
-      bounciness: 12, 
-      speed: 14,      
-    }).start();
-  }, [safeActiveIndex, TAB_WIDTH]);
+  const safeActiveIndex = visibleRoutes.findIndex((r: any) => r.name === currentRouteName);
 
   const handleSwitchBack = async () => {
     if (currentProfile?.manager_id) {
@@ -48,18 +23,10 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   return (
     <View style={styles.tabBarContainer}>
-      <Animated.View
-        style={[
-          styles.slidingIndicator,
-          { transform: [{ translateX }] }
-        ]}
-      />
-
       {visibleRoutes.map((route: any, index: number) => {
         const isFocused = safeActiveIndex === index;
 
         const onPress = () => {
-          // لو الحساب فرعي وضغط على أيقونة البروفايل، نفذ التبديل بدل التنقل
           if (route.name === 'profile' && isSubAccount) {
             handleSwitchBack();
           } else {
@@ -74,39 +41,52 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           }
         };
 
+        // تحديد الأيقونات
         let iconName: any = 'home';
         if (route.name === 'index') iconName = isFocused ? 'home' : 'home-outline';
         if (route.name === 'chat') iconName = isFocused ? 'chatbubbles' : 'chatbubbles-outline';
         if (route.name === 'medical') iconName = isFocused ? 'pulse' : 'pulse-outline';
         if (route.name === 'history') iconName = isFocused ? 'time' : 'time-outline';
-        
-        // 🎨 أيقونة البروفايل الديناميكية
+
         if (route.name === 'profile') {
-          if (isSubAccount) {
-            iconName = 'swap-horizontal-outline'; // أيقونة التبديل للحساب الفرعي
-          } else {
-            iconName = isFocused ? 'person' : 'person-outline';
-          }
+          iconName = isSubAccount ? 'swap-horizontal-outline' : (isFocused ? 'person' : 'person-outline');
         }
 
+        // 🔴 تصميم الزر الأوسط البارز (صفحة القياسات - الطبية)
+        if (route.name === 'medical') {
+          return (
+            <TouchableOpacity
+              key={route.key}
+              onPress={onPress}
+              style={styles.centerButtonWrapper}
+              activeOpacity={0.9}
+            >
+              <View style={[
+                styles.centerButton,
+                // برتقالي في العادي، وأخضر غامق لما نقف عليه
+                { backgroundColor: isFocused ? AppColors.primary : AppColors.accent }
+              ]}>
+                <Ionicons name={iconName} size={28} color="#FFFFFF" />
+              </View>
+            </TouchableOpacity>
+          );
+        }
+
+        // 🔴 تصميم باقي الأزرار العادية
         return (
           <TouchableOpacity
             key={route.key}
             onPress={onPress}
             style={styles.tabItem}
-            activeOpacity={1} 
+            activeOpacity={0.7}
           >
-            <Ionicons 
-              name={iconName} 
-              size={isFocused ? 24 : 26} 
-              color={isFocused ? '#FFF' : (route.name === 'profile' && isSubAccount ? AppColors.accent : AppColors.tabInactive)} 
+            <Ionicons
+              name={iconName}
+              // تكبير بسيط للأيقونة لما تتفعل
+              size={isFocused ? 26 : 24}
+              // الأيقونة وهي مش متفعلة أخضر غامق، ولما تتفعل برتقالي (بدون أي خلفية)
+              color={isFocused ? AppColors.accent : AppColors.primary}
             />
-            {/* ✅ Label نصي يظهر فقط تحت الأيقونة المفعلة */}
-            {isFocused && (
-              <Text style={styles.tabLabel}>
-                {route.name === 'profile' && isSubAccount ? 'تبديل' : (TAB_LABELS[route.name] || '')}
-              </Text>
-            )}
           </TouchableOpacity>
         );
       })}
@@ -120,6 +100,7 @@ export default function TabLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
+      {/* الترتيب هنا مهم جداً عشان medical تكون رقم 3 وفي النص بالظبط */}
       <Tabs.Screen name="index" />
       <Tabs.Screen name="chat" />
       <Tabs.Screen name="medical" />
@@ -130,8 +111,6 @@ export default function TabLayout() {
   );
 }
 
-const INDICATOR_SIZE = 50;
-
 const styles = StyleSheet.create({
   tabBarContainer: {
     position: 'absolute',
@@ -139,40 +118,43 @@ const styles = StyleSheet.create({
     left: 20,
     right: 20,
     height: 70,
-    backgroundColor: AppColors.surface,
-    borderRadius: 40,
+    backgroundColor: '#FFFFFF', // خلفية بيضاء
+    borderRadius: 35, // دوران ناعم
     flexDirection: 'row',
     alignItems: 'center',
-    elevation: 10,
-    shadowColor: AppColors.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
+    // شادو ناعم جداً للبار نفسه
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 15,
   },
   tabItem: {
     flex: 1,
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 1, 
   },
-  // ✅ Label صغير تحت الأيقونة المفعلة
-  tabLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#FFF',
-    marginTop: 2,
-    letterSpacing: 0.3,
+
+  // تنسيقات الزر اللي في النص (Floating)
+  centerButtonWrapper: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  slidingIndicator: {
-    position: 'absolute',
-    width: INDICATOR_SIZE,
-    height: INDICATOR_SIZE,
-    borderRadius: INDICATOR_SIZE / 2,
-    backgroundColor: AppColors.primary,
-    // ✅ نستخدم alignSelf للتمركز الصحيح بدل left ثابت
-    left: (TAB_BAR_WIDTH / 5 - INDICATOR_SIZE) / 2,
-    zIndex: 0, 
-    elevation: 8,
+  centerButton: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    // رفعه لفوق خارج البار
+    transform: [{ translateY: -15 }],
+    // شادو قوي للزرار عشان يبرز
+    elevation: 10,
+    shadowColor: AppColors.primary,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
   },
 });

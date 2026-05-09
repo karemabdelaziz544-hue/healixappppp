@@ -5,8 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../src/lib/supabase';
 import { useFamily } from '../../src/context/FamilyContext';
 import { useSubscriptionGuard } from '../../hooks/useSubscriptionGuard';
-import ExpiredState from '../../components/ExpiredState';
 import Skeleton from '../../components/Skeleton';
+import LockedTabView from '../../components/LockedTabView';
 import type { InbodyRecord, ClientDocument, HealthProfile, LifestyleProfile } from '../../src/types';
 
 import { medicalStyles as styles } from '../../src/features/medical/medicalStyles';
@@ -14,12 +14,14 @@ import InBodyTab from '../../src/features/medical/InBodyTab';
 import DocumentsTab from '../../src/features/medical/DocumentsTab';
 import HealthProfileTab from '../../src/features/medical/HealthProfileTab';
 import LifestyleProfileTab from '../../src/features/medical/LifestyleProfileTab';
+import { useRouter } from 'expo-router';
 
 export default function MedicalRecordsScreen() {
   const { currentProfile } = useFamily();
-  const { isSubscribed, isGuardLoading } = useSubscriptionGuard();
+  const { userLifecycleState, isGuardLoading } = useSubscriptionGuard();
   const userId = currentProfile?.id;
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<'inbody' | 'docs' | 'health' | 'lifestyle'>('inbody');
   
@@ -33,6 +35,9 @@ export default function MedicalRecordsScreen() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  // 🔥 Read-only mode for expired users
+  const isReadOnly = userLifecycleState === 'expired';
 
   const fetchAllData = useCallback(async () => {
     if (!userId) return;
@@ -76,6 +81,7 @@ export default function MedicalRecordsScreen() {
     setDocs(data || []);
   };
 
+  // 🛡️ Loading State — Skeleton
   if (isGuardLoading || !currentProfile || loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -98,8 +104,19 @@ export default function MedicalRecordsScreen() {
     );
   }
 
-  if (!isSubscribed) {
-    return <ExpiredState />;
+  // 🔒 Lead — لا يمكنه الوصول للملف الطبي
+  if (userLifecycleState === 'lead') {
+    return (
+      <LockedTabView
+        icon="lock-closed"
+        iconColor="#F97316"
+        iconBg="#FFF7ED"
+        title="اشترك للوصول لملفك الطبي 🔒"
+        subtitle="سجل اشتراكك في Healix لتتمكن من إدارة بياناتك الطبية، رفع تحاليلك، وتتبع قياساتك بالكامل."
+        buttonText="اشترك الآن"
+        onPress={() => router.push('/subscriptions')}
+      />
+    );
   }
 
   return (
@@ -109,6 +126,16 @@ export default function MedicalRecordsScreen() {
           <Text style={styles.title}>مركز القياسات <Ionicons name="pulse" size={24} color="#F97316" /></Text>
           <Text style={styles.subtitle}>البيانات الطبية، نمط الحياة، والتحاليل</Text>
         </View>
+
+        {/* 🔒 بانر Read-only للعميل المنتهي */}
+        {isReadOnly && (
+          <View style={{ flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 15, paddingVertical: 10, gap: 8, borderBottomWidth: 1, borderBottomColor: '#FDE68A' }}>
+            <Ionicons name="warning" size={18} color="#D97706" />
+            <Text style={{ flex: 1, fontSize: 12, color: '#92400E', fontWeight: 'bold', textAlign: 'right', lineHeight: 18 }}>
+              اشتراكك منتهي — يمكنك مشاهدة بياناتك السابقة فقط. جدد اشتراكك لإضافة قياسات جديدة.
+            </Text>
+          </View>
+        )}
 
         <View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScrollContainer}>

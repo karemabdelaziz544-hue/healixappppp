@@ -1,17 +1,17 @@
 /**
  * InBodyTab — قياسات الـ InBody والرسوم البيانية
  */
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, TextInput, Image, Alert, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
+import * as ImagePicker from 'expo-image-picker';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, Dimensions, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
-import { supabase } from '../../lib/supabase';
 import { showToast } from '../../../components/AppToast';
+import { supabase } from '../../lib/supabase';
+import type { InbodyRecord } from '../../types';
 import { ARABIC_MONTHS, MedicalTabProps } from './medical.types';
 import { medicalStyles as styles } from './medicalStyles';
-import type { InbodyRecord } from '../../types';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -29,6 +29,10 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [aiReport, setAiReport] = useState<string>('');
 
+  // 🔴 States جديدة للـ Popup
+  const [selectedRecord, setSelectedRecord] = useState<InbodyRecord | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+
   const lastRec = inbodyRecords.length > 0 ? inbodyRecords[inbodyRecords.length - 1] : null;
   const chartData = {
     labels: inbodyRecords.slice(-5).map(r => new Date(r.record_date).getDate().toString()),
@@ -39,7 +43,8 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.8,
+        allowsEditing: true,
+        quality: 0.2, // ضغط الصورة لمنع خطأ 413
         base64: true,
       });
 
@@ -62,22 +67,12 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
         if (uploadError) throw uploadError;
         setImageUrl(fileName);
 
-        // 2. استدعاء Edge Function لتحليل الصورة بـ Groq
+        // 2. استدعاء Edge Function لتحليل الصورة
         const { data: fnData, error: fnError } = await supabase.functions.invoke('analyze-inbody', {
           body: { imagePath: fileName },
         });
 
-        if (fnError) {
-          // طباعة تفاصيل الخطأ من الـ Edge Function
-          console.error('[Edge Function Error Details]', JSON.stringify(fnError, null, 2));
-          if (fnError.context) {
-            try {
-              const errBody = await fnError.context.json();
-              console.error('[Edge Function Response Body]', errBody);
-            } catch (_) {}
-          }
-          throw fnError;
-        }
+        if (fnError) throw fnError;
 
         // 3. تعبئة الحقول تلقائياً إذا أمكن
         if (fnData?.extracted?.weight) setWeight(String(fnData.extracted.weight));
@@ -107,6 +102,7 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
         fat_percent: fat ? parseFloat(fat) : null,
         record_date: new Date().toISOString(),
         image_url: imageUrl,
+        ai_summary: aiReport, // حفظ التقرير في الداتابيز
       });
       if (error) throw error;
       await onRefresh();
@@ -120,8 +116,15 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
     }
   };
 
+  // 🔴 دالة لفتح الـ Popup
+  const openRecordDetails = (record: InbodyRecord) => {
+    setSelectedRecord(record);
+    setModalVisible(true);
+  };
+
   return (
     <View style={styles.fadeContainer}>
+      {/* --- آخر قياس --- */}
       {lastRec ? (
         <>
           <View style={styles.lastRecordHeader}>
@@ -153,6 +156,7 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
         <View style={styles.emptyAlert}><Text style={styles.emptyAlertText}>ليس لديك سجلات بعد، أضف أول قياس لتبدأ رحلتك! 🚀</Text></View>
       )}
 
+      {/* --- التشارت والمقارنة --- */}
       {inbodyRecords.length > 1 && (
         <View style={styles.chartContainer}>
           <Text style={styles.chartTitle}>تطور الوزن</Text>
@@ -164,22 +168,7 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
         </View>
       )}
 
-      {inbodyRecords.length >= 2 && inbodyRecords[0]?.image_url && lastRec?.image_url && (
-        <View style={styles.chartContainer}>
-          <Text style={styles.chartTitle}>مقارنة التطور البصري (قبل وبعد)</Text>
-          <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 10 }}>
-            <View style={{ flex: 1, alignItems: 'center', marginHorizontal: 5 }}>
-              <Text style={{ fontWeight: 'bold', marginBottom: 8, color: '#4B5563' }}>أول قياس</Text>
-              <Image source={{ uri: supabase.storage.from('medical-docs').getPublicUrl(inbodyRecords[0].image_url).data.publicUrl }} style={{ width: '100%', height: 200, borderRadius: 12 }} resizeMode="cover" />
-            </View>
-            <View style={{ flex: 1, alignItems: 'center', marginHorizontal: 5 }}>
-              <Text style={{ fontWeight: 'bold', marginBottom: 8, color: '#2A4B46' }}>القياس الأخير</Text>
-              <Image source={{ uri: supabase.storage.from('medical-docs').getPublicUrl(lastRec.image_url).data.publicUrl }} style={{ width: '100%', height: 200, borderRadius: 12 }} resizeMode="cover" />
-            </View>
-          </View>
-        </View>
-      )}
-
+      {/* --- أزرار الإضافة --- */}
       {!showForm && (
         <View style={styles.actionRow}>
           <TouchableOpacity style={[styles.actionBtn, { borderColor: '#F97316', backgroundColor: '#FFF7ED' }]} onPress={handleAnalyzeImage} disabled={analyzing}>
@@ -193,6 +182,7 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
         </View>
       )}
 
+      {/* --- فورم الإضافة --- */}
       {showForm && (
         <View style={styles.formContainer}>
           <View style={styles.formHeader}>
@@ -223,27 +213,216 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
         </View>
       )}
 
+      {/* --- سجل القياسات (الكروت) --- */}
       {inbodyRecords.length > 0 && !showForm && (
         <View style={styles.historySection}>
           <Text style={styles.historySectionTitle}>سجل القياسات السابقة <Ionicons name="calendar-outline" size={18} /></Text>
           {inbodyRecords.slice().reverse().map(record => {
             const d = new Date(record.record_date);
             return (
-              <View key={record.id} style={styles.historyCard}>
-                <View style={styles.historyDateBox}><Text style={styles.historyDay}>{d.getDate()}</Text><Text style={styles.historyMonth}>{ARABIC_MONTHS[d.getMonth()]}</Text></View>
-                <View style={styles.historyDetails}>
-                  <View style={styles.historyRow}>
-                    <Text style={styles.historyWeight}>{record.weight} كجم</Text>
-                    {record.muscle_mass && <Text style={styles.historyBadge}>💪 {record.muscle_mass}</Text>}
-                    {record.fat_percent && <Text style={styles.historyBadge}>💧 {record.fat_percent}%</Text>}
-                  </View>
-                  {record.ai_summary && (<Text style={styles.historySummary} numberOfLines={2}>{record.ai_summary}</Text>)}
+              <TouchableOpacity key={record.id} style={styles.historyCard} onPress={() => openRecordDetails(record)} activeOpacity={0.7}>
+                <View style={styles.historyDateBox}>
+                  <Text style={styles.historyDay}>{d.getDate()}</Text>
+                  <Text style={styles.historyMonth}>{ARABIC_MONTHS[d.getMonth()]}</Text>
                 </View>
-              </View>
+                <View style={styles.historyDetails}>
+
+                  {/* عنوان أو مقتطف صغير جداً من التقرير */}
+                  <Text style={[styles.historySummary, { color: '#4B5563', fontSize: 14 }]} numberOfLines={1}>
+                    {record.ai_summary ? record.ai_summary.split('\n')[0] : 'تم تسجيل قياس InBody'}
+                  </Text>
+
+                  {/* 🔴 الجملة الجديدة اللي طلبتها */}
+                  <View style={{ flexDirection: 'row-reverse', alignItems: 'center', marginTop: 8 }}>
+                    <Ionicons name="scan-outline" size={16} color="#F97316" />
+                    <Text style={localStyles.clickForMoreText}>اضغط لمزيد من التفاصيل</Text>
+                  </View>
+
+                </View>
+              </TouchableOpacity>
             );
           })}
         </View>
       )}
+      {/* 🔴 Modal (Popup) لعرض التفاصيل */}
+      {selectedRecord && (
+        <Modal
+          visible={modalVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setModalVisible(false)}
+        >
+          <View style={localStyles.modalOverlay}>
+            <View style={localStyles.modalContent}>
+
+              {/* Header */}
+              <View style={localStyles.modalHeader}>
+                <TouchableOpacity onPress={() => setModalVisible(false)}>
+                  <Ionicons name="close" size={28} color="#4B5563" />
+                </TouchableOpacity>
+                <Text style={localStyles.modalTitle}>تفاصيل القياس</Text>
+                <View style={{ width: 28 }} />
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {/* التاريخ */}
+                <Text style={localStyles.modalDate}>
+                  بتاريخ: {new Date(selectedRecord.record_date).toLocaleDateString('ar-EG')}
+                </Text>
+
+                {/* الأرقام الأساسية */}
+                <View style={localStyles.modalStatsRow}>
+                  <View style={localStyles.modalStatBox}>
+                    <Text style={localStyles.modalStatLabel}>الوزن</Text>
+                    <Text style={localStyles.modalStatValue}>{selectedRecord.weight} كجم</Text>
+                  </View>
+                  <View style={localStyles.modalStatBox}>
+                    <Text style={localStyles.modalStatLabel}>العضلات</Text>
+                    <Text style={localStyles.modalStatValue}>{selectedRecord.muscle_mass || '-'} كجم</Text>
+                  </View>
+                  <View style={localStyles.modalStatBox}>
+                    <Text style={localStyles.modalStatLabel}>الدهون</Text>
+                    <Text style={localStyles.modalStatValue}>{selectedRecord.fat_percent || '-'} %</Text>
+                  </View>
+                </View>
+
+                {/* التقرير الذكي */}
+                {selectedRecord.ai_summary ? (
+                  <View style={localStyles.modalReportBox}>
+                    <Text style={localStyles.modalReportTitle}><Ionicons name="sparkles" color="#F97316" /> التقرير والتحليل الذكي</Text>
+                    <Text style={localStyles.modalReportText}>{selectedRecord.ai_summary}</Text>
+                  </View>
+                ) : (
+                  <Text style={localStyles.noReportText}>لا يوجد تقرير ذكي مسجل لهذا القياس.</Text>
+                )}
+
+                {/* زر الإغلاق السفلي */}
+                <TouchableOpacity style={localStyles.closeBtn} onPress={() => setModalVisible(false)}>
+                  <Text style={localStyles.closeBtnText}>حسناً، إغلاق</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
+
     </View>
   );
 }
+
+// 🔴 تنسيقات الـ Popup الجديدة
+const localStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    width: '100%',
+    maxHeight: '80%',
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    paddingBottom: 10,
+  },
+  modalTitle: {
+    fontFamily: 'Tajawal-Bold', // تأكد من اسم الخط المستخدم في مشروعك
+    fontSize: 20,
+    color: '#2A4B46',
+  },
+  modalDate: {
+    fontFamily: 'Tajawal-Regular',
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  modalStatsRow: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  modalStatBox: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 15,
+    marginHorizontal: 5,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  modalStatLabel: {
+    fontFamily: 'Tajawal-Medium',
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 5,
+  },
+  modalStatValue: {
+    fontFamily: 'Tajawal-Bold',
+    fontSize: 16,
+    color: '#2A4B46',
+  },
+  modalReportBox: {
+    backgroundColor: '#FFF7ED',
+    borderRadius: 12,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+    marginBottom: 20,
+  },
+  modalReportTitle: {
+    fontFamily: 'Tajawal-Bold',
+    fontSize: 16,
+    color: '#9A3412',
+    marginBottom: 10,
+    textAlign: 'right',
+  },
+  modalReportText: {
+    fontFamily: 'Tajawal-Medium',
+    fontSize: 15,
+    color: '#431407',
+    lineHeight: 24,
+    textAlign: 'right',
+  },
+  noReportText: {
+    fontFamily: 'Tajawal-Regular',
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginVertical: 20,
+  },
+  closeBtn: {
+    backgroundColor: '#2A4B46',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  closeBtnText: {
+    fontFamily: 'Tajawal-Bold',
+    color: '#FFF',
+    fontSize: 16,
+  },
+  clickForMoreText: {
+    fontFamily: 'Tajawal-Medium', // أو أي خط بتستخدمه
+    fontSize: 13,
+    color: '#F97316',
+    marginRight: 4,
+  },
+});

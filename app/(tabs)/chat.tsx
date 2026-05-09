@@ -10,10 +10,11 @@ import * as Haptics from 'expo-haptics';
 import { supabase } from '../../src/lib/supabase';
 import { useFamily } from '../../src/context/FamilyContext';
 import { useSubscriptionGuard } from '../../hooks/useSubscriptionGuard';
-import ExpiredState from '../../components/ExpiredState';
+import LockedTabView from '../../components/LockedTabView';
 import type { Message } from '../../src/types';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { AppColors } from '../../constants/AppTheme';
+import { useRouter } from 'expo-router';
 
 // 🌟 مُشغل المرفقات الداخلي (صور - فويس - ملفات)
 const InlineAttachment = ({ path, type, isMe }: { path: string, type: string, isMe: boolean }) => {
@@ -124,7 +125,8 @@ const InlineAttachment = ({ path, type, isMe }: { path: string, type: string, is
 export default function ChatScreen() {
   const { currentProfile } = useFamily();
   const currentUserId = currentProfile?.id;  
-  const { isSubscribed, isGuardLoading } = useSubscriptionGuard();
+  const { userLifecycleState, isGuardLoading } = useSubscriptionGuard();
+  const router = useRouter();
 
   const activeChannel = 'doctor';
   const { isConnected } = useNetworkStatus();
@@ -331,8 +333,35 @@ export default function ChatScreen() {
   };
 
   if (isGuardLoading || !currentProfile) return <ActivityIndicator size="large" color="#2A4B46" style={{flex:1, marginTop: 50}} />;
-  if (!isSubscribed) {
-    return <ExpiredState />;
+  
+  // 🔒 Lead — مقفول
+  if (userLifecycleState === 'lead') {
+    return (
+      <LockedTabView
+        icon="chatbubbles"
+        iconColor="#8B5CF6"
+        iconBg="#EDE9FE"
+        title="اشترك لمراسلة الكوتش 💬"
+        subtitle="سجل اشتراكك في Healix لتتمكن من التواصل المباشر مع الكوتش الطبي والحصول على المتابعة الشخصية."
+        buttonText="اشترك الآن"
+        onPress={() => router.push('/subscriptions')}
+      />
+    );
+  }
+
+  // 🔒 Expired — مقفول
+  if (userLifecycleState === 'expired') {
+    return (
+      <LockedTabView
+        icon="chatbubbles"
+        iconColor={AppColors.danger}
+        iconBg={AppColors.dangerLight}
+        title="اشتراكك منتهي ⚠️"
+        subtitle="جدد اشتراكك لتتمكن من مراسلة الكوتش الطبي ومتابعة رحلتك الصحية مع Healix."
+        buttonText="تجديد الاشتراك"
+        onPress={() => router.push('/subscriptions')}
+      />
+    );
   }
 
   return (

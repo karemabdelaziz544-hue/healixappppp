@@ -6,6 +6,7 @@ import { supabase } from '../src/lib/supabase';
 import { useFamily } from '../src/context/FamilyContext';
 import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import Skeleton from '../components/Skeleton';
 import type { PaymentRequest } from '../src/types';
 import { SubscriptionConfig } from '../constants/subscriptionConfig';
@@ -104,16 +105,50 @@ export default function SubscriptionsScreen() {
     });
   };
 
-  // 👇 التعديل المطلوب: تفعيل اختيار الصور والـ PDF معاً
-  const handlePickReceipt = async () => {
+  // 👇 اختيار صورة من الجاليري
+  const handlePickReceiptImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets.length > 0) {
+        const file = result.assets[0];
+        const uriParts = file.uri.split('.');
+        const fileExt = uriParts[uriParts.length - 1] || 'jpg';
+        setReceiptFile({
+          uri: file.uri,
+          name: `receipt_${Date.now()}.${fileExt}`,
+          mimeType: file.mimeType || `image/${fileExt}`,
+        } as any);
+      }
+    } catch (err) {
+      Alert.alert('خطأ', 'لا يمكن الوصول للاستوديو');
+    }
+  };
+
+  // 👇 اختيار ملف (PDF)
+  const handlePickReceiptFile = async () => {
     const result = await DocumentPicker.getDocumentAsync({ 
       type: ['image/*', 'application/pdf'],
       copyToCacheDirectory: true,
     });
-    
     if (!result.canceled && result.assets && result.assets.length > 0) {
       setReceiptFile(result.assets[0]);
     }
+  };
+
+  // 👇 قائمة اختيار: صورة أم ملف
+  const handlePickReceipt = () => {
+    Alert.alert(
+      "إرفاق إيصال الدفع",
+      "اختر طريقة الرفع",
+      [
+        { text: "صورة من الاستوديو 🖼️", onPress: handlePickReceiptImage },
+        { text: "ملف PDF 📄", onPress: handlePickReceiptFile },
+        { text: "إلغاء", style: "cancel" },
+      ]
+    );
   };
 
   const handleSubmitRequest = async () => {
