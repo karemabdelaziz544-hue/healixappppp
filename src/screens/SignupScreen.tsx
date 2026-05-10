@@ -80,6 +80,8 @@ export default function SignupScreen() {
         id: data.user.id,
         full_name: name,
         phone: phone,
+        gender: gender,                 // ✅ BUG-03: حفظ النوع في profiles
+        subscription_status: 'new',     // ✅ BUG-03: تعيين الحالة الافتراضية
         role: 'client', // افتراضياً أي مسجل جديد هو عميل
         updated_at: new Date().toISOString(),
       });

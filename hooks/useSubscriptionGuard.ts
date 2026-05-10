@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFamily } from '../src/context/FamilyContext';
 
 /**
@@ -23,11 +23,16 @@ export function useSubscriptionGuard() {
   const { currentProfile } = useFamily();
   const [userLifecycleState, setUserLifecycleState] = useState<UserLifecycleState>('loading');
   const [isGuardLoading, setIsGuardLoading] = useState(true);
+  // ✅ BUG-02: فصل التحميل الأولي عن التحديثات اللاحقة
+  const initialized = useRef(false);
 
   useEffect(() => {
     if (!currentProfile) {
-      setUserLifecycleState('loading');
-      setIsGuardLoading(true);
+      // ✅ BUG-02: فقط أظهر loading في التحميل الأولي، مش في كل تغيير
+      if (!initialized.current) {
+        setUserLifecycleState('loading');
+        setIsGuardLoading(true);
+      }
       return;
     }
 
@@ -39,6 +44,7 @@ export function useSubscriptionGuard() {
     if (role !== 'client') {
       setUserLifecycleState('admin_or_doctor');
       setIsGuardLoading(false);
+      initialized.current = true;
       return;
     }
 
@@ -46,6 +52,7 @@ export function useSubscriptionGuard() {
     if (subscription_status === 'new') {
       setUserLifecycleState('lead');
       setIsGuardLoading(false);
+      initialized.current = true;
       return;
     }
 
@@ -65,6 +72,7 @@ export function useSubscriptionGuard() {
         setUserLifecycleState('active');
       }
       setIsGuardLoading(false);
+      initialized.current = true;
       return;
     }
 
@@ -72,12 +80,14 @@ export function useSubscriptionGuard() {
     if (subscription_status === 'expired') {
       setUserLifecycleState('expired');
       setIsGuardLoading(false);
+      initialized.current = true;
       return;
     }
 
     // حالة غير معروفة — fallback إلى lead
     setUserLifecycleState('lead');
     setIsGuardLoading(false);
+    initialized.current = true;
   }, [currentProfile]);
 
   // ✅ Backward compatibility — isSubscribed للتوافقية مع أي كود قديم

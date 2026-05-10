@@ -32,24 +32,14 @@ export default function ProfileScreen() {
   // حالة التحكم في القوائم المنسدلة (Accordion)
   const [activeSection, setActiveSection] = useState<'profile' | 'security' | null>(null);
 
+  // ✅ UX-03: استخدام بيانات currentProfile بدل API call إضافي
   useEffect(() => {
-    if (user && !isSubAccount) fetchProfile();
-  }, [user, isSubAccount]);
-
-  const fetchProfile = async () => {
-    try {
-      setFetching(true);
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', user?.id).single();
-      if (data) {
-        setFullName(data.full_name || '');
-        setAvatarUrl(data.avatar_url);
-      }
-    } catch (err) {
-      console.log('Error fetching profile:', err);
-    } finally {
+    if (currentProfile && !isSubAccount) {
+      setFullName(currentProfile.full_name || '');
+      setAvatarUrl(currentProfile.avatar_url || null);
       setFetching(false);
     }
-  };
+  }, [currentProfile, isSubAccount]);
 
   const handleUpdateProfile = async () => {
     if (!user?.id) return;

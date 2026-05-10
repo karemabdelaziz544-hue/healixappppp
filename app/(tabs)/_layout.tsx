@@ -29,6 +29,11 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
         const onPress = () => {
           if (route.name === 'profile' && isSubAccount) {
             handleSwitchBack();
+            // ✅ UX-02: إشعار واضح عند الرجوع التلقائي
+            setTimeout(() => {
+              const { showToast } = require('../../components/AppToast');
+              showToast.info('تم الرجوع للحساب الرئيسي');
+            }, 300);
           } else {
             const event = navigation.emit({
               type: 'tabPress',

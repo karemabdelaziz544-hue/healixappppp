@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 
@@ -36,15 +36,26 @@ export const FamilyProvider = ({ children }: { children: React.ReactNode }) => {
   const [familyMembers, setFamilyMembers] = useState<Profile[]>([]);
   const [loadingFamily, setLoadingFamily] = useState(true);
 
-  const fetchFamily = async () => {
+  // ✅ BUG-02/ARCH-02: ref لتتبع إذا كان التحميل الأولي اكتمل
+  const isInitialLoadDone = useRef(false);
+  // ✅ BUG-09: ref لتتبع الحساب النشط بين الـ re-renders
+  const currentProfileIdRef = useRef<string | null>(null);
+
+  const fetchFamily = async (silent = false) => {
     if (!userId) {
       setCurrentProfile(null);
       setFamilyMembers([]);
       setLoadingFamily(false);
+      isInitialLoadDone.current = false;
+      currentProfileIdRef.current = null;
       return;
     }
 
-    setLoadingFamily(true);
+    // ✅ BUG-02: فقط أظهر الـ loading في التحميل الأولي
+    if (!silent && !isInitialLoadDone.current) {
+      setLoadingFamily(true);
+    }
+
     try {
       // جلب الحساب الرئيسي وكل الحسابات اللي هو مديرها
       const { data, error } = await supabase
@@ -70,13 +81,10 @@ export const FamilyProvider = ({ children }: { children: React.ReactNode }) => {
 
             let inheritedStatus = memberStatus;
             if (managerStatus === 'new') {
-              // المدير لسه جديد (lead) — الفرعي يرث 'new'
               inheritedStatus = 'new';
             } else if (managerStatus === 'expired' || memberStatus === 'expired') {
-              // لو المدير أو العضو منتهي — expired
               inheritedStatus = 'expired';
             } else if (managerStatus === 'active') {
-              // المدير نشط — الفرعي يرث 'active'
               inheritedStatus = 'active';
             }
 
@@ -91,36 +99,44 @@ export const FamilyProvider = ({ children }: { children: React.ReactNode }) => {
 
         setFamilyMembers(processedMembers);
 
-        // تعيين الحساب النشط (لو مفيش حساب نشط، اختار الأساسي)
-        if (!currentProfile) {
-          setCurrentProfile(processedMembers.find(p => p.id === userId) || processedMembers[0]);
+        // تعيين الحساب النشط
+        const activeId = currentProfileIdRef.current;
+        if (!activeId) {
+          // أول تحميل — اختر الحساب الرئيسي
+          const mainProfile = processedMembers.find(p => p.id === userId) || processedMembers[0];
+          setCurrentProfile(mainProfile);
+          currentProfileIdRef.current = mainProfile?.id || null;
         } else {
-          // تحديث بيانات الحساب النشط حالياً لو حصل فيها تغيير
-          const updatedCurrent = processedMembers.find(p => p.id === currentProfile.id);
-          if (updatedCurrent) setCurrentProfile(updatedCurrent);
+          // تحديث بيانات الحساب النشط حالياً
+          const updatedCurrent = processedMembers.find(p => p.id === activeId);
+          if (updatedCurrent) {
+            setCurrentProfile(updatedCurrent);
+          }
         }
       }
     } catch (err) {
       console.log("Error fetching family:", err);
     } finally {
       setLoadingFamily(false);
+      isInitialLoadDone.current = true;
     }
   };
 
   useEffect(() => {
+    isInitialLoadDone.current = false;
     fetchFamily();
 
-    // 🔥 الاشتراك في تغييرات الـ profiles بدل الـ manual refresh فقط
+    // 🔥 الاشتراك في تغييرات الـ profiles
     if (!userId) return;
 
     const channel = supabase.channel(`family-changes-${userId}`)
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` },
-        () => fetchFamily()
+        () => fetchFamily(true) // ✅ ARCH-02: silent refresh
       )
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'profiles', filter: `manager_id=eq.${userId}` },
-        () => fetchFamily()
+        () => fetchFamily(true) // ✅ ARCH-02: silent refresh
       )
       .subscribe();
 
@@ -132,7 +148,10 @@ export const FamilyProvider = ({ children }: { children: React.ReactNode }) => {
   // دالة التبديل بين الحسابات
   const switchProfile = (profileId: string) => {
     const profile = familyMembers.find(p => p.id === profileId);
-    if (profile) setCurrentProfile(profile);
+    if (profile) {
+      setCurrentProfile(profile);
+      currentProfileIdRef.current = profile.id; // ✅ BUG-09: تحديث الـ ref
+    }
   };
 
   return (

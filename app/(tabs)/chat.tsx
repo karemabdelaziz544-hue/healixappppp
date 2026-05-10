@@ -349,17 +349,23 @@ export default function ChatScreen() {
     );
   }
 
-  // 🔒 Expired — مقفول
+  // 🔒 Expired — مقفول بالكامل (إجبار على التجديد)
   if (userLifecycleState === 'expired') {
+    const ExpiredState = require('../../components/ExpiredState').default;
+    return <ExpiredState />;
+  }
+
+  // 🔒 Onboarding — مقفول (يجب إكمال البيانات أولاً)
+  if (userLifecycleState === 'onboarding') {
     return (
       <LockedTabView
-        icon="chatbubbles"
-        iconColor={AppColors.danger}
-        iconBg={AppColors.dangerLight}
-        title="اشتراكك منتهي ⚠️"
-        subtitle="جدد اشتراكك لتتمكن من مراسلة الكوتش الطبي ومتابعة رحلتك الصحية مع Healix."
-        buttonText="تجديد الاشتراك"
-        onPress={() => router.push('/subscriptions')}
+        icon="clipboard"
+        iconColor={AppColors.primary}
+        iconBg={AppColors.primaryLight}
+        title="أكمل بياناتك أولاً 📋"
+        subtitle="أكمل بياناتك الطبية ليتمكن الكوتش من دراسة حالتك والرد على استفساراتك."
+        buttonText="الذهاب لإكمال البيانات"
+        onPress={() => router.push('/(tabs)')}
       />
     );
   }
@@ -488,8 +494,8 @@ const styles = StyleSheet.create({
   
   messagesArea: { flex: 1 },
   messageWrapper: { marginBottom: 15, flexDirection: 'row' },
-  myMessageWrapper: { justifyContent: 'flex-start' }, 
-  theirMessageWrapper: { justifyContent: 'flex-end' },
+  myMessageWrapper: { justifyContent: 'flex-end' },    // ✅ BUG-04: رسائلي على اليمين (RTL)
+  theirMessageWrapper: { justifyContent: 'flex-start' }, // ✅ BUG-04: رسائلهم على اليسار (RTL)
   messageBubble: { maxWidth: '80%', padding: 15, borderRadius: 20 },
   myBubble: { backgroundColor: '#2A4B46', borderBottomLeftRadius: 5 },
   theirBubble: { backgroundColor: '#FFF', borderBottomRightRadius: 5, borderWidth: 1, borderColor: '#E5E7EB' },

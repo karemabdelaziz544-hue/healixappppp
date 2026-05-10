@@ -28,7 +28,7 @@ function AuthGuard() {
     // لا نفعل شيئاً حتى يكتمل تحميل الـ auth ويكون الـ Router جاهزاً
     if (!navigationState?.key || isLoading) return;
 
-    const inAuthGroup = segments[0] === 'login' || segments[0] === 'signup';
+    const inAuthGroup = segments[0] === 'login' || segments[0] === 'signup' || segments[0] === 'verify'; // ✅ إضافة verify
     const inOnboarding = segments[0] === 'onboarding';
 
     // ✅ أخفِ الـ Splash بعد التحقق من الـ auth مباشرة

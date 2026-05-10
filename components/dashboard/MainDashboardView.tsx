@@ -59,12 +59,22 @@ export default function MainDashboardView() {
   const fetchDashboardData = useCallback(async () => {
     if (!userId) return;
     try {
-      const { data: planData } = await supabase.from('plans').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).single();
-      if (planData) {
-        setPlan(planData as Plan);
-        const { data: allTasks } = await supabase.from('plan_tasks').select('*').eq('plan_id', planData.id).order('order_index', { ascending: true });
+      // ✅ BUG-01: استعلام الخطة للمستخدم الحالي أولاً
+      const { data: planData } = await supabase.from('plans').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      
+      let activePlan = planData;
+
+      // ✅ BUG-01: لو مفيش خطة + ده حساب فرعي → جرب خطة المدير
+      if (!activePlan && currentProfile?.manager_id) {
+        const { data: managerPlan } = await supabase.from('plans').select('*').eq('user_id', currentProfile.manager_id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+        activePlan = managerPlan;
+      }
+
+      if (activePlan) {
+        setPlan(activePlan as Plan);
+        const { data: allTasks } = await supabase.from('plan_tasks').select('*').eq('plan_id', activePlan.id).order('order_index', { ascending: true });
         if (allTasks && allTasks.length > 0) {
-          const startDate = new Date(planData.start_date || planData.created_at);
+          const startDate = new Date(activePlan.start_date || activePlan.created_at);
           const today = new Date();
           startDate.setHours(0, 0, 0, 0); today.setHours(0, 0, 0, 0);
           const currentDayNum = Math.floor((today.getTime() - startDate.getTime()) / 86400000) + 1;
@@ -74,6 +84,8 @@ export default function MainDashboardView() {
             return new RegExp(`(^|\\D)${currentDayNum}($|\\D)`).test(name);
           });
           setTasks(filtered);
+        } else {
+          setTasks([]);
         }
       } else {
         setPlan(null); setTasks([]);
@@ -96,9 +108,16 @@ export default function MainDashboardView() {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, currentProfile?.manager_id]);
 
-  useEffect(() => { setLoading(true); fetchDashboardData(); }, [fetchDashboardData]);
+  // ✅ BUG-02: مسح البيانات القديمة فوراً عند تغيير userId
+  useEffect(() => {
+    setPlan(null);
+    setTasks([]);
+    setStreak(0);
+    setLoading(true);
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true); await fetchDashboardData(); setRefreshing(false);
@@ -142,6 +161,13 @@ export default function MainDashboardView() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* ✅ UX-06: بانر يُشير للحساب الفرعي النشط */}
+      {currentProfile?.manager_id && (
+        <View style={styles.subAccountBanner}>
+          <Ionicons name="swap-horizontal" size={16} color="#FFF" />
+          <Text style={styles.subAccountBannerText}>تعرض حساب: {currentProfile.full_name}</Text>
+        </View>
+      )}
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
@@ -333,4 +359,8 @@ const styles = StyleSheet.create({
   emptyStateIconWrap: { width: 90, height: 90, backgroundColor: AppColors.primaryLight, borderRadius: 45, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
   emptyTitle: { fontSize: 22, fontWeight: '900', color: AppColors.textPrimary },
   emptySub: { fontSize: 15, color: AppColors.textSecondary, marginTop: 8, fontWeight: '600', textAlign: 'center', lineHeight: 22 },
+
+  // ✅ UX-06: Sub-account banner
+  subAccountBanner: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: AppColors.accent, paddingVertical: 8, paddingHorizontal: 15 },
+  subAccountBannerText: { color: '#FFF', fontSize: 13, fontWeight: '900' },
 });

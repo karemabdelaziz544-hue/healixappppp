@@ -36,9 +36,6 @@ export default function MedicalRecordsScreen() {
   const [uploading, setUploading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // 🔥 Read-only mode for expired users
-  const isReadOnly = userLifecycleState === 'expired';
-
   const fetchAllData = useCallback(async () => {
     if (!userId) return;
     try {
@@ -104,19 +101,26 @@ export default function MedicalRecordsScreen() {
     );
   }
 
-  // 🔒 Lead — لا يمكنه الوصول للملف الطبي
-  if (userLifecycleState === 'lead') {
+
+  // 🔒 Lead — مقفول بالكامل
+  if (!isGuardLoading && userLifecycleState === 'lead') {
     return (
       <LockedTabView
-        icon="lock-closed"
+        icon="pulse"
         iconColor="#F97316"
         iconBg="#FFF7ED"
-        title="اشترك للوصول لملفك الطبي 🔒"
-        subtitle="سجل اشتراكك في Healix لتتمكن من إدارة بياناتك الطبية، رفع تحاليلك، وتتبع قياساتك بالكامل."
+        title="المركز الطبي والقياسات 🩺"
+        subtitle="اشترك الآن لتبدأ في تسجيل قياساتك الطبية، التحاليل، ونمط حياتك لمتابعة أدق مع طبيبك."
         buttonText="اشترك الآن"
         onPress={() => router.push('/subscriptions')}
       />
     );
+  }
+
+  // ⏰ Expired — مقفول بالكامل (إجبار على التجديد)
+  if (!isGuardLoading && userLifecycleState === 'expired') {
+    const ExpiredState = require('../../components/ExpiredState').default;
+    return <ExpiredState />;
   }
 
   return (
@@ -126,16 +130,6 @@ export default function MedicalRecordsScreen() {
           <Text style={styles.title}>مركز القياسات <Ionicons name="pulse" size={24} color="#F97316" /></Text>
           <Text style={styles.subtitle}>البيانات الطبية، نمط الحياة، والتحاليل</Text>
         </View>
-
-        {/* 🔒 بانر Read-only للعميل المنتهي */}
-        {isReadOnly && (
-          <View style={{ flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 15, paddingVertical: 10, gap: 8, borderBottomWidth: 1, borderBottomColor: '#FDE68A' }}>
-            <Ionicons name="warning" size={18} color="#D97706" />
-            <Text style={{ flex: 1, fontSize: 12, color: '#92400E', fontWeight: 'bold', textAlign: 'right', lineHeight: 18 }}>
-              اشتراكك منتهي — يمكنك مشاهدة بياناتك السابقة فقط. جدد اشتراكك لإضافة قياسات جديدة.
-            </Text>
-          </View>
-        )}
 
         <View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScrollContainer}>

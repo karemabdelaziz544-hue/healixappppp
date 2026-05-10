@@ -86,6 +86,12 @@ export default function HistoryScreen() {
     );
   }
 
+  // ⏰ Expired — مقفول بالكامل (إجبار على التجديد)
+  if (!isGuardLoading && userLifecycleState === 'expired') {
+    const ExpiredState = require('../../components/ExpiredState').default;
+    return <ExpiredState />;
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       {/* الهيدر ثابت وبيظهر دايماً */}

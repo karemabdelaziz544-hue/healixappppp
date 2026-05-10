@@ -29,7 +29,7 @@ export default function PlanDetailsScreen() {
   const fetchPlanDetails = async () => {
     try {
       setLoading(true);
-      const { data: plan } = await supabase.from('plans').select('title').eq('id', planId).single();
+      const { data: plan } = await supabase.from('plans').select('title').eq('id', planId).maybeSingle(); // ✅ BUG-08: لا يرمي خطأ إذا لم توجد خطة
       if (plan) setPlanTitle(plan.title || 'تفاصيل الخطة');
 
       const { data: tasks } = await supabase

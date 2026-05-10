@@ -121,10 +121,15 @@ export default function AssistantOnboardingView() {
 
   // 🔥 حساب الخطوات المكتملة (من الداتابيز + المحددة يدوياً)
   const isStepDone = (stepId: string) => completionStatus[stepId] || manuallyCompleted[stepId] || false;
-  const completedCount = steps.filter(s => isStepDone(s.id)).length;
-  const totalSteps = steps.length;
-  const progressPercent = totalSteps > 0 ? Math.round((completedCount / totalSteps) * 100) : 0;
-  const allDone = completedCount === totalSteps;
+  
+  // ✅ جعل التحاليل (docs) اختيارية
+  const mandatorySteps = steps.filter(s => s.id !== 'docs');
+  const completedMandatoryCount = mandatorySteps.filter(s => isStepDone(s.id)).length;
+  const totalMandatorySteps = mandatorySteps.length;
+  
+  // التقدم مبني على الخطوات الإجبارية فقط
+  const progressPercent = totalMandatorySteps > 0 ? Math.round((completedMandatoryCount / totalMandatorySteps) * 100) : 0;
+  const allDone = completedMandatoryCount === totalMandatorySteps;
 
   // 🔥 تحديد الخطوة كمكتملة يدوياً
   const handleManualComplete = (stepId: string) => {
@@ -191,7 +196,7 @@ export default function AssistantOnboardingView() {
         {/* 🔥 Progress Card */}
         <View style={styles.progressCard}>
           <View style={styles.progressHeader}>
-            <Text style={styles.progressLabel}>{completedCount} من {totalSteps} مكتملة</Text>
+            <Text style={styles.progressLabel}>{completedMandatoryCount} من {totalMandatorySteps} خطوات إجبارية</Text>
             <Text style={styles.progressPercent}>{progressPercent}%</Text>
           </View>
           <View style={styles.progressBarBg}>

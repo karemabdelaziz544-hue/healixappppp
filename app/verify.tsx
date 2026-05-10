@@ -12,10 +12,11 @@ export default function VerifyScreen() {
 
     const [code, setCode] = useState('');
     const [loading, setLoading] = useState(false);
+    const [resending, setResending] = useState(false);
 
     const handleVerify = async () => {
-        if (!code || code.length < 6) {
-            Alert.alert('تنبيه', 'الرجاء إدخال الكود المكون من 6 أرقام');
+        if (!code || code.length < 8) {
+            Alert.alert('تنبيه', 'الرجاء إدخال الكود المكون من 8 أرقام');
             return;
         }
 
@@ -29,7 +30,24 @@ export default function VerifyScreen() {
 
             if (error) throw error;
 
+            // ✅ تأكيد إنشاء البروفايل هنا (لأن في شاشة التسجيل كان اليوزر بدون صلاحيات ففشل الحفظ بسبب RLS)
+            if (data?.user) {
+                const meta = data.user.user_metadata || {};
+                await supabase.from('profiles').upsert({
+                    id: data.user.id,
+                    full_name: meta.full_name,
+                    phone: meta.phone,
+                    gender: meta.gender,
+                    subscription_status: 'new', // تحديد كعميل جديد
+                    is_onboarded: false,
+                    role: 'client',
+                    updated_at: new Date().toISOString()
+                });
+            }
+
             Alert.alert('نجاح 🎉', 'تم تفعيل حسابك بنجاح!');
+            // ✅ BUG-07: تأخير بسيط لإعطاء FamilyContext وقت للتحميل
+            await new Promise(resolve => setTimeout(resolve, 800));
             router.replace('/(tabs)');
 
         } catch (error: any) {
@@ -39,6 +57,28 @@ export default function VerifyScreen() {
             setLoading(false);
         }
     };
+
+    // ✅ UX-04: إعادة إرسال الكود
+    const handleResend = async () => {
+        if (!email) {
+            Alert.alert('خطأ', 'لا يوجد بريد إلكتروني للإعادة');
+            return;
+        }
+        setResending(true);
+        try {
+            const { error } = await supabase.auth.resend({
+                type: 'signup',
+                email: email,
+            });
+            if (error) throw error;
+            Alert.alert('تم ✅', 'تم إعادة إرسال الكود إلى بريدك الإلكتروني');
+        } catch (error: any) {
+            Alert.alert('خطأ', 'فشل إعادة الإرسال: ' + error.message);
+        } finally {
+            setResending(false);
+        }
+    };
+
     return (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
             <View style={styles.content}>
@@ -48,17 +88,17 @@ export default function VerifyScreen() {
 
                 <Text style={styles.title}>تأكيد البريد الإلكتروني</Text>
                 <Text style={styles.subtitle}>
-                    أرسلنا كود مكون من 6 أرقام إلى بريدك {'\n'}
+                    أرسلنا كود تفعيل إلى بريدك {'\n'}
                     <Text style={{ fontWeight: 'bold', color: AppColors.primary }}>{email}</Text>
                 </Text>
 
                 <View style={styles.inputContainer}>
                     <TextInput
                         style={styles.input}
-                        placeholder="أدخل الكود هنا (مثال: 123456)"
+                        placeholder="أدخل الكود هنا"
                         placeholderTextColor={AppColors.textMuted}
                         keyboardType="number-pad"
-                        maxLength={6}
+                        maxLength={8}
                         value={code}
                         onChangeText={setCode}
                         textAlign="center"
@@ -66,14 +106,27 @@ export default function VerifyScreen() {
                 </View>
 
                 <TouchableOpacity
-                    style={[styles.button, (!code || code.length < 6) && styles.buttonDisabled]}
+                    style={[styles.button, (!code || code.length < 8) && styles.buttonDisabled]}
                     onPress={handleVerify}
-                    disabled={loading || !code || code.length < 6}
+                    disabled={loading || !code || code.length < 8}
                 >
                     {loading ? (
                         <ActivityIndicator color="#FFF" />
                     ) : (
                         <Text style={styles.buttonText}>تأكيد وتفعيل الحساب</Text>
+                    )}
+                </TouchableOpacity>
+
+                {/* ✅ UX-04: زر إعادة إرسال الكود */}
+                <TouchableOpacity
+                    style={styles.resendButton}
+                    onPress={handleResend}
+                    disabled={resending}
+                >
+                    {resending ? (
+                        <ActivityIndicator size="small" color={AppColors.accent} />
+                    ) : (
+                        <Text style={styles.resendButtonText}>لم يصل الكود؟ أعد الإرسال</Text>
                     )}
                 </TouchableOpacity>
 
@@ -96,6 +149,8 @@ const styles = StyleSheet.create({
     button: { backgroundColor: AppColors.primary, padding: 18, borderRadius: 16, alignItems: 'center', elevation: 2, shadowColor: AppColors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 },
     buttonDisabled: { backgroundColor: AppColors.tabInactive, elevation: 0, shadowOpacity: 0 },
     buttonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-    backButton: { marginTop: 20, alignItems: 'center', padding: 10 },
+    resendButton: { marginTop: 20, alignItems: 'center', padding: 14, backgroundColor: '#FFF7ED', borderRadius: 12, borderWidth: 1, borderColor: '#FFEDD5' },
+    resendButtonText: { color: AppColors.accent, fontSize: 14, fontWeight: '900' },
+    backButton: { marginTop: 15, alignItems: 'center', padding: 10 },
     backButtonText: { color: AppColors.textSecondary, fontSize: 14, fontWeight: 'bold' }
 });

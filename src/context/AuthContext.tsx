@@ -23,6 +23,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // مراقبة أي تغيير لحظي (دخول أو خروج)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      setIsLoading(false); // ✅ BUG-05: ضمان إنهاء التحميل حتى لو الحدث وصل قبل getSession
     });
 
     return () => subscription.unsubscribe();
