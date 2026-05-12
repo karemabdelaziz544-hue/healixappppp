@@ -25,20 +25,44 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ——— 1. جلب الـ GROQ API Key من Supabase Secrets ———
+    // ——— 1. التحقق من هوية المستخدم (JWT) وملكية الملف ———
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const userClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    );
+    const { data: { user }, error: userError } = await userClient.auth.getUser();
+    
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized access' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // التأكد أن المستخدم يحاول قراءة ملف في المجلد الخاص به فقط
+    if (!imagePath.startsWith(`inbody/${user.id}/`)) {
+      return new Response(JSON.stringify({ error: 'Forbidden: You can only access your own files' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ——— 2. جلب الـ GROQ API Key من Supabase Secrets ———
     const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
     if (!GROQ_API_KEY) {
       throw new Error('GROQ_API_KEY secret is not configured in Supabase');
     }
 
-    // ——— 2. إنشاء Supabase client لجلب الصورة من Storage ———
-    const supabase = createClient(
+    // ——— 3. إنشاء Supabase Admin client لجلب الصورة من Storage ———
+    const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
     // جلب signed URL للصورة
-    const { data: urlData, error: urlError } = await supabase.storage
+    const { data: urlData, error: urlError } = await supabaseAdmin.storage
       .from('medical-docs')
       .createSignedUrl(imagePath, 60);
 

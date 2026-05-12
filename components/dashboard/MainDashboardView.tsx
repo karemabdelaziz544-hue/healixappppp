@@ -77,13 +77,32 @@ export default function MainDashboardView() {
           const startDate = new Date(activePlan.start_date || activePlan.created_at);
           const today = new Date();
           startDate.setHours(0, 0, 0, 0); today.setHours(0, 0, 0, 0);
+          const todayStr = today.toISOString().split('T')[0];
           const currentDayNum = Math.floor((today.getTime() - startDate.getTime()) / 86400000) + 1;
           const filtered = (allTasks as PlanTask[]).filter(t => {
             const name = t.day_name || "";
             if (currentDayNum === 1) return /اليوم\s*(الأول|1($|\D))/.test(name);
             return new RegExp(`(^|\\D)${currentDayNum}($|\\D)`).test(name);
           });
-          setTasks(filtered);
+          
+          // ✅ BUG-FIX: Fetch isolated progress from daily_task_logs
+          const { data: logData } = await supabase.from('daily_task_logs')
+             .select('task_id, is_completed')
+             .eq('user_id', userId)
+             .eq('log_date', todayStr);
+
+          const logsMap = new Map();
+          if (logData) {
+            logData.forEach(log => logsMap.set(log.task_id, log.is_completed));
+          }
+
+          // Override is_completed with user-specific progress
+          const tasksWithProgress = filtered.map(t => ({
+             ...t,
+             is_completed: logsMap.has(t.id) ? logsMap.get(t.id) : false
+          }));
+
+          setTasks(tasksWithProgress);
         } else {
           setTasks([]);
         }
@@ -95,10 +114,10 @@ export default function MainDashboardView() {
       const { data: logs } = await supabase.from('daily_logs').select('log_date, all_tasks_completed').eq('user_id', userId).order('log_date', { ascending: false }).limit(30);
       if (!logs || logs.length === 0) { setStreak(0); return; }
       let count = 0;
-      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const todayForStreak = new Date(); todayForStreak.setHours(0, 0, 0, 0);
       for (let i = 0; i < logs.length; i++) {
         const logDate = new Date(logs[i].log_date); logDate.setHours(0, 0, 0, 0);
-        const expectedDate = new Date(today); expectedDate.setDate(expectedDate.getDate() - i);
+        const expectedDate = new Date(todayForStreak); expectedDate.setDate(expectedDate.getDate() - i);
         if (logDate.getTime() !== expectedDate.getTime() || !logs[i].all_tasks_completed) break;
         count++;
       }
@@ -128,7 +147,13 @@ export default function MainDashboardView() {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, is_completed: newStatus } : t));
     await Haptics.impactAsync(newStatus ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
     try {
-      await supabase.from('plan_tasks').update({ is_completed: newStatus }).eq('id', taskId);
+      const todayStr = new Date().toISOString().split('T')[0];
+      await supabase.from('daily_task_logs').upsert({
+         user_id: userId,
+         task_id: taskId,
+         log_date: todayStr,
+         is_completed: newStatus
+      }, { onConflict: 'user_id,task_id,log_date' });
     } catch (err) {
       fetchDashboardData();
     }

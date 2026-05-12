@@ -70,7 +70,7 @@ export default function SubscriptionsScreen() {
                    currentProfile?.subscription_end_date && 
                    new Date(currentProfile.subscription_end_date) > new Date();
                    
-  const isSubAccount = currentProfile?.manager_id !== null;
+  const isSubAccount = !!currentProfile?.manager_id;
   const totalPrice = SubscriptionConfig.calculateTotal(newSubCount);
 
   const handleNextStep = () => {
@@ -310,6 +310,14 @@ export default function SubscriptionsScreen() {
                     <Text style={styles.activeBenefitsTitle}>كل شيء على ما يرام!</Text>
                     <Text style={styles.activeBenefitsText}>
                       أنت وعائلتك تتمتعون بجميع ميزات "هيليكس". استمروا في تحقيق أهدافكم الصحية.
+                    </Text>
+                  </View>
+                ) : isSubAccount ? (
+                  <View style={styles.activeBenefitsBox}>
+                    <Ionicons name="information-circle" size={40} color="#3B82F6" style={{ marginBottom: 10 }} />
+                    <Text style={styles.activeBenefitsTitle}>تجديد الاشتراك</Text>
+                    <Text style={styles.activeBenefitsText}>
+                      اشتراكك مرتبط بعائلة. الرجاء التواصل مع مدير العائلة لتجديد الاشتراك لك ولجميع أفراد العائلة.
                     </Text>
                   </View>
                 ) : (
