@@ -45,7 +45,9 @@
             "backgroundColor": "#1C2F2C"
           }
         }
-      ]
+      ],
+      "expo-secure-store",
+      "@sentry/react-native"
     ],
     "experiments": {
       "typedRoutes": true,

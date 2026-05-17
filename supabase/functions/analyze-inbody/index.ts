@@ -5,7 +5,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': Deno.env.get('APP_URL') || '*', // 🔴 Security: Restrict CORS in production via APP_URL env var
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
@@ -94,7 +94,7 @@ Deno.serve(async (req: Request) => {
         'Authorization': `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "llama-3.2-90b-vision-preview", // 🔴 استخدام موديل الرؤية الجديد من Groq
+        model: "llama-3.2-90b-vision", // 🌟 H-07: استخدام موديل الرؤية المستقر من Groq
         messages: [
           {
             role: 'user',

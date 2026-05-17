@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Alert, Keyboard, Platform, ScrollView } from 'react-native';
+import { Alert, Keyboard, Platform } from 'react-native';
 import { Audio } from 'expo-av';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../src/lib/supabase';
+import { showToast } from '../components/AppToast';
 import type { Message } from '../src/types';
 
 export type ChannelType = 'doctor' | 'admin';
@@ -31,10 +32,13 @@ export function useChatSession(channelType: ChannelType, currentUserId: string |
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [lastSeen, setLastSeen] = useState<string | null>(null);
   const [lastSentAt, setLastSentAt] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const scrollViewRef = useRef<ScrollView>(null);
   const channelRef = useRef<any>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const MAX_MESSAGE_LENGTH = 1000;
 
   // ⌨️ Keyboard listeners
   useEffect(() => {
@@ -60,15 +64,13 @@ export function useChatSession(channelType: ChannelType, currentUserId: string |
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${currentUserId}` }, (payload) => {
         const msg = payload.new as Message;
         if (msg.sender_id === receiverId) {
-          setMessages(prev => [...prev, msg]);
-          setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+          setMessages(prev => [msg, ...prev]);
         }
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `sender_id=eq.${currentUserId}` }, (payload) => {
         const msg = payload.new as Message;
         if (msg.receiver_id === receiverId) {
-          setMessages(prev => [...prev, msg]);
-          setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+          setMessages(prev => [msg, ...prev]);
         }
       }).subscribe();
 
@@ -79,12 +81,27 @@ export function useChatSession(channelType: ChannelType, currentUserId: string |
     setLoading(true);
     try {
       const role = channelType === 'doctor' ? 'doctor' : 'admin';
-      const { data: receiverData } = await supabase
-        .from('profiles')
-        .select('id, updated_at')
-        .eq('role', role)
-        .limit(1)
-        .single();
+      let receiverData = null;
+
+      // 🌟 H-03: Prioritize assigned_coach_id for doctor channel
+      if (channelType === 'doctor') {
+        const { data: userProfile } = await supabase.from('profiles').select('assigned_coach_id').eq('id', currentUserId).single();
+        if (userProfile?.assigned_coach_id) {
+           const { data: coachData } = await supabase.from('profiles').select('id, updated_at').eq('id', userProfile.assigned_coach_id).single();
+           receiverData = coachData;
+        }
+      }
+
+      // Fallback to any generic role if not assigned or admin
+      if (!receiverData) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, updated_at')
+          .eq('role', role)
+          .limit(1)
+          .single();
+        receiverData = data;
+      }
       if (receiverData && currentUserId) {
         setReceiverId(receiverData.id);
         setLastSeen(receiverData.updated_at);
@@ -93,14 +110,56 @@ export function useChatSession(channelType: ChannelType, currentUserId: string |
           .select('id, sender_id, receiver_id, content, attachment_url, attachment_type, recipient_type, is_read, created_at')
           .eq('recipient_type', role)
           .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${receiverData.id}),and(sender_id.eq.${receiverData.id},receiver_id.eq.${currentUserId})`)
-          .order('created_at', { ascending: true });
-        if (messagesData) setMessages(messagesData as Message[]);
+          .order('created_at', { ascending: false })
+          .limit(30);
+          
+        if (messagesData) {
+          setMessages(messagesData as Message[]);
+          if (messagesData.length < 30) setHasMore(false);
+        }
+
+        // Mark messages as read
+        await supabase
+          .from('messages')
+          .update({ is_read: true })
+          .eq('receiver_id', currentUserId)
+          .eq('sender_id', receiverData.id)
+          .eq('is_read', false);
       }
     } catch (err) {
       if (__DEV__) console.log(err);
     } finally {
       setLoading(false);
-      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: false }), 200);
+    }
+  };
+
+  const loadMoreMessages = async () => {
+    if (!hasMore || loadingMore || !receiverId || !currentUserId) return;
+    setLoadingMore(true);
+    try {
+      const role = channelType === 'doctor' ? 'doctor' : 'admin';
+      const lastMessage = messages[messages.length - 1];
+      if (!lastMessage) return;
+
+      const { data: olderMessages } = await supabase
+        .from('messages')
+        .select('id, sender_id, receiver_id, content, attachment_url, attachment_type, recipient_type, is_read, created_at')
+        .eq('recipient_type', role)
+        .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${receiverId}),and(sender_id.eq.${receiverId},receiver_id.eq.${currentUserId})`)
+        .lt('created_at', lastMessage.created_at)
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      if (olderMessages && olderMessages.length > 0) {
+        setMessages(prev => [...prev, ...(olderMessages as Message[])]);
+        if (olderMessages.length < 30) setHasMore(false);
+      } else {
+        setHasMore(false);
+      }
+    } catch (err) {
+      if (__DEV__) console.log(err);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -189,6 +248,12 @@ export function useChatSession(channelType: ChannelType, currentUserId: string |
     setLastSentAt(now);
 
     if (!receiverId || (!newMessage.trim() && !attachment) || !currentUserId) return;
+    
+    if (newMessage.trim().length > MAX_MESSAGE_LENGTH) {
+      showToast.error('الرسالة طويلة جداً (الحد الأقصى 1000 حرف)');
+      return;
+    }
+
     setUploading(true);
     let attachmentPath = null;
     let attachmentType = null;
@@ -232,9 +297,8 @@ export function useChatSession(channelType: ChannelType, currentUserId: string |
       setNewMessage('');
       setAttachment(null);
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (err) {
-      Alert.alert('خطأ', 'فشل الإرسال، حاول مرة أخرى');
+      showToast.error('فشل الإرسال، حاول مرة أخرى');
     } finally {
       setUploading(false);
     }
@@ -253,10 +317,12 @@ export function useChatSession(channelType: ChannelType, currentUserId: string |
     isKeyboardVisible,
     recordingDuration,
     lastSeen,
-    scrollViewRef,
     handleAttachmentClick,
     startRecording,
     stopRecording,
     sendMessage,
+    loadMoreMessages,
+    hasMore,
+    loadingMore,
   };
 }

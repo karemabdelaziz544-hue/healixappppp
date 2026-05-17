@@ -10,6 +10,8 @@ import { decode } from 'base64-arraybuffer';
 import { useRouter, Redirect } from 'expo-router';
 import { useFamily } from '../../src/context/FamilyContext';
 import SupportFAB from '../../components/SupportFAB';
+import { showToast } from '../../components/AppToast';
+import { AppColors } from '../../constants/AppTheme';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -25,7 +27,8 @@ export default function ProfileScreen() {
   const [fetching, setFetching] = useState(true);
   
   const [fullName, setFullName] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarPath, setAvatarPath] = useState<string | null>(null);
+  const [avatarDisplayUrl, setAvatarDisplayUrl] = useState<string | null>(null);
   
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -35,11 +38,23 @@ export default function ProfileScreen() {
 
   // ✅ UX-03: استخدام بيانات currentProfile بدل API call إضافي
   useEffect(() => {
-    if (currentProfile && !isSubAccount) {
-      setFullName(currentProfile.full_name || '');
-      setAvatarUrl(currentProfile.avatar_url || null);
-      setFetching(false);
-    }
+    const loadAvatar = async () => {
+      if (currentProfile && !isSubAccount) {
+        setFullName(currentProfile.full_name || '');
+        const path = currentProfile.avatar_url;
+        if (path) {
+          setAvatarPath(path);
+          if (!path.startsWith('http')) {
+            const { data } = await supabase.storage.from('avatars').createSignedUrl(path, 3600); // 1 hour expiry
+            if (data?.signedUrl) setAvatarDisplayUrl(data.signedUrl);
+          } else {
+            setAvatarDisplayUrl(path);
+          }
+        }
+        setFetching(false);
+      }
+    };
+    loadAvatar();
   }, [currentProfile, isSubAccount]);
 
   const handleUpdateProfile = async () => {
@@ -49,15 +64,15 @@ export default function ProfileScreen() {
       const updates = {
         id: user.id,
         full_name: fullName,
-        avatar_url: avatarUrl,
+        avatar_url: avatarPath,
         updated_at: new Date().toISOString(),
       };
       const { error } = await supabase.from('profiles').upsert(updates);
       if (error) throw error;
-      Alert.alert('نجاح', 'تم تحديث الملف الشخصي بنجاح! 🎉');
+      showToast.success('تم تحديث الملف الشخصي بنجاح! 🎉');
       setActiveSection(null);
     } catch (error: any) {
-      Alert.alert('خطأ', 'فشل التحديث: ' + error.message);
+      showToast.error('فشل التحديث: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -93,17 +108,20 @@ export default function ProfileScreen() {
 
       if (uploadError) throw uploadError;
 
-      const { data: signedData, error: signedError } = await supabase.storage
+      setAvatarPath(fileName); // Save path instead of signed URL in DB
+
+      const { data: signedData } = await supabase.storage
         .from('avatars')
-        .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1 year expiry
+        .createSignedUrl(fileName, 3600); // 1 hour expiry for display
 
-      if (signedError || !signedData?.signedUrl) throw signedError || new Error('Failed to generate signed URL');
+      if (signedData?.signedUrl) {
+        setAvatarDisplayUrl(signedData.signedUrl);
+      }
 
-      setAvatarUrl(signedData.signedUrl);
-      Alert.alert('نجاح', 'تم رفع الصورة، اضغط "حفظ التغييرات" لتأكيد التغيير.');
+      showToast.success('تم رفع الصورة، اضغط "حفظ التغييرات" لتأكيد التغيير.');
       
     } catch (error: any) {
-      Alert.alert('خطأ', 'فشل رفع الصورة: ' + error.message);
+      showToast.error('فشل رفع الصورة: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -118,23 +136,28 @@ export default function ProfileScreen() {
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
-      Alert.alert('نجاح', 'تم تغيير كلمة المرور بنجاح! 🔒');
+      showToast.success('تم تغيير كلمة المرور بنجاح! 🔒');
       setNewPassword('');
       setConfirmPassword('');
       setActiveSection(null);
     } catch (error: any) {
-      Alert.alert('خطأ', 'فشل التغيير: ' + error.message);
+      showToast.error('فشل التغيير: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (err) {
-      logger.error('Error logging out:', err);
-    }
+  const handleLogout = () => {
+    Alert.alert('تسجيل الخروج', 'هل أنت متأكد من رغبتك في تسجيل الخروج؟', [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'تسجيل الخروج', style: 'destructive', onPress: async () => {
+        try {
+          await supabase.auth.signOut();
+        } catch (err) {
+          logger.error('Error logging out:', err);
+        }
+      }}
+    ]);
   };
 
   // 🔥 لو الحساب فرعي وحاول يدخل الصفحة دي (حتى لو بزرار الرجوع)، اطرده للرئيسية فوراً
@@ -178,8 +201,8 @@ export default function ProfileScreen() {
           <View style={styles.expandedCard}>
             <View style={styles.avatarSection}>
               <TouchableOpacity style={styles.avatarWrapper} onPress={handleAvatarUpload} disabled={loading}>
-                {avatarUrl ? (
-                  <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+                {avatarDisplayUrl ? (
+                  <Image source={{ uri: avatarDisplayUrl }} style={styles.avatarImage} />
                 ) : (
                   <View style={styles.avatarPlaceholder}>
                     <Text style={styles.avatarInitial}>{fullName ? fullName[0].toUpperCase() : 'H'}</Text>

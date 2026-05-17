@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'; // ضفنا أيقونات جديدة
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../src/lib/supabase';
 import { useFamily } from '../src/context/FamilyContext';
 import { logger } from '../src/lib/logger';
+import { AppColors } from '../constants/AppTheme';
+import * as Haptics from 'expo-haptics';
 
 const CIRCLE_SIZE = 160; // كبرنا الدايرة شوية
 
@@ -67,10 +69,17 @@ export default function WaterTracker() {
     setConsumedGlasses(newAmount);
     animateWater(newAmount, targetGlasses);
     shakeWater(); // تشغيل الهزة البصرية
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
-      await supabase.from('water_tracking').insert([{ user_id: userId, amount: 1, recorded_at: new Date().toISOString() }]);
-    } catch (err) { logger.error('Error adding water:', err); }
+      const { error } = await supabase.from('water_tracking').insert([{ user_id: userId, amount: 1, recorded_at: new Date().toISOString() }]);
+      if (error) throw error;
+    } catch (err) {
+      logger.error('Error adding water:', err);
+      // Rollback on error
+      setConsumedGlasses(consumedGlasses);
+      animateWater(consumedGlasses, targetGlasses);
+    }
   };
 
   const handleRemoveGlass = async () => {
@@ -78,12 +87,23 @@ export default function WaterTracker() {
     const newAmount = consumedGlasses - 1;
     setConsumedGlasses(newAmount);
     animateWater(newAmount, targetGlasses);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
       const today = new Date(); today.setHours(0, 0, 0, 0);
-      const { data } = await supabase.from('water_tracking').select('id').eq('user_id', userId).gte('recorded_at', today.toISOString()).order('recorded_at', { ascending: false }).limit(1);
-      if (data && data.length > 0) { await supabase.from('water_tracking').delete().eq('id', data[0].id); }
-    } catch (err) { logger.error('Error removing water:', err); }
+      const { data, error } = await supabase.from('water_tracking').select('id').eq('user_id', userId).gte('recorded_at', today.toISOString()).order('recorded_at', { ascending: false }).limit(1);
+      
+      if (error) throw error;
+      if (data && data.length > 0) {
+        const { error: deleteError } = await supabase.from('water_tracking').delete().eq('id', data[0].id);
+        if (deleteError) throw deleteError;
+      }
+    } catch (err) {
+      logger.error('Error removing water:', err);
+      // Rollback on error
+      setConsumedGlasses(consumedGlasses);
+      animateWater(consumedGlasses, targetGlasses);
+    }
   };
 
   const waterHeight = fillAnim.interpolate({
@@ -106,7 +126,7 @@ export default function WaterTracker() {
       <View style={styles.mainContent}>
         {/* 🌟 زرار التقليل الجانبي الأنيق */}
         <TouchableOpacity style={styles.sideBtn} onPress={handleRemoveGlass} activeOpacity={0.7}>
-          <MaterialCommunityIcons name="minus" size={20} color="#9CA3AF" />
+          <Ionicons name="remove" size={20} color={AppColors.textMuted} />
         </TouchableOpacity>
 
         {/* 🌟 الفقاعة المائية المجسمة (The Fluid Bubble) */}
@@ -147,7 +167,7 @@ export default function WaterTracker() {
 const styles = StyleSheet.create({
   container: { marginBottom: 35 },
   header: { alignItems: 'flex-end', paddingHorizontal: 5, marginBottom: 15 },
-  cardTitle: { fontSize: 22, fontWeight: '900', color: '#0F172A', textAlign: 'right' },
+  cardTitle: { fontSize: 22, fontWeight: '900', color: AppColors.textPrimary, textAlign: 'right' },
   motivationText: { fontSize: 13, color: '#38BDF8', fontWeight: 'bold', marginBottom: 2 },
   
   mainContent: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 15 },

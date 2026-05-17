@@ -25,22 +25,23 @@ const getFormattedDate = () => {
 
 // 🔴 دالة ذكية لتحديد نوع المهمة (فطار، غداء، عشاء، تمرين) من محتواها
 const getTaskMeta = (task: PlanTask) => {
+  const type = task.task_type;
+  
+  if (type === 'workout') return { title: 'تمرين رياضي', icon: 'barbell', color: AppColors.accent, bg: AppColors.accentLight };
+  if (type === 'breakfast') return { title: 'وجبة الإفطار', icon: 'cafe', color: '#10B981', bg: '#D1FAE5' };
+  if (type === 'lunch') return { title: 'وجبة الغداء', icon: 'restaurant', color: '#3B82F6', bg: '#DBEAFE' };
+  if (type === 'dinner') return { title: 'وجبة العشاء', icon: 'moon', color: '#8B5CF6', bg: '#EDE9FE' };
+  if (type === 'snack') return { title: 'سناك خفيف', icon: 'apple', color: '#F59E0B', bg: '#FEF3C7' };
+  
+  // Fallback for older data without exact task_type
   const text = task.content || '';
+  if (text.includes('تمرين')) return { title: 'تمرين رياضي', icon: 'barbell', color: AppColors.accent, bg: AppColors.accentLight };
+  if (text.includes('فطار') || text.includes('إفطار') || text.includes('الريق')) return { title: 'وجبة الإفطار', icon: 'cafe', color: '#10B981', bg: '#D1FAE5' };
+  if (text.includes('غداء') || text.includes('غذاء')) return { title: 'وجبة الغداء', icon: 'restaurant', color: '#3B82F6', bg: '#DBEAFE' };
+  if (text.includes('عشاء')) return { title: 'وجبة العشاء', icon: 'moon', color: '#8B5CF6', bg: '#EDE9FE' };
+  if (text.includes('سناك') || text.includes('وجبة خفيفة')) return { title: 'سناك خفيف', icon: 'apple', color: '#F59E0B', bg: '#FEF3C7' };
 
-  if (task.task_type === 'workout' || text.includes('تمرين')) {
-    return { title: 'تمرين رياضي', icon: 'barbell', color: AppColors.accent, bg: AppColors.accentLight };
-  } else if (text.includes('فطار') || text.includes('إفطار') || text.includes('الريق')) {
-    return { title: 'وجبة الإفطار', icon: 'cafe', color: '#10B981', bg: '#D1FAE5' };
-  } else if (text.includes('غداء') || text.includes('غذاء')) {
-    return { title: 'وجبة الغداء', icon: 'restaurant', color: '#3B82F6', bg: '#DBEAFE' };
-  } else if (text.includes('عشاء')) {
-    return { title: 'وجبة العشاء', icon: 'moon', color: '#8B5CF6', bg: '#EDE9FE' };
-  } else if (text.includes('سناك') || text.includes('وجبة خفيفة')) {
-    return { title: 'سناك خفيف', icon: 'apple', color: '#F59E0B', bg: '#FEF3C7' };
-  } else {
-    // الافتراضي لأي مهام أخرى
-    return { title: 'مهمة نظام', icon: 'nutrition', color: AppColors.primary, bg: AppColors.primaryLight };
-  }
+  return { title: 'مهمة نظام', icon: 'nutrition', color: AppColors.primary, bg: AppColors.primaryLight };
 };
 
 export default function MainDashboardView() {
@@ -114,9 +115,20 @@ export default function MainDashboardView() {
           startDate.setHours(0, 0, 0, 0);
           const currentDayNum = Math.floor((today.getTime() - startDate.getTime()) / 86400000) + 1;
           const filtered = (allTasks as PlanTask[]).filter(t => {
+            // Support 'day_number' if added in future migrations
+            if ((t as any).day_number !== undefined && (t as any).day_number !== null) {
+              return (t as any).day_number === currentDayNum;
+            }
+
             const name = t.day_name || "";
-            if (currentDayNum === 1) return /اليوم\s*(الأول|1($|\D))/.test(name);
-            return new RegExp(`(^|\\D)${currentDayNum}($|\\D)`).test(name);
+            if (currentDayNum === 1 && /اليوم\s*(الأول|1($|\D))/.test(name)) return true;
+            
+            // Extract the first number found in the day name string
+            const match = name.match(/\d+/);
+            if (match) {
+              return parseInt(match[0], 10) === currentDayNum;
+            }
+            return false;
           });
           
           const logsMap = new Map();

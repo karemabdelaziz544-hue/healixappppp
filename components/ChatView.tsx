@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ScrollView, ActivityIndicator, KeyboardAvoidingView,
-  Platform, Alert, Image,
+  ActivityIndicator, KeyboardAvoidingView,
+  Platform, Alert, Image, FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -66,7 +66,7 @@ const InlineAttachment = ({ path, type, isMe }: { path: string; type: string; is
         const { sound: newSound } = await Audio.Sound.createAsync(
           { uri: signedUrl },
           { shouldPlay: true },
-          (status: any) => {
+          (status) => {
             if (status.isLoaded && status.didJustFinish) {
               setIsPlaying(false);
               newSound.setPositionAsync(0);
@@ -110,10 +110,12 @@ const InlineAttachment = ({ path, type, isMe }: { path: string; type: string; is
     );
   }
 
+  const fileLabel = path.split('.').pop()?.toUpperCase() || 'ملف';
+
   return (
     <TouchableOpacity onPress={() => Linking.openURL(signedUrl)} style={[styles.inlineFileBox, { backgroundColor: isMe ? 'rgba(255,255,255,0.2)' : 'rgba(42,75,70,0.05)' }]}>
       <Ionicons name="document-text" size={18} color={isMe ? '#FFF' : AppColors.primary} />
-      <Text style={{ fontSize: 13, fontWeight: 'bold', color: isMe ? '#FFF' : AppColors.primary }}>فتح الملف (PDF)</Text>
+      <Text style={{ fontSize: 13, fontWeight: 'bold', color: isMe ? '#FFF' : AppColors.primary }}>فتح الملف ({fileLabel})</Text>
     </TouchableOpacity>
   );
 };
@@ -155,11 +157,13 @@ export default function ChatView({
     isKeyboardVisible,
     recordingDuration,
     lastSeen,
-    scrollViewRef,
     handleAttachmentClick,
     startRecording,
     stopRecording,
     sendMessage,
+    loadMoreMessages,
+    hasMore,
+    loadingMore,
   } = useChatSession(channelType, currentUserId);
 
   return (
@@ -180,16 +184,34 @@ export default function ChatView({
             )}
           </View>
           <View style={[styles.headerAvatar, { backgroundColor: headerIconBg }]}>
-            <Ionicons name={headerIcon as any} size={20} color={headerIconColor} />
+            <Ionicons name={headerIcon as keyof typeof Ionicons.glyphMap} size={20} color={headerIconColor} />
           </View>
         </View>
 
-        <ScrollView ref={scrollViewRef} style={styles.messagesArea} contentContainerStyle={{ padding: 15 }}>
-          {loading ? <ActivityIndicator size="large" color={AppColors.primary} style={{ marginTop: 50 }} /> : (
-            messages.map((msg) => {
+        {loading && messages.length === 0 ? (
+          <ActivityIndicator size="large" color={AppColors.primary} style={{ marginTop: 50 }} />
+        ) : (
+          <FlatList
+            style={styles.messagesArea}
+            contentContainerStyle={{ padding: 15 }}
+            data={messages}
+            keyExtractor={(item) => item.id}
+            inverted={true}
+            onEndReached={loadMoreMessages}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={AppColors.primary} style={{ marginVertical: 10 }} /> : null}
+            ListEmptyComponent={
+              <View style={styles.emptyStateContainer}>
+                <Ionicons name="chatbubbles-outline" size={48} color={AppColors.textMuted} />
+                <Text style={styles.emptyStateText}>لا توجد رسائل حتى الآن.</Text>
+                <Text style={styles.emptyStateSubtext}>ابدأ المحادثة الآن!</Text>
+              </View>
+            }
+            renderItem={({ item: msg }) => {
               const isMe = msg.sender_id === currentUserId;
+              const msgTime = new Date(msg.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
               return (
-                <View key={msg.id} style={[styles.messageWrapper, isMe ? styles.myMessageWrapper : styles.theirMessageWrapper]}>
+                <View style={[styles.messageWrapper, isMe ? styles.myMessageWrapper : styles.theirMessageWrapper]}>
                   <View style={[styles.messageBubble, isMe ? styles.myBubble : styles.theirBubble]}>
                     {msg.content ? (
                       <Text style={[styles.messageText, isMe ? styles.myMessageText : styles.theirMessageText]}>
@@ -201,21 +223,25 @@ export default function ChatView({
                       <InlineAttachment path={msg.attachment_url} type={msg.attachment_type || 'file'} isMe={isMe} />
                     ) : null}
 
-                    {isMe && (
-                      <View style={{ alignSelf: 'flex-start', marginTop: 5, flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={styles.messageFooter}>
+                      <Text style={[styles.messageTime, isMe ? { color: 'rgba(255,255,255,0.7)' } : { color: AppColors.textMuted }]}>
+                        {msgTime}
+                      </Text>
+                      {isMe && (
                         <Ionicons
                           name={msg.is_read ? 'checkmark-done' : 'checkmark'}
-                          size={16}
-                          color={msg.is_read ? AppColors.readReceipt : 'rgba(255,255,255,0.7)'}
+                          size={14}
+                          color={msg.is_read ? '#4ADE80' : 'rgba(255,255,255,0.7)'}
+                          style={{ marginLeft: 4 }}
                         />
-                      </View>
-                    )}
+                      )}
+                    </View>
                   </View>
                 </View>
               );
-            })
-          )}
-        </ScrollView>
+            }}
+          />
+        )}
 
         <View style={[styles.inputArea, !isKeyboardVisible && { paddingBottom: Platform.OS === 'ios' ? 90 : 80 }]}>
           {/* Offline banner */}
@@ -297,6 +323,11 @@ const styles = StyleSheet.create({
   messageText: { fontSize: 15, lineHeight: 22 },
   myMessageText: { color: '#FFF' },
   theirMessageText: { color: AppColors.textPrimary },
+  messageFooter: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', marginTop: 5 },
+  messageTime: { fontSize: 10, fontWeight: 'bold' },
+  emptyStateContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 80, transform: [{ scaleY: -1 }] }, // Reverse transform to offset inverted FlatList
+  emptyStateText: { fontSize: 16, color: AppColors.textPrimary, fontWeight: 'bold', marginTop: 10 },
+  emptyStateSubtext: { fontSize: 14, color: AppColors.textMuted, marginTop: 5 },
 
   inlineImage: { width: 220, height: 220, borderRadius: 15, marginTop: 10, backgroundColor: 'rgba(0,0,0,0.1)' },
   inlineAudioBox: { flexDirection: 'row-reverse', alignItems: 'center', padding: 10, borderRadius: 15, marginTop: 10, minWidth: 180, alignSelf: 'flex-end' },

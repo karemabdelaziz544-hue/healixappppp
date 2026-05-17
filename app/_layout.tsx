@@ -7,6 +7,12 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import OfflineBanner from '../components/OfflineBanner';
 import { AppToastProvider } from '../components/AppToast';
+import * as Sentry from '@sentry/react-native';
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  tracesSampleRate: 1.0,
+});
 
 // 🛑 أوقف إخفاء الـ Splash تلقائياً — هنخفيه يدوياً بعد انتهاء التحقق من الـ auth
 SplashScreen.preventAutoHideAsync();
@@ -44,7 +50,7 @@ function AuthGuard() {
   return null;
 }
 
-export default function RootLayout() {
+function RootLayout() {
   return (
     <ErrorBoundary>
       <AuthProvider>
@@ -61,3 +67,5 @@ export default function RootLayout() {
     </ErrorBoundary>
   );
 }
+
+export default Sentry.wrap(RootLayout);
