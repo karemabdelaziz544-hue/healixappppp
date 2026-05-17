@@ -3,9 +3,11 @@ import { View, Text, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platfor
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../src/lib/supabase';
+import { logger } from '../../src/lib/logger';
 import { useFamily } from '../../src/context/FamilyContext';
 import { useSubscriptionGuard } from '../../hooks/useSubscriptionGuard';
 import Skeleton from '../../components/Skeleton';
+import ExpiredState from '../../components/ExpiredState';
 import LockedTabView from '../../components/LockedTabView';
 import type { InbodyRecord, ClientDocument, HealthProfile, LifestyleProfile } from '../../src/types';
 
@@ -41,7 +43,7 @@ export default function MedicalRecordsScreen() {
     try {
       await Promise.all([fetchInbody(), fetchDocs(), fetchProfiles()]);
     } catch (error) {
-      console.log('Error fetching all medical data:', error);
+      logger.error('Error fetching all medical data:', error);
     } finally {
       setLoading(false);
     }
@@ -61,20 +63,20 @@ export default function MedicalRecordsScreen() {
   }, [fetchAllData]);
 
   const fetchProfiles = async () => {
-    const { data: health } = await supabase.from('health_profile').select('*').eq('user_id', userId).single();
+    const { data: health } = await supabase.from('health_profile').select('id, user_id, diseases, has_allergies, allergies_details, diet_type, family_history, medications, surgeries, injuries, digestive_issues, hormonal_status').eq('user_id', userId).single();
     setHealthProfile(health || null);
 
-    const { data: life } = await supabase.from('lifestyle_profile').select('*').eq('user_id', userId).single();
+    const { data: life } = await supabase.from('lifestyle_profile').select('id, user_id, goal, meals_per_day, has_breakfast, has_snacks, late_night_eating, favorite_foods, disliked_foods, water_liters, beverages, activity_level, does_exercise, exercise_details, sleep_hours, sleep_quality, smoker, stress_level, work_nature, emotional_eating, diet_history, supplements, caffeine_intake, appetite_level, weight_plateau').eq('user_id', userId).single();
     setLifestyleProfile(life || null);
   };
 
   const fetchInbody = async () => {
-    const { data } = await supabase.from('inbody_records').select('*').eq('user_id', userId).order('record_date', { ascending: true });
+    const { data } = await supabase.from('inbody_records').select('id, user_id, weight, muscle_mass, fat_percent, record_date, ai_summary, image_url').eq('user_id', userId).order('record_date', { ascending: true });
     setInbodyRecords(data || []);
   };
 
   const fetchDocs = async () => {
-    const { data } = await supabase.from('client_documents').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+    const { data } = await supabase.from('client_documents').select('id, user_id, file_name, file_url, file_type, created_at').eq('user_id', userId).order('created_at', { ascending: false });
     setDocs(data || []);
   };
 
@@ -119,7 +121,6 @@ export default function MedicalRecordsScreen() {
 
   // ⏰ Expired — مقفول بالكامل (إجبار على التجديد)
   if (!isGuardLoading && userLifecycleState === 'expired') {
-    const ExpiredState = require('../../components/ExpiredState').default;
     return <ExpiredState />;
   }
 

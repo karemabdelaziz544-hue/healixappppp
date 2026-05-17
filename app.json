@@ -6,10 +6,16 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "healixapp",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.healix.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "يحتاج Healix للوصول للكاميرا لالتقاط صور التحاليل والقياسات الطبية.",
+        "NSMicrophoneUsageDescription": "يحتاج Healix للوصول للميكروفون لإرسال الرسائل الصوتية للكوتش.",
+        "NSPhotoLibraryUsageDescription": "يحتاج Healix للوصول للصور لرفع صور التحاليل والمستندات الطبية."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -20,7 +26,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.healixapp"
+      "package": "com.healix.app"
     },
     "web": {
       "output": "static",

@@ -1,7 +1,6 @@
-// @ts-nocheck
 // analyze-inbody — Supabase Edge Function
 // تستقبل مسار الصورة من Supabase Storage، تجلبها وترسلها لـ Groq (Llama 3.2 90B Vision) لتحليلها
-// هذا الملف يعمل في بيئة Deno على Supabase — أخطاء IDE طبيعية
+// هذا الملف يعمل في بيئة Deno على Supabase — أخطاء IDE المتعلقة بـ Deno طبيعية ولا تؤثر على التشغيل
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 

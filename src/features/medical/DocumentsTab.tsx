@@ -6,6 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import { supabase } from '../../lib/supabase';
 import { showToast } from '../../../components/AppToast';
+import { logger } from '../../lib/logger';
 import { MedicalTabProps } from './medical.types';
 import { medicalStyles as styles } from './medicalStyles';
 import type { ClientDocument } from '../../types';
@@ -54,7 +55,7 @@ export default function DocumentsTab({ userId, docs, uploading, setUploading, on
         showToast.success('تم رفع الصورة بنجاح');
       }
     } catch (err) {
-      console.log(err);
+      logger.error(err);
       showToast.error('فشل رفع الصورة');
     } finally {
       setUploading(false);
@@ -82,7 +83,7 @@ export default function DocumentsTab({ userId, docs, uploading, setUploading, on
         showToast.success('تم رفع الملف بنجاح');
       }
     } catch (err) {
-      console.log(err);
+      logger.error(err);
       showToast.error('فشل رفع الملف');
     } finally {
       setUploading(false);

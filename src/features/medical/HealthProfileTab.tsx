@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ActivityIndicator, TextInput } from 'reac
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { showToast } from '../../../components/AppToast';
+import { logger } from '../../lib/logger';
 import { MedicalTabProps, DISEASE_OPTIONS, DIET_OPTIONS, FAMILY_HISTORY_OPTIONS, DIGESTIVE_OPTIONS } from './medical.types';
 import { medicalStyles as styles } from './medicalStyles';
 import type { HealthProfile } from '../../types';
@@ -46,7 +47,7 @@ export default function HealthProfileTab({ userId, healthProfile, uploading, set
       setIsEditing(false);
       showToast.success('تم حفظ الملف الطبي بنجاح');
     } catch (err: any) {
-      console.error('[saveHealthProfile] Error:', JSON.stringify(err));
+      logger.error('[saveHealthProfile] Error:', JSON.stringify(err));
       showToast.error('خطأ في الحفظ', err?.message);
     } finally {
       setUploading(false);

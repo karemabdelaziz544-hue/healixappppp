@@ -4,9 +4,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import NotificationBell from '../NotificationBell';
+import Skeleton from '../Skeleton';
 import { AppColors } from '../../constants/AppTheme';
 import { useFamily } from '../../src/context/FamilyContext';
 import { supabase } from '../../src/lib/supabase';
+import { logger } from '../../src/lib/logger';
 import type { Plan, PlanTask } from '../../src/types';
 
 const MOTIVATIONAL_QUOTES = [
@@ -59,25 +61,57 @@ export default function MainDashboardView() {
   const fetchDashboardData = useCallback(async () => {
     if (!userId) return;
     try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split('T')[0];
+
+      // 🚀 Parallelize streak fetching
+      const streakPromise = supabase.from('daily_logs')
+        .select('log_date, all_tasks_completed')
+        .eq('user_id', userId)
+        .order('log_date', { ascending: false })
+        .limit(30);
+
       // ✅ BUG-01: استعلام الخطة للمستخدم الحالي أولاً
-      const { data: planData } = await supabase.from('plans').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).maybeSingle();
-      
-      let activePlan = planData;
+      let { data: activePlan } = await supabase.from('plans')
+        .select('id, user_id, title, status, start_date, created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       // ✅ BUG-01: لو مفيش خطة + ده حساب فرعي → جرب خطة المدير
       if (!activePlan && currentProfile?.manager_id) {
-        const { data: managerPlan } = await supabase.from('plans').select('*').eq('user_id', currentProfile.manager_id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+        const { data: managerPlan } = await supabase.from('plans')
+          .select('id, user_id, title, status, start_date, created_at')
+          .eq('user_id', currentProfile.manager_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
         activePlan = managerPlan;
       }
 
       if (activePlan) {
         setPlan(activePlan as Plan);
-        const { data: allTasks } = await supabase.from('plan_tasks').select('*').eq('plan_id', activePlan.id).order('order_index', { ascending: true });
+        
+        // 🚀 Parallelize Tasks & Logs fetching
+        const [tasksRes, logsRes] = await Promise.all([
+          supabase.from('plan_tasks')
+            .select('id, plan_id, day_name, content, task_type, is_completed, order_index')
+            .eq('plan_id', activePlan.id)
+            .order('order_index', { ascending: true }),
+          supabase.from('daily_task_logs')
+             .select('task_id, is_completed')
+             .eq('user_id', userId)
+             .eq('log_date', todayStr)
+        ]);
+
+        const allTasks = tasksRes.data;
+        const logData = logsRes.data;
+
         if (allTasks && allTasks.length > 0) {
           const startDate = new Date(activePlan.start_date || activePlan.created_at);
-          const today = new Date();
-          startDate.setHours(0, 0, 0, 0); today.setHours(0, 0, 0, 0);
-          const todayStr = today.toISOString().split('T')[0];
+          startDate.setHours(0, 0, 0, 0);
           const currentDayNum = Math.floor((today.getTime() - startDate.getTime()) / 86400000) + 1;
           const filtered = (allTasks as PlanTask[]).filter(t => {
             const name = t.day_name || "";
@@ -85,12 +119,6 @@ export default function MainDashboardView() {
             return new RegExp(`(^|\\D)${currentDayNum}($|\\D)`).test(name);
           });
           
-          // ✅ BUG-FIX: Fetch isolated progress from daily_task_logs
-          const { data: logData } = await supabase.from('daily_task_logs')
-             .select('task_id, is_completed')
-             .eq('user_id', userId)
-             .eq('log_date', todayStr);
-
           const logsMap = new Map();
           if (logData) {
             logData.forEach(log => logsMap.set(log.task_id, log.is_completed));
@@ -111,7 +139,7 @@ export default function MainDashboardView() {
       }
 
       // Streak Calculation
-      const { data: logs } = await supabase.from('daily_logs').select('log_date, all_tasks_completed').eq('user_id', userId).order('log_date', { ascending: false }).limit(30);
+      const { data: logs } = await streakPromise;
       if (!logs || logs.length === 0) { setStreak(0); return; }
       let count = 0;
       const todayForStreak = new Date(); todayForStreak.setHours(0, 0, 0, 0);
@@ -123,7 +151,7 @@ export default function MainDashboardView() {
       }
       setStreak(count);
     } catch (err) {
-      console.log("Error fetching data:", err);
+      logger.error("Error fetching data:", err);
     } finally {
       setLoading(false);
     }
@@ -171,7 +199,6 @@ export default function MainDashboardView() {
   }, [progress]);
 
   if (loading) {
-    const Skeleton = require('../Skeleton').default;
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.scrollContent}>

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'reac
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'; // ضفنا أيقونات جديدة
 import { supabase } from '../src/lib/supabase';
 import { useFamily } from '../src/context/FamilyContext';
+import { logger } from '../src/lib/logger';
 
 const CIRCLE_SIZE = 160; // كبرنا الدايرة شوية
 
@@ -38,7 +39,7 @@ export default function WaterTracker() {
         setConsumedGlasses(totalConsumed);
         animateWater(totalConsumed, target);
       }
-    } catch (error) { console.log('Error water data:', error); } finally { setLoading(false); }
+    } catch (error) { logger.error('Error water data:', error); } finally { setLoading(false); }
   };
 
   const animateWater = (consumed: number, target: number) => {
@@ -69,7 +70,7 @@ export default function WaterTracker() {
 
     try {
       await supabase.from('water_tracking').insert([{ user_id: userId, amount: 1, recorded_at: new Date().toISOString() }]);
-    } catch (err) { console.log('Error adding water:', err); }
+    } catch (err) { logger.error('Error adding water:', err); }
   };
 
   const handleRemoveGlass = async () => {
@@ -82,7 +83,7 @@ export default function WaterTracker() {
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const { data } = await supabase.from('water_tracking').select('id').eq('user_id', userId).gte('recorded_at', today.toISOString()).order('recorded_at', { ascending: false }).limit(1);
       if (data && data.length > 0) { await supabase.from('water_tracking').delete().eq('id', data[0].id); }
-    } catch (err) { console.log('Error removing water:', err); }
+    } catch (err) { logger.error('Error removing water:', err); }
   };
 
   const waterHeight = fillAnim.interpolate({

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
+import { logger } from '../src/lib/logger';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
@@ -39,11 +40,11 @@ export function usePushNotifications() {
           }
         }
       })
-      .catch(console.error); // منع الكراش الصامت
+      .catch(logger.error); // منع الكراش الصامت
 
     // 2. مستمع للإشعارات
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Received notification:', notification);
+      logger.log('Received notification:', notification);
     });
 
     // 3. مستمع لضغط المستخدم على الإشعار
@@ -71,7 +72,7 @@ async function registerForPushNotificationsAsync() {
   const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
   
   if (isExpoGo) {
-    console.log('⚠️ الإشعارات لا تعمل داخل تطبيق Expo Go. سيتم تخطيها بأمان مؤقتاً.');
+    logger.log('⚠️ الإشعارات لا تعمل داخل تطبيق Expo Go. سيتم تخطيها بأمان مؤقتاً.');
     return undefined; // نرجع فاضي عشان ميكرش التطبيق وتقدر تسجل دخول
   }
 
@@ -95,17 +96,17 @@ async function registerForPushNotificationsAsync() {
       }
       
       if (finalStatus !== 'granted') {
-        console.log('Failed to get push token for push notification!');
+        logger.error('Failed to get push token for push notification!');
         return undefined;
       }
       
       const projectId = Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId;
       token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     } catch (e) {
-      console.log("Error getting push token:", e);
+      logger.error("Error getting push token:", e);
     }
   } else {
-    console.log('يجب استخدام جهاز حقيقي لاختبار الإشعارات');
+    logger.log('يجب استخدام جهاز حقيقي لاختبار الإشعارات');
   }
 
   return token;

@@ -1,6 +1,7 @@
 import React, { ErrorInfo, ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { logger } from '../src/lib/logger';
 
 interface Props {
   children: ReactNode;
@@ -24,7 +25,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // هنا ممكن مستقبلاً نربطها بـ Sentry أو Crashlytics عشان تتبع الأخطاء
-    console.error('App crashed:', error, errorInfo);
+    logger.error('App crashed:', error, errorInfo);
   }
 
   // دالة لإعادة المحاولة

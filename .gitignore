@@ -39,6 +39,9 @@ yarn-error.*
 
 app-example
 
+# Supabase temp files (contains sensitive project IDs)
+supabase/.temp/
+
 # generated native folders
 /ios
 /android

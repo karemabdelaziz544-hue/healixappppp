@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { AppColors, AppRadius } from '../../constants/AppTheme';
 import { useFamily } from '../../src/context/FamilyContext';
 import { supabase } from '../../src/lib/supabase';
+import { logger } from '../../src/lib/logger';
 
 /**
  * AssistantOnboardingView — مساعد تهيئة العميل الجديد
@@ -160,11 +161,11 @@ export default function AssistantOnboardingView() {
           .eq('id', userId);
 
         if (error) throw error;
-        console.log('✅ is_onboarded updated to true');
+        logger.log('✅ is_onboarded updated to true');
         // تحديث البروفايل في الـ Context → الداشبورد هيتحول لـ MainDashboardView
         refreshFamily();
       } catch (err) {
-        console.log('Error updating is_onboarded:', err);
+        logger.error('Error updating is_onboarded:', err);
       }
     };
 

@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ActivityIndicator, TextInput } from 'reac
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { showToast } from '../../../components/AppToast';
+import { logger } from '../../lib/logger';
 import { MedicalTabProps, GOAL_OPTIONS, WORK_NATURE_OPTIONS, APPETITE_OPTIONS } from './medical.types';
 import { medicalStyles as styles } from './medicalStyles';
 import type { LifestyleProfile } from '../../types';
@@ -61,7 +62,7 @@ export default function LifestyleProfileTab({ userId, lifestyleProfile, uploadin
       setIsEditing(false);
       showToast.success('تم حفظ نمط الحياة بنجاح');
     } catch (err: any) {
-      console.error('[saveLifestyleProfile] Error:', JSON.stringify(err));
+      logger.error('[saveLifestyleProfile] Error:', JSON.stringify(err));
       showToast.error('خطأ في الحفظ', err?.message);
     } finally {
       setUploading(false);

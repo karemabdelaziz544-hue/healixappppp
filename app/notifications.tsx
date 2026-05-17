@@ -25,7 +25,7 @@ export default function NotificationsScreen() {
   const fetchNotifications = useCallback(async () => {
     const { data } = await supabase
       .from('notifications')
-      .select('*')
+      .select('id, user_id, title, message, type, link, is_read, created_at')
       .eq('user_id', currentProfile!.id)
       .order('created_at', { ascending: false });
     

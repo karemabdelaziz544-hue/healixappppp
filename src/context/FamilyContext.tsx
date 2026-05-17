@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { logger } from '../lib/logger';
 
 // تعريف شكل بيانات البروفايل
 export interface Profile {
@@ -60,7 +61,7 @@ export const FamilyProvider = ({ children }: { children: React.ReactNode }) => {
       // جلب الحساب الرئيسي وكل الحسابات اللي هو مديرها
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, full_name, avatar_url, role, manager_id, subscription_status, subscription_end_date, is_onboarded, gender, birth_date, weight, height')
         .or(`id.eq.${userId},manager_id.eq.${userId}`);
 
       if (error) throw error;
@@ -115,7 +116,7 @@ export const FamilyProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
     } catch (err) {
-      console.log("Error fetching family:", err);
+      logger.error("Error fetching family:", err);
     } finally {
       setLoadingFamily(false);
       isInitialLoadDone.current = true;

@@ -3,10 +3,12 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, I
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../src/lib/supabase';
+import { logger } from '../../src/lib/logger';
 import { useRouter } from 'expo-router';
 import { useFamily } from '../../src/context/FamilyContext';
 import { useSubscriptionGuard } from '../../hooks/useSubscriptionGuard';
 import LockedTabView from '../../components/LockedTabView';
+import ExpiredState from '../../components/ExpiredState';
 import Skeleton from '../../components/Skeleton';
 import type { Plan } from '../../src/types';
 import { AppColors } from '../../constants/AppTheme';
@@ -37,7 +39,7 @@ export default function HistoryScreen() {
       if (error) throw error;
       setPlans(data || []);
     } catch (error) {
-      console.log('Error fetching history:', error);
+      logger.error('Error fetching history:', error);
     } finally {
       setLoading(false);
     }
@@ -88,7 +90,6 @@ export default function HistoryScreen() {
 
   // ⏰ Expired — مقفول بالكامل (إجبار على التجديد)
   if (!isGuardLoading && userLifecycleState === 'expired') {
-    const ExpiredState = require('../../components/ExpiredState').default;
     return <ExpiredState />;
   }
 

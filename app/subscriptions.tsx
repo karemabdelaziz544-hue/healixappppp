@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../src/lib/supabase';
+import { logger } from '../src/lib/logger';
 import { useFamily } from '../src/context/FamilyContext';
 import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
@@ -47,14 +48,14 @@ export default function SubscriptionsScreen() {
   const fetchData = async () => {
     try {
       const { data: pending } = await supabase.from('payment_requests')
-        .select('*').eq('user_id', userId).eq('status', 'pending').maybeSingle();
+        .select('id, user_id, amount, plan_type, status, receipt_url, renewal_metadata, created_at').eq('user_id', userId).eq('status', 'pending').maybeSingle();
       setPendingRequest(pending);
 
       const { data: hist } = await supabase.from('payment_requests')
-        .select('*').eq('user_id', userId).order('created_at', { ascending: false });
+        .select('id, user_id, amount, plan_type, status, receipt_url, renewal_metadata, created_at').eq('user_id', userId).order('created_at', { ascending: false });
       setHistory(hist || []);
     } catch (error) {
-      console.log("Error fetching sub data:", error);
+      logger.error("Error fetching sub data:", error);
     } finally {
       setLoading(false);
     }

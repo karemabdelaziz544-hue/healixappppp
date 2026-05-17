@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../src/lib/supabase';
+import { logger } from '../../src/lib/logger';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import ExpiredState from '../../components/ExpiredState';
 import Skeleton from '../../components/Skeleton';
@@ -34,7 +35,7 @@ export default function PlanDetailsScreen() {
 
       const { data: tasks } = await supabase
         .from('plan_tasks')
-        .select('*')
+        .select('id, plan_id, day_name, content, task_type, is_completed, order_index')
         .eq('plan_id', planId)
         .order('order_index', { ascending: true });
 
@@ -56,7 +57,7 @@ export default function PlanDetailsScreen() {
         if (days.length > 0) setActiveDay(days[0]);
       }
     } catch (error) {
-      console.error('Error fetching details:', error);
+      logger.error('Error fetching details:', error);
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,5 @@
 import { Alert } from 'react-native';
+import { logger } from './logger';
 
 /**
  * Global Error Handler
@@ -7,7 +8,7 @@ import { Alert } from 'react-native';
 export function handleError(error: unknown, context: string = 'App') {
   const message = error instanceof Error ? error.message : typeof error === 'string' ? error : 'حدث خطأ غير متوقع';
   
-  console.error(`[Healix Error] [${context}]`, error);
+  logger.error(`[Healix Error] [${context}]`, error);
   
   // Future: Sentry.captureException(error)
   

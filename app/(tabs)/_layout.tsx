@@ -4,6 +4,7 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { AppColors } from '../../constants/AppTheme';
+import { showToast } from '../../components/AppToast';
 import { useFamily } from '../../src/context/FamilyContext';
 
 function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
@@ -31,7 +32,6 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             handleSwitchBack();
             // ✅ UX-02: إشعار واضح عند الرجوع التلقائي
             setTimeout(() => {
-              const { showToast } = require('../../components/AppToast');
               showToast.info('تم الرجوع للحساب الرئيسي');
             }, 300);
           } else {
@@ -46,15 +46,17 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           }
         };
 
-        // تحديد الأيقونات
+        // تحديد الأيقونات والعناوين للوصولية (Accessibility)
         let iconName: any = 'home';
-        if (route.name === 'index') iconName = isFocused ? 'home' : 'home-outline';
-        if (route.name === 'chat') iconName = isFocused ? 'chatbubbles' : 'chatbubbles-outline';
-        if (route.name === 'medical') iconName = isFocused ? 'pulse' : 'pulse-outline';
-        if (route.name === 'history') iconName = isFocused ? 'time' : 'time-outline';
+        let a11yLabel = '';
+        if (route.name === 'index') { iconName = isFocused ? 'home' : 'home-outline'; a11yLabel = 'الرئيسية'; }
+        if (route.name === 'chat') { iconName = isFocused ? 'chatbubbles' : 'chatbubbles-outline'; a11yLabel = 'المحادثات'; }
+        if (route.name === 'medical') { iconName = isFocused ? 'pulse' : 'pulse-outline'; a11yLabel = 'القسم الطبي'; }
+        if (route.name === 'history') { iconName = isFocused ? 'time' : 'time-outline'; a11yLabel = 'الخطط والبرامج'; }
 
         if (route.name === 'profile') {
           iconName = isSubAccount ? 'swap-horizontal-outline' : (isFocused ? 'person' : 'person-outline');
+          a11yLabel = isSubAccount ? 'العودة للحساب الرئيسي' : 'الملف الشخصي';
         }
 
         // 🔴 تصميم الزر الأوسط البارز (صفحة القياسات - الطبية)
@@ -65,6 +67,9 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               onPress={onPress}
               style={styles.centerButtonWrapper}
               activeOpacity={0.9}
+              accessibilityRole="button"
+              accessibilityLabel={a11yLabel}
+              accessibilityState={{ selected: isFocused }}
             >
               <View style={[
                 styles.centerButton,
@@ -84,6 +89,9 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             onPress={onPress}
             style={styles.tabItem}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={a11yLabel}
+            accessibilityState={{ selected: isFocused }}
           >
             <Ionicons
               name={iconName}
@@ -125,7 +133,7 @@ const styles = StyleSheet.create({
     height: 70,
     backgroundColor: '#FFFFFF', // خلفية بيضاء
     borderRadius: 35, // دوران ناعم
-    flexDirection: 'row',
+    flexDirection: 'row-reverse', // ✅ Fix RTL alignment
     alignItems: 'center',
     // شادو ناعم جداً للبار نفسه
     elevation: 8,

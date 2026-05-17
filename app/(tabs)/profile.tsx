@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Activi
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../src/lib/supabase';
+import { logger } from '../../src/lib/logger';
 import { useAuth } from '../../src/context/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
@@ -83,7 +84,8 @@ export default function ProfileScreen() {
     try {
       const base64FileData = pickerResult.assets[0].base64;
       const fileExt = pickerResult.assets[0].uri.split('.').pop() || 'jpeg';
-      const fileName = `${user?.id}/${Date.now()}.${fileExt}`;
+      const fileId = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+      const fileName = `${user?.id}/${fileId}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
@@ -91,9 +93,13 @@ export default function ProfileScreen() {
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName);
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from('avatars')
+        .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1 year expiry
 
-      setAvatarUrl(publicUrl);
+      if (signedError || !signedData?.signedUrl) throw signedError || new Error('Failed to generate signed URL');
+
+      setAvatarUrl(signedData.signedUrl);
       Alert.alert('نجاح', 'تم رفع الصورة، اضغط "حفظ التغييرات" لتأكيد التغيير.');
       
     } catch (error: any) {
@@ -127,7 +133,7 @@ export default function ProfileScreen() {
     try {
       await supabase.auth.signOut();
     } catch (err) {
-      console.log('Error logging out:', err);
+      logger.error('Error logging out:', err);
     }
   };
 

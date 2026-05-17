@@ -8,6 +8,7 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { showToast } from '../../../components/AppToast';
+import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
 import type { InbodyRecord } from '../../types';
 import { ARABIC_MONTHS, MedicalTabProps } from './medical.types';
@@ -87,7 +88,7 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
     } catch (err: any) {
       setAnalyzing(false);
       showToast.error('حدث خطأ أثناء رفع الصورة أو التحليل');
-      console.error('[handleAnalyzeImage]', err);
+      logger.error('[handleAnalyzeImage]', err);
     }
   };
 

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { AppColors } from '../constants/AppTheme';
 import { supabase } from '../src/lib/supabase';
+import { logger } from '../src/lib/logger';
 
 export default function VerifyScreen() {
     const router = useRouter();
@@ -52,7 +53,7 @@ export default function VerifyScreen() {
 
         } catch (error: any) {
             Alert.alert('خطأ', 'الكود غير صحيح أو منتهي الصلاحية');
-            console.error(error.message);
+            logger.error(error.message);
         } finally {
             setLoading(false);
         }
