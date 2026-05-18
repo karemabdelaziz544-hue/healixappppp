@@ -73,6 +73,24 @@ Deno.serve(async (req: Request) => {
     const imageResponse = await fetch(urlData.signedUrl);
     if (!imageResponse.ok) throw new Error('Failed to fetch image from storage');
 
+    const contentLength = Number(imageResponse.headers.get('content-length') || 0);
+    const MAX_SIZE = 5 * 1024 * 1024; // 5MB limit to prevent memory crashes
+
+    if (contentLength > MAX_SIZE) {
+      return new Response(JSON.stringify({ error: 'Payload Too Large: Image exceeds 5MB limit' }), {
+        status: 413,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg';
+    if (!mimeType.startsWith('image/')) {
+      return new Response(JSON.stringify({ error: 'Unsupported Media Type: Only images are allowed' }), {
+        status: 415,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const imageBuffer = await imageResponse.arrayBuffer();
     const bytes = new Uint8Array(imageBuffer);
 

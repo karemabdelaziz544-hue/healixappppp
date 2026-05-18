@@ -2,15 +2,11 @@
  * InBodyTab — قياسات الـ InBody والرسوم البيانية
  */
 import { Ionicons } from '@expo/vector-icons';
-import { decode } from 'base64-arraybuffer';
-import * as ImagePicker from 'expo-image-picker';
-import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { memo } from 'react';
+import { ActivityIndicator, Dimensions, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
-import { showToast } from '../../../components/AppToast';
-import { logger } from '../../lib/logger';
-import { supabase } from '../../lib/supabase';
 import type { InbodyRecord } from '../../types';
+import { useInBody } from './hooks/useInBody';
 import { ARABIC_MONTHS, MedicalTabProps } from './medical.types';
 import { medicalStyles as styles } from './medicalStyles';
 
@@ -21,107 +17,40 @@ interface InBodyTabProps extends MedicalTabProps {
   onRefresh: () => Promise<void>;
 }
 
+// 🌟 Performance: Memoize History Card to prevent re-renders in lists
+const HistoryCard = memo(({ record, onPress }: { record: InbodyRecord, onPress: (r: InbodyRecord) => void }) => {
+  const d = new Date(record.record_date);
+  return (
+    <TouchableOpacity style={styles.historyCard} onPress={() => onPress(record)} activeOpacity={0.7}>
+      <View style={styles.historyDateBox}>
+        <Text style={styles.historyDay}>{d.getDate()}</Text>
+        <Text style={styles.historyMonth}>{ARABIC_MONTHS[d.getMonth()]}</Text>
+      </View>
+      <View style={styles.historyDetails}>
+        <Text style={[styles.historySummary, { color: '#4B5563', fontSize: 14 }]} numberOfLines={1}>
+          {record.ai_summary ? record.ai_summary.split('\n')[0] : 'تم تسجيل قياس InBody'}
+        </Text>
+        <View style={{ flexDirection: 'row-reverse', alignItems: 'center', marginTop: 8 }}>
+          <Ionicons name="scan-outline" size={16} color="#F97316" />
+          <Text style={localStyles.clickForMoreText}>اضغط لمزيد من التفاصيل</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
 export default function InBodyTab({ userId, inbodyRecords, uploading, setUploading, onRefresh }: InBodyTabProps) {
-  const [showForm, setShowForm] = useState(false);
-  const [weight, setWeight] = useState('');
-  const [muscle, setMuscle] = useState('');
-  const [fat, setFat] = useState('');
-  const [analyzing, setAnalyzing] = useState(false);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [aiReport, setAiReport] = useState<string>('');
+  const { state, actions } = useInBody(userId, inbodyRecords, onRefresh, setUploading);
 
-  // 🔴 States جديدة للـ Popup
-  const [selectedRecord, setSelectedRecord] = useState<InbodyRecord | null>(null);
-  const [modalVisible, setModalVisible] = useState(false);
+  const {
+    showForm, weight, muscle, fat, analyzing, imageUrl, aiReport,
+    selectedRecord, modalVisible, chartData, lastRec
+  } = state;
 
-  const lastRec = inbodyRecords.length > 0 ? inbodyRecords[inbodyRecords.length - 1] : null;
-  const chartData = {
-    labels: inbodyRecords.slice(-5).map(r => new Date(r.record_date).getDate().toString()),
-    datasets: [{ data: inbodyRecords.slice(-5).map(r => r.weight) }],
-  };
-
-  const handleAnalyzeImage = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.2, // ضغط الصورة لمنع خطأ 413
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets.length > 0) {
-        setAnalyzing(true);
-        const file = result.assets[0];
-        const uriParts = file.uri.split('.');
-        const fileExt = uriParts[uriParts.length - 1];
-        const fileName = `inbody/${userId}/${Date.now()}.${fileExt}`;
-
-        if (!file.base64) throw new Error('لا توجد بيانات للصورة');
-
-        // 1. رفع الصورة لـ Supabase Storage
-        const { error: uploadError } = await supabase.storage
-          .from('medical-docs')
-          .upload(fileName, decode(file.base64), {
-            contentType: file.mimeType || `image/${fileExt}`,
-          });
-
-        if (uploadError) throw uploadError;
-        setImageUrl(fileName);
-
-        // 2. استدعاء Edge Function لتحليل الصورة
-        const { data: fnData, error: fnError } = await supabase.functions.invoke('analyze-inbody', {
-          body: { imagePath: fileName },
-        });
-
-        if (fnError) throw fnError;
-
-        // 3. تعبئة الحقول تلقائياً إذا أمكن
-        if (fnData?.extracted?.weight) setWeight(String(fnData.extracted.weight));
-        if (fnData?.extracted?.muscle) setMuscle(String(fnData.extracted.muscle));
-        if (fnData?.extracted?.fat) setFat(String(fnData.extracted.fat));
-        if (fnData?.analysis) setAiReport(fnData.analysis);
-
-        setAnalyzing(false);
-        showToast.success('تم تحليل الورقة! راجع الأرقام وتأكد منها.');
-        setShowForm(true);
-      }
-    } catch (err: any) {
-      setAnalyzing(false);
-      showToast.error('حدث خطأ أثناء رفع الصورة أو التحليل');
-      logger.error('[handleAnalyzeImage]', err);
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (!weight) return Alert.alert('خطأ', 'الرجاء إدخال الوزن');
-    setUploading(true);
-    try {
-      const { error } = await supabase.from('inbody_records').insert({
-        user_id: userId,
-        weight: parseFloat(weight),
-        muscle_mass: muscle ? parseFloat(muscle) : null,
-        fat_percent: fat ? parseFloat(fat) : null,
-        record_date: new Date().toISOString(),
-        image_url: imageUrl,
-        ai_summary: aiReport, // حفظ التقرير في الداتابيز
-      });
-      if (error) throw error;
-      await onRefresh();
-      setShowForm(false);
-      setWeight(''); setMuscle(''); setFat(''); setImageUrl(null); setAiReport('');
-      showToast.success('تم حفظ القياس بنجاح!');
-    } catch (err) {
-      showToast.error('فشل حفظ القياس');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  // 🔴 دالة لفتح الـ Popup
-  const openRecordDetails = (record: InbodyRecord) => {
-    setSelectedRecord(record);
-    setModalVisible(true);
-  };
+  const {
+    setWeight, setMuscle, setFat, setShowForm, setModalVisible,
+    handleAnalyzeImage, handleSubmit, resetForm, openRecordDetails
+  } = actions;
 
   return (
     <View style={styles.fadeContainer}>
@@ -158,7 +87,7 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
       )}
 
       {/* --- التشارت والمقارنة --- */}
-      {inbodyRecords.length > 1 && (
+      {chartData && (
         <View style={styles.chartContainer}>
           <Text style={styles.chartTitle}>تطور الوزن</Text>
           <LineChart
@@ -187,7 +116,7 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
       {showForm && (
         <View style={styles.formContainer}>
           <View style={styles.formHeader}>
-            <TouchableOpacity onPress={() => { setShowForm(false); setImageUrl(null); setWeight(''); setMuscle(''); setFat(''); setAiReport(''); }}>
+            <TouchableOpacity onPress={resetForm}>
               <Ionicons name="close-circle" size={28} color="#EF4444" />
             </TouchableOpacity>
             <Text style={styles.formTitle}>تسجيل قياس جديد</Text>
@@ -218,33 +147,12 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
       {inbodyRecords.length > 0 && !showForm && (
         <View style={styles.historySection}>
           <Text style={styles.historySectionTitle}>سجل القياسات السابقة <Ionicons name="calendar-outline" size={18} /></Text>
-          {inbodyRecords.slice().reverse().map(record => {
-            const d = new Date(record.record_date);
-            return (
-              <TouchableOpacity key={record.id} style={styles.historyCard} onPress={() => openRecordDetails(record)} activeOpacity={0.7}>
-                <View style={styles.historyDateBox}>
-                  <Text style={styles.historyDay}>{d.getDate()}</Text>
-                  <Text style={styles.historyMonth}>{ARABIC_MONTHS[d.getMonth()]}</Text>
-                </View>
-                <View style={styles.historyDetails}>
-
-                  {/* عنوان أو مقتطف صغير جداً من التقرير */}
-                  <Text style={[styles.historySummary, { color: '#4B5563', fontSize: 14 }]} numberOfLines={1}>
-                    {record.ai_summary ? record.ai_summary.split('\n')[0] : 'تم تسجيل قياس InBody'}
-                  </Text>
-
-                  {/* 🔴 الجملة الجديدة اللي طلبتها */}
-                  <View style={{ flexDirection: 'row-reverse', alignItems: 'center', marginTop: 8 }}>
-                    <Ionicons name="scan-outline" size={16} color="#F97316" />
-                    <Text style={localStyles.clickForMoreText}>اضغط لمزيد من التفاصيل</Text>
-                  </View>
-
-                </View>
-              </TouchableOpacity>
-            );
-          })}
+          {inbodyRecords.slice().reverse().map(record => (
+            <HistoryCard key={record.id} record={record} onPress={openRecordDetails} />
+          ))}
         </View>
       )}
+
       {/* 🔴 Modal (Popup) لعرض التفاصيل */}
       {selectedRecord && (
         <Modal

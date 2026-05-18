@@ -1,50 +1,113 @@
-# Welcome to your Expo app 👋
+# Healix Mobile Application 🚀
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Healix is a comprehensive health and lifestyle tracking mobile application built with React Native (Expo) and Supabase. This repository contains the mobile client and edge functions that power the medical analysis features using advanced AI.
 
-## Get started
+---
 
-1. Install dependencies
+## 🏗 Architecture Map
 
-   ```bash
-   npm install
-   ```
+The application follows a modular, feature-based architecture pattern with clear separation of concerns.
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+src/
+├── components/        # Shared UI components (Buttons, Toasts, Modals)
+├── context/           # Global state providers (Auth, Family)
+├── features/          # Domain-specific logic
+│   ├── medical/       # InBody analysis, Documents, Health Profiles
+│   │   ├── hooks/     # Business logic and state management
+│   │   ├── services/  # API and Supabase interactions
+│   │   └── ...        # UI Screens and Tabs
+│   └── chat/          # Real-time messaging
+├── lib/               # Core infrastructure
+│   ├── apiClient.ts   # Resilient Supabase wrapper (Retries, Timeouts)
+│   ├── schemas.ts     # Zod runtime validation schemas
+│   ├── supabase.ts    # Supabase client initialization
+│   └── logger.ts      # Telemetry wrapper
+├── types/             # TypeScript interfaces and domain models
+└── ...
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### Key Technologies
+- **Framework**: React Native (Expo SDK 54)
+- **Backend & Auth**: Supabase (PostgreSQL, Storage, Edge Functions)
+- **Routing**: Expo Router (File-based routing)
+- **Observability**: Sentry for React Native
+- **AI Integration**: Groq (Llama 3.2 Vision) for medical document parsing
 
-## Learn more
+---
 
-To learn more about developing your project with Expo, look at the following resources:
+## 🛠 Environment Setup
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+1. **Clone the repository:**
+   ```bash
+   git clone <repo-url>
+   cd healix-app
+   ```
 
-## Join the community
+2. **Install dependencies:**
+   ```bash
+   npm install --legacy-peer-deps
+   ```
 
-Join our community of developers creating universal apps.
+3. **Environment Variables:**
+   Create a `.env` file in the root directory and populate it with your Supabase and Sentry credentials:
+   ```env
+   EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   EXPO_PUBLIC_SENTRY_DSN=your_sentry_dsn
+   ```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+4. **Start Development Server:**
+   ```bash
+   npm start
+   ```
+
+---
+
+## 🧪 Testing & Quality Assurance
+
+This project uses Jest and React Native Testing Library.
+
+- **Run Unit Tests**:
+  ```bash
+  npm test
+  ```
+- **Security Audit**:
+  ```bash
+  npm run audit:prod
+  ```
+  *(Run this before any production release to ensure no vulnerable dependencies exist).*
+
+---
+
+## 🚀 Release Process
+
+1. **Pre-flight Checks**:
+   - Ensure `npm test` passes.
+   - Ensure `npm run audit:prod` yields no critical vulnerabilities.
+   - Verify environment variables for the production tier.
+
+2. **Build for iOS/Android**:
+   We use EAS (Expo Application Services) for building the production artifacts.
+   ```bash
+   eas build --profile production --platform all
+   ```
+
+3. **OTA Updates** (Over-The-Air):
+   For minor JavaScript/asset fixes:
+   ```bash
+   eas update --branch production --message "Fix: Description of fix"
+   ```
+
+---
+
+## 🔍 Troubleshooting
+
+- **Edge Function Memory Crashes (413 Payload Too Large)**:
+  The `analyze-inbody` function enforces a 5MB payload limit. If users report analysis failures, ensure the client-side image compression (quality: 0.2) is working correctly.
+
+- **Routing Loops / Blank Screens on Boot**:
+  The application uses an explicit state machine (`booting` -> `ready` | `unauthenticated`) in `app/_layout.tsx`. If the app hangs on the splash screen, verify that the `AuthContext` is resolving the session state correctly.
+
+- **Network Timeouts on Weak Connections**:
+  The `apiClient` automatically retries idempotent requests with exponential backoff up to 2 times. Timeout is set to 15 seconds. Logs are sent to Sentry if all retries fail.

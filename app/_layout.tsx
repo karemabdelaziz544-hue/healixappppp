@@ -23,7 +23,9 @@ function PushNotificationManager() {
   return null;
 }
 
-// 🌟 2. حارس التوجيه الذكي (Auth Guard) — يستخدم SplashScreen بدل setTimeout
+type AppState = 'booting' | 'unauthenticated' | 'ready';
+
+// 🌟 2. حارس التوجيه الذكي (Auth Guard) — يستخدم State Machine
 function AuthGuard() {
   const { session, isLoading } = useAuth();
   const segments = useSegments();
@@ -31,19 +33,40 @@ function AuthGuard() {
   const navigationState = useRootNavigationState();
 
   useEffect(() => {
-    // لا نفعل شيئاً حتى يكتمل تحميل الـ auth ويكون الـ Router جاهزاً
-    if (!navigationState?.key || isLoading) return;
+    if (!navigationState?.key) return;
 
-    const inAuthGroup = segments[0] === 'login' || segments[0] === 'signup' || segments[0] === 'verify'; // ✅ إضافة verify
-    const inOnboarding = segments[0] === 'onboarding';
+    const currentSegment = segments[0] || '';
+    const isAuthRoute = ['login', 'signup', 'verify'].includes(currentSegment);
+    const isOnboardingRoute = currentSegment === 'onboarding';
+
+    // State Machine
+    let appState: AppState = 'booting';
+    if (isLoading) {
+      appState = 'booting';
+    } else if (session) {
+      appState = 'ready';
+    } else {
+      appState = 'unauthenticated';
+    }
+
+    if (appState === 'booting') return;
 
     // ✅ أخفِ الـ Splash بعد التحقق من الـ auth مباشرة
     SplashScreen.hideAsync();
 
-    if (!session && !inAuthGroup && !inOnboarding) {
-      router.replace('/login');
-    } else if (session && (inAuthGroup || inOnboarding)) {
-      router.replace('/(tabs)');
+    // Route based on state map
+    switch (appState) {
+      case 'unauthenticated':
+        if (!isAuthRoute && !isOnboardingRoute) {
+          router.replace('/login');
+        }
+        break;
+      
+      case 'ready':
+        if (isAuthRoute || isOnboardingRoute) {
+          router.replace('/(tabs)');
+        }
+        break;
     }
   }, [session, segments, isLoading, navigationState?.key]);
 
