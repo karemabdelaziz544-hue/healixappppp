@@ -11,7 +11,7 @@ import * as Linking from 'expo-linking';
 import { supabase } from '../src/lib/supabase';
 import type { Message } from '../src/types';
 import { AppColors } from '../constants/AppTheme';
-import { useChatSession, ChannelType } from '../hooks/useChatSession';
+import { useChatSession, ChannelType } from '../src/features/chat/hooks/useChatSession';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 
 // 🌟 مُشغل المرفقات الداخلي (صور - فويس - ملفات)

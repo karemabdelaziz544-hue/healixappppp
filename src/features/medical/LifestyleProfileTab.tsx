@@ -1,12 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../../lib/supabase';
-import { showToast } from '../../../components/AppToast';
-import { logger } from '../../lib/logger';
 import { MedicalTabProps, GOAL_OPTIONS, WORK_NATURE_OPTIONS, APPETITE_OPTIONS } from './medical.types';
 import { medicalStyles as styles } from './medicalStyles';
 import type { LifestyleProfile } from '../../types';
+import { useLifestyleProfile } from './hooks/useLifestyleProfile';
 
 interface LifestyleProfileTabProps extends MedicalTabProps {
   lifestyleProfile: LifestyleProfile | null;
@@ -14,60 +12,10 @@ interface LifestyleProfileTabProps extends MedicalTabProps {
 }
 
 export default function LifestyleProfileTab({ userId, lifestyleProfile, uploading, setUploading, onRefresh }: LifestyleProfileTabProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [form, setForm] = useState<any>(
-    lifestyleProfile
-      ? {
-          ...lifestyleProfile,
-          water_liters: lifestyleProfile.water_liters?.toString() || '2',
-          sleep_hours: lifestyleProfile.sleep_hours?.toString() || '7',
-          exercise_details: {
-            type: lifestyleProfile.exercise_details?.type || '',
-            days: lifestyleProfile.exercise_details?.days?.toString() || '0',
-          },
-        }
-      : {
-          goal: 'خسارة وزن',
-          meals_per_day: '3',
-          has_breakfast: true,
-          has_snacks: false,
-          late_night_eating: false,
-          favorite_foods: '',
-          disliked_foods: '',
-          water_liters: '2',
-          beverages: [],
-          activity_level: 'متوسط',
-          does_exercise: false,
-          exercise_details: { type: '', days: '0' },
-          sleep_hours: '7',
-          sleep_quality: 'جيد',
-          smoker: false,
-          stress_level: 'متوسط',
-          work_nature: 'مكتبي (جالس)',
-          emotional_eating: false,
-          diet_history: '',
-          supplements: '',
-          caffeine_intake: '',
-          appetite_level: 'عادية',
-          weight_plateau: false,
-        }
-  );
-
-  const saveProfile = async () => {
-    setUploading(true);
-    try {
-      const { error } = await supabase.from('lifestyle_profile').upsert({ ...form, user_id: userId });
-      if (error) throw error;
-      await onRefresh();
-      setIsEditing(false);
-      showToast.success('تم حفظ نمط الحياة بنجاح');
-    } catch (err: any) {
-      logger.error('[saveLifestyleProfile] Error:', JSON.stringify(err));
-      showToast.error('خطأ في الحفظ', err?.message);
-    } finally {
-      setUploading(false);
-    }
-  };
+  const {
+    state: { isEditing, form },
+    actions: { setIsEditing, setForm, saveProfile }
+  } = useLifestyleProfile(userId, lifestyleProfile, onRefresh, setUploading);
 
   return (
     <View style={styles.fadeContainer}>

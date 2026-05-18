@@ -4,8 +4,12 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+const APP_URL = Deno.env.get('APP_URL');
+// 🔴 Security: Deny-by-default CORS. If APP_URL is missing, we don't fallback to '*'.
+const allowedOrigin = APP_URL ? APP_URL : 'https://healix.app';
+
 const corsHeaders = {
-  'Access-Control-Allow-Origin': Deno.env.get('APP_URL') || '*', // 🔴 Security: Restrict CORS in production via APP_URL env var
+  'Access-Control-Allow-Origin': allowedOrigin,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
@@ -44,6 +48,21 @@ Deno.serve(async (req: Request) => {
     if (!imagePath.startsWith(`inbody/${user.id}/`)) {
       return new Response(JSON.stringify({ error: 'Forbidden: You can only access your own files' }), {
         status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ——— 1.5 Rate Limiting (5 times per 24h) ———
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count, error: countError } = await userClient
+      .from('inbody_records')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('created_at', oneDayAgo);
+
+    if (!countError && count !== null && count >= 5) {
+      return new Response(JSON.stringify({ error: 'Too Many Requests: You have reached your daily limit for InBody analysis.' }), {
+        status: 429,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -101,8 +120,6 @@ Deno.serve(async (req: Request) => {
       binary += String.fromCharCode(...bytes.slice(i, i + chunkSize));
     }
     const imageBase64 = btoa(binary);
-
-    const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg';
 
     // ——— 4. إرسال الصورة لـ Groq Vision (Llama 3.2 90B Vision) ———
     const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {

@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import { showToast } from '../../../../components/AppToast';
-import { logger } from '../../../../lib/logger';
+import { logger } from '../../../lib/logger';
 import { inBodyService } from '../services/inBodyService';
 import type { InbodyRecord } from '../../../types';
 

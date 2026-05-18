@@ -1,12 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../../lib/supabase';
-import { showToast } from '../../../components/AppToast';
-import { logger } from '../../lib/logger';
 import { MedicalTabProps, DISEASE_OPTIONS, DIET_OPTIONS, FAMILY_HISTORY_OPTIONS, DIGESTIVE_OPTIONS } from './medical.types';
 import { medicalStyles as styles } from './medicalStyles';
 import type { HealthProfile } from '../../types';
+import { useHealthProfile } from './hooks/useHealthProfile';
 
 interface HealthProfileTabProps extends MedicalTabProps {
   healthProfile: HealthProfile | null;
@@ -14,45 +12,10 @@ interface HealthProfileTabProps extends MedicalTabProps {
 }
 
 export default function HealthProfileTab({ userId, healthProfile, uploading, setUploading, onRefresh }: HealthProfileTabProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [form, setForm] = useState<HealthProfile>(
-    healthProfile || {
-      user_id: userId,
-      diseases: [],
-      has_allergies: false,
-      allergies_details: '',
-      diet_type: 'عادي',
-      family_history: [],
-      medications: '',
-      surgeries: '',
-      injuries: '',
-      digestive_issues: [],
-      hormonal_status: '',
-    }
-  );
-
-  const toggleArrayItem = (arrayName: 'diseases' | 'family_history' | 'digestive_issues', item: string) => {
-    setForm((prev: any) => {
-      const arr = prev[arrayName] || [];
-      return { ...prev, [arrayName]: arr.includes(item) ? arr.filter((i: string) => i !== item) : [...arr, item] };
-    });
-  };
-
-  const saveProfile = async () => {
-    setUploading(true);
-    try {
-      const { error } = await supabase.from('health_profile').upsert({ ...form, user_id: userId });
-      if (error) throw error;
-      await onRefresh();
-      setIsEditing(false);
-      showToast.success('تم حفظ الملف الطبي بنجاح');
-    } catch (err: any) {
-      logger.error('[saveHealthProfile] Error:', JSON.stringify(err));
-      showToast.error('خطأ في الحفظ', err?.message);
-    } finally {
-      setUploading(false);
-    }
-  };
+  const { 
+    state: { isEditing, form }, 
+    actions: { setIsEditing, setForm, toggleArrayItem, saveProfile } 
+  } = useHealthProfile(userId, healthProfile, onRefresh, setUploading);
 
   return (
     <View style={styles.fadeContainer}>

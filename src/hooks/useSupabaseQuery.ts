@@ -1,8 +1,36 @@
 import { useState, useEffect } from 'react';
 
-// Simple in-memory cache
-const cache: Record<string, { data: any; timestamp: number }> = {};
+// Bounded LRU Cache Implementation to prevent memory growth
+class LRUCache<K, V> {
+  private maxSize: number;
+  private cache: Map<K, V>;
+
+  constructor(maxSize: number) {
+    this.maxSize = maxSize;
+    this.cache = new Map();
+  }
+
+  get(key: K): V | undefined {
+    if (!this.cache.has(key)) return undefined;
+    const value = this.cache.get(key)!;
+    this.cache.delete(key);
+    this.cache.set(key, value);
+    return value;
+  }
+
+  set(key: K, value: V) {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.maxSize) {
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey !== undefined) this.cache.delete(firstKey);
+    }
+    this.cache.set(key, value);
+  }
+}
+
 const CACHE_EXPIRATION_MS = 5 * 60 * 1000; // 5 minutes
+const globalCache = new LRUCache<string, { data: any; timestamp: number }>(50); // Max 50 items
 
 export function useSupabaseQuery<T>(
   key: string,
@@ -18,18 +46,19 @@ export function useSupabaseQuery<T>(
       setLoading(true);
       setError(null);
 
-      if (!ignoreCache && cache[key]) {
-        const isExpired = Date.now() - cache[key].timestamp > options.cacheTime;
+      const cachedItem = globalCache.get(key);
+
+      if (!ignoreCache && cachedItem) {
+        const isExpired = Date.now() - cachedItem.timestamp > options.cacheTime;
         if (!isExpired) {
-          setData(cache[key].data);
+          setData(cachedItem.data);
           setLoading(false);
-          // Optional: stale-while-revalidate could go here
           return;
         }
       }
 
       const result = await queryFn();
-      cache[key] = { data: result, timestamp: Date.now() };
+      globalCache.set(key, { data: result, timestamp: Date.now() });
       setData(result);
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Unknown error'));
