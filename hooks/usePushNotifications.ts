@@ -24,6 +24,7 @@ export function usePushNotifications() {
   
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
+  const lastSyncedTokenInfo = useRef<{ token: string; profileId: string } | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -33,10 +34,22 @@ export function usePushNotifications() {
         if (token) {
           setExpoPushToken(token);
           if (currentProfile?.id) {
-            await supabase
+            // Check diff before updating
+            if (
+              lastSyncedTokenInfo.current?.token === token &&
+              lastSyncedTokenInfo.current?.profileId === currentProfile.id
+            ) {
+              return; // Already synced for this exact token & profile combination
+            }
+
+            const { error } = await supabase
               .from('profiles')
               .update({ fcm_token: token })
               .eq('id', currentProfile.id);
+
+            if (!error) {
+              lastSyncedTokenInfo.current = { token, profileId: currentProfile.id };
+            }
           }
         }
       })

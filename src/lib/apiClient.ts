@@ -1,4 +1,3 @@
-import { supabase } from './supabase';
 import { logger } from './logger';
 import * as Sentry from '@sentry/react-native';
 
@@ -8,6 +7,19 @@ export interface QueryOptions {
   timeoutMs?: number;
   retries?: number;
   isIdempotent?: boolean; // If true, sets default retries to 2. Else 0.
+}
+
+/**
+ * Wraps a promise with a timeout. Rejects if the promise doesn't resolve in time.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(() => reject(new Error('Request timed out')), ms);
+    promise.then(
+      (val) => { clearTimeout(timeoutId); resolve(val); },
+      (err) => { clearTimeout(timeoutId); reject(err); }
+    );
+  });
 }
 
 export async function executeQuery<T>(
@@ -20,22 +32,29 @@ export async function executeQuery<T>(
   let attempt = 0;
   
   while (attempt <= retries) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
     try {
-      const result = await query.abortSignal(controller.signal);
-      clearTimeout(timeoutId);
+      let resultPromise: Promise<any>;
+
+      // Database query builders expose .abortSignal(); Storage & Functions return plain Promises.
+      // We detect which case we're in and handle accordingly.
+      if (typeof query?.abortSignal === 'function') {
+        const controller = new AbortController();
+        resultPromise = withTimeout(query.abortSignal(controller.signal), timeoutMs);
+      } else {
+        // query is already a Promise (storage.upload, functions.invoke, etc.)
+        resultPromise = withTimeout(Promise.resolve(query), timeoutMs);
+      }
+
+      const result = await resultPromise;
       
-      if (result.error) {
+      if (result?.error) {
         throw result.error;
       }
       
-      return { data: result.data as T, error: null };
+      // Storage & functions return { data, error } or just data directly
+      return { data: (result?.data !== undefined ? result.data : result) as T, error: null };
     } catch (error: any) {
-      clearTimeout(timeoutId);
-      
-      const isTimeout = error.name === 'AbortError' || error.message?.includes('AbortError');
+      const isTimeout = error.message === 'Request timed out' || error.name === 'AbortError';
       
       if (isTimeout) {
         logger.warn(`Request timed out on attempt ${attempt + 1}`);

@@ -11,7 +11,7 @@ import * as Sentry from '@sentry/react-native';
 
 Sentry.init({
   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-  tracesSampleRate: 1.0,
+  tracesSampleRate: 0.1, // 🌟 Adjusted from 1.0 to 0.1 to save bandwidth/battery in production
 });
 
 // 🛑 أوقف إخفاء الـ Splash تلقائياً — هنخفيه يدوياً بعد انتهاء التحقق من الـ auth

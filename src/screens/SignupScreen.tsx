@@ -1,10 +1,11 @@
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Animated, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { handleError } from '../lib/errorHandler';
 import { supabase } from '../lib/supabase';
-// 🔴 إضافة استدعاء showToast
+import { showToast } from '../../components/AppToast';
+import { AuthInput } from '../../components/auth/AuthInput';
+import { AuthButton } from '../../components/auth/AuthButton';
 
 export default function SignupScreen() {
   const [name, setName] = useState('');
@@ -14,8 +15,6 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // أنيميشن لدخول الشاشة بنعومة (Fade In & Scale)
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -31,28 +30,28 @@ export default function SignupScreen() {
   const handleSignup = async () => {
     // 1. التحقق من البيانات (Validation)
     if (!name || !email || !phone || !password) {
-      Alert.alert('تنبيه', 'يرجى إكمال جميع الحقول');
+      showToast.error('يرجى إكمال جميع الحقول');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      Alert.alert('تنبيه', 'يرجى إدخال بريد إلكتروني صحيح');
+      showToast.error('يرجى إدخال بريد إلكتروني صحيح');
       return;
     }
 
     const phoneRegex = /^01[0125][0-9]{8}$/; // أرقام مصرية
     if (!phoneRegex.test(phone)) {
-      Alert.alert('تنبيه', 'يرجى إدخال رقم هاتف صحيح (مثال: 01012345678)');
+      showToast.error('يرجى إدخال رقم هاتف صحيح (مثال: 01012345678)');
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('تنبيه', 'كلمات المرور غير متطابقة');
+      showToast.error('كلمات المرور غير متطابقة');
       return;
     }
     if (password.length < 6) {
-      Alert.alert('تنبيه', 'كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+      showToast.error('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
       return;
     }
 
@@ -87,7 +86,7 @@ export default function SignupScreen() {
       });
 
       // 🔴 التعديل هنا: توجيه المستخدم لصفحة إدخال الكود بدل الدخول المباشر للتابات
-      Alert.alert('نجاح 🎉', 'تم إنشاء الحساب! تفقد بريدك لإدخال الكود.');
+      showToast.success('تم إنشاء الحساب! تفقد بريدك لإدخال الكود.');
       router.push({
         pathname: '/verify',
         params: { email: email.trim() }
@@ -120,35 +119,22 @@ export default function SignupScreen() {
           </View>
 
           {/* نموذج التسجيل */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>الاسم بالكامل</Text>
-            <TextInput style={styles.input} placeholder="مثال: أحمد محمد" value={name} onChangeText={setName} />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>البريد الإلكتروني</Text>
-            <TextInput style={styles.input} placeholder="name@example.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-          </View>
+          <AuthInput label="الاسم بالكامل" placeholder="مثال: أحمد محمد" value={name} onChangeText={setName} />
+          
+          <AuthInput label="البريد الإلكتروني" placeholder="name@example.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
 
           <View style={styles.row}>
-            <View style={[styles.inputGroup, { flex: 1 }]}>
-              <Text style={styles.label}>رقم الهاتف</Text>
-              <TextInput style={styles.input} placeholder="01xxxxxxxxx" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+            <View style={{ flex: 1 }}>
+              <AuthInput label="رقم الهاتف" placeholder="01xxxxxxxxx" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
             </View>
 
-            <View style={[styles.inputGroup, { flex: 1 }]}>
+            <View style={{ flex: 1 }}>
               <Text style={styles.label}>النوع</Text>
               <View style={styles.genderToggle}>
-                <TouchableOpacity
-                  style={[styles.genderBtn, gender === 'male' && styles.genderBtnActive]}
-                  onPress={() => setGender('male')}
-                >
+                <TouchableOpacity style={[styles.genderBtn, gender === 'male' && styles.genderBtnActive]} onPress={() => setGender('male')}>
                   <Text style={[styles.genderText, gender === 'male' && styles.genderTextActive]}>ذكر</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.genderBtn, gender === 'female' && styles.genderBtnActive]}
-                  onPress={() => setGender('female')}
-                >
+                <TouchableOpacity style={[styles.genderBtn, gender === 'female' && styles.genderBtnActive]} onPress={() => setGender('female')}>
                   <Text style={[styles.genderText, gender === 'female' && styles.genderTextActive]}>أنثى</Text>
                 </TouchableOpacity>
               </View>
@@ -156,34 +142,16 @@ export default function SignupScreen() {
           </View>
 
           <View style={styles.row}>
-            <View style={[styles.inputGroup, { flex: 1 }]}>
-              <Text style={styles.label}>كلمة المرور</Text>
-              <View style={styles.passwordContainer}>
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-                  <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color="#9CA3AF" />
-                </TouchableOpacity>
-                <TextInput style={[styles.input, { flex: 1, height: '100%' }]} placeholder="••••••••" value={password} onChangeText={setPassword} secureTextEntry={!showPassword} />
-              </View>
+            <View style={{ flex: 1 }}>
+              <AuthInput label="كلمة المرور" isPassword placeholder="••••••••" value={password} onChangeText={setPassword} />
             </View>
-            <View style={[styles.inputGroup, { flex: 1 }]}>
-              <Text style={styles.label}>تأكيد المرور</Text>
-              <View style={styles.passwordContainer}>
-                <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.eyeIcon}>
-                  <Ionicons name={showConfirmPassword ? "eye-off" : "eye"} size={20} color="#9CA3AF" />
-                </TouchableOpacity>
-                <TextInput style={[styles.input, { flex: 1, height: '100%' }]} placeholder="••••••••" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry={!showConfirmPassword} />
-              </View>
+            <View style={{ flex: 1 }}>
+              <AuthInput label="تأكيد المرور" isPassword placeholder="••••••••" value={confirmPassword} onChangeText={setConfirmPassword} />
             </View>
           </View>
 
           {/* زر التسجيل */}
-          <TouchableOpacity style={styles.submitBtn} onPress={handleSignup} disabled={loading}>
-            {loading ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <Text style={styles.submitBtnText}>إنشاء حساب جديد</Text>
-            )}
-          </TouchableOpacity>
+          <AuthButton title="إنشاء حساب جديد" onPress={handleSignup} loading={loading} />
 
           {/* رابط تسجيل الدخول */}
           <View style={styles.footer}>
@@ -214,22 +182,14 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '900', color: '#2A4B46', marginBottom: 5 },
   subtitle: { fontSize: 14, color: '#6B7280', fontWeight: 'bold' },
 
-  inputGroup: { marginBottom: 15 },
-  row: { flexDirection: 'row-reverse', gap: 15 },
+  row: { flexDirection: 'row-reverse', gap: 15, marginBottom: 15 },
   label: { fontSize: 13, fontWeight: 'bold', color: '#4B5563', textAlign: 'right', marginBottom: 8 },
-  input: { backgroundColor: '#F3F4F6', height: 55, borderRadius: 15, paddingHorizontal: 15, textAlign: 'right', fontSize: 14, color: '#1F2937' },
 
-  passwordContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', height: 55, borderRadius: 15 },
-  eyeIcon: { padding: 12 },
-
-  genderToggle: { flexDirection: 'row-reverse', backgroundColor: '#F3F4F6', height: 50, borderRadius: 15, padding: 4 },
+  genderToggle: { flexDirection: 'row-reverse', backgroundColor: '#F3F4F6', height: 55, borderRadius: 15, padding: 4 },
   genderBtn: { flex: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 12 },
   genderBtnActive: { backgroundColor: '#FFF', elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3 },
   genderText: { fontSize: 14, fontWeight: 'bold', color: '#9CA3AF' },
   genderTextActive: { color: '#2A4B46' },
-
-  submitBtn: { backgroundColor: '#2A4B46', height: 55, borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginTop: 15 },
-  submitBtnText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
 
   footer: { flexDirection: 'row-reverse', justifyContent: 'center', marginTop: 25 },
   footerText: { color: '#6B7280', fontSize: 14, fontWeight: 'bold' },

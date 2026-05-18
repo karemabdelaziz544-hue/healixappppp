@@ -4,6 +4,21 @@
 
 // ======== Plan & Tasks ========
 
+export interface Profile {
+  id: string;
+  full_name: string;
+  avatar_url: string | null;
+  role: string;
+  manager_id: string | null;
+  subscription_status: string;
+  subscription_end_date: string | null;
+  is_onboarded: boolean;
+  gender?: string;
+  birth_date?: string;
+  weight?: number;
+  height?: number;
+}
+
 export interface Plan {
   id: string;
   user_id: string;
