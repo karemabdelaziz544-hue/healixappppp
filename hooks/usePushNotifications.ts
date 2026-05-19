@@ -7,6 +7,7 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { supabase } from '../src/lib/supabase';
 import { useFamily } from '../src/context/FamilyContext';
 import { useRouter } from 'expo-router';
+import { validateNotificationRoute } from '../src/lib/notificationRoutes';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -63,8 +64,14 @@ export function usePushNotifications() {
     // 3. مستمع لضغط المستخدم على الإشعار
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
       const data = response.notification.request.content.data;
-      if (data?.screen) {
-        router.push(data.screen as any);
+      // 🔴 SECURITY FIX: Validate deep-link against allowlist before navigating.
+      // Previously: router.push(data.screen as any) — allows arbitrary route injection from payload.
+      // Now: only routes in ALLOWED_NOTIFICATION_ROUTES are accepted; others are silently dropped.
+      const safeRoute = validateNotificationRoute(data?.screen);
+      if (safeRoute) {
+        router.push(safeRoute as any);
+      } else if (data?.screen) {
+        logger.warn(`[PushNotification] Blocked unauthorized deep-link: "${data.screen}"`);
       }
     });
 

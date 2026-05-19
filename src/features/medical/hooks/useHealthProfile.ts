@@ -28,9 +28,12 @@ export function useHealthProfile(
   );
 
   const toggleArrayItem = (arrayName: 'diseases' | 'family_history' | 'digestive_issues', item: string) => {
-    setForm((prev: any) => {
-      const arr = prev[arrayName] || [];
-      return { ...prev, [arrayName]: arr.includes(item) ? arr.filter((i: string) => i !== item) : [...arr, item] };
+    setForm((prev: HealthProfile) => {
+      const arr: string[] = (prev[arrayName] as string[]) || [];
+      return {
+        ...prev,
+        [arrayName]: arr.includes(item) ? arr.filter(i => i !== item) : [...arr, item],
+      };
     });
   };
 

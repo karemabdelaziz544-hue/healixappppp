@@ -51,13 +51,12 @@ export function useSupabaseQuery<T>(
   const [error, setError] = useState<Error | null>(null);
 
   const fetch = async (ignoreCache = false) => {
-    try {
-      setLoading(true);
-      setError(null);
-
+    // 🔴 AUDIT FIX: Check cache BEFORE setting loading=true to prevent flicker.
+    // Previously: setLoading(true) ran unconditionally, causing a spinner flash
+    // even when the cache had fresh data that would resolve synchronously.
+    if (!ignoreCache) {
       const cachedItem = globalCache.get(key);
-
-      if (!ignoreCache && cachedItem) {
+      if (cachedItem) {
         const isExpired = Date.now() - cachedItem.timestamp > options.cacheTime;
         if (!isExpired) {
           setData(cachedItem.data);
@@ -65,6 +64,11 @@ export function useSupabaseQuery<T>(
           return;
         }
       }
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
 
       const result = await queryFn();
       globalCache.set(key, { data: result, timestamp: Date.now() });

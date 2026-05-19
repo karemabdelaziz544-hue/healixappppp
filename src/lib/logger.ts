@@ -16,9 +16,17 @@ export const logger = {
     if (__DEV__) {
       console.error(...args);
     } else {
-      // 🔴 H1-FIX: Always capture errors in Sentry for production observability
-      const message = args.map(a => (a instanceof Error ? a.message : String(a))).join(' ');
-      Sentry.captureMessage(message, 'error');
+      // 🔴 AUDIT FIX: Capture the full Error object (with stack trace) when available.
+      // captureMessage only sends the message string — captureException sends the full stack.
+      const errorObj = args.find((a): a is Error => a instanceof Error);
+      if (errorObj) {
+        Sentry.captureException(errorObj, {
+          extra: { contexts: args.filter(a => a !== errorObj) },
+        });
+      } else {
+        const message = args.map(a => String(a)).join(' ');
+        Sentry.captureMessage(message, 'error');
+      }
     }
   },
   warn: (...args: any[]) => {

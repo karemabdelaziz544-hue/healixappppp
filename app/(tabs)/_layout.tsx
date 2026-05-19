@@ -3,6 +3,7 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppColors } from '../../constants/AppTheme';
 import { showToast } from '../../components/AppToast';
 import { useFamily } from '../../src/context/FamilyContext';
@@ -10,6 +11,10 @@ import { useFamily } from '../../src/context/FamilyContext';
 function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const { currentProfile, switchProfile } = useFamily();
   const isSubAccount = currentProfile?.manager_id !== null && currentProfile?.manager_id !== undefined;
+  // 🔴 AUDIT FIX (Medium): Use safe area insets to calculate the correct floating button lift.
+  // translateY: -15 caused overlap on iPhones with large bottom safe area (e.g. iPhone 15 Pro).
+  const insets = useSafeAreaInsets();
+  const floatLift = Math.max(10, 20 - insets.bottom);
 
   // استبعاد صفحة تفاصيل الخطة من البار السفلي
   const visibleRoutes = state.routes.filter((route: any) => route.name !== 'plan-details');
@@ -18,7 +23,10 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
   const handleSwitchBack = async () => {
     if (currentProfile?.manager_id) {
+      // 🔴 AUDIT FIX (High): Await switchProfile before showing toast.
+      // Previously a 300ms setTimeout was used — brittle and not tied to actual completion.
       await switchProfile(currentProfile.manager_id);
+      showToast.info('تم الرجوع للحساب الرئيسي');
     }
   };
 
@@ -29,11 +37,8 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 
         const onPress = () => {
           if (route.name === 'profile' && isSubAccount) {
+            // Await so toast fires after the profile switch is confirmed, not on a fixed timer
             handleSwitchBack();
-            // ✅ UX-02: إشعار واضح عند الرجوع التلقائي
-            setTimeout(() => {
-              showToast.info('تم الرجوع للحساب الرئيسي');
-            }, 300);
           } else {
             const event = navigation.emit({
               type: 'tabPress',
@@ -71,8 +76,11 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               accessibilityLabel={a11yLabel}
               accessibilityState={{ selected: isFocused }}
             >
-              <View style={[
+          <View style={[
                 styles.centerButton,
+                // للتعويض عن كون StyleSheet.create لا يدعم Dynamic Values:
+                // نضع translateY كـ inline style حيث floatLift في نطاق المكون
+                { transform: [{ translateY: -floatLift }] },
                 // برتقالي في العادي، وأخضر غامق لما نقف عليه
                 { backgroundColor: isFocused ? AppColors.primary : AppColors.accent }
               ]}>
@@ -161,9 +169,7 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    // رفعه لفوق خارج البار
-    transform: [{ translateY: -15 }],
-    // شادو قوي للزرار عشان يبرز
+    // شادو قوي للزرار عشان يبرز (translateY moved to inline style — see CustomTabBar)
     elevation: 10,
     shadowColor: AppColors.primary,
     shadowOffset: { width: 0, height: 5 },
