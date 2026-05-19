@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   ActivityIndicator, KeyboardAvoidingView,
-  Platform, Alert, Image, FlatList,
+  Platform, Image, FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +20,13 @@ const InlineAttachment = ({ path, type, isMe }: { path: string; type: string; is
   const [loading, setLoading] = useState(true);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  // 🔴 H2-FIX: Use a ref to hold the sound object for cleanup,
+  // so the cleanup effect doesn't depend on the `sound` state (which caused the loop).
+  const soundRef = useRef<Audio.Sound | null>(null);
 
+  // Effect 1: Fetch signed URL — runs only when `path` changes.
+  // Previously this effect also depended on `sound`, causing an infinite loop:
+  // sound state update → effect re-runs → cleanup unloads sound → repeat.
   useEffect(() => {
     let isMounted = true;
     const fetchUrl = async () => {
@@ -29,7 +35,9 @@ const InlineAttachment = ({ path, type, isMe }: { path: string; type: string; is
           if (isMounted) { setSignedUrl(path); setLoading(false); }
           return;
         }
-        const { data } = await supabase.storage.from('chat-attachments').createSignedUrl(path, 604800);
+        // 🔴 H2-FIX: Reduced TTL from 604800 (7 days) to 7200 (2 hours).
+        // Medical images accessible via URL for 7 days is a security risk.
+        const { data } = await supabase.storage.from('chat-attachments').createSignedUrl(path, 7200);
         if (data && isMounted) setSignedUrl(data.signedUrl);
       } catch (e) {
         if (__DEV__) console.log(e);
@@ -38,12 +46,16 @@ const InlineAttachment = ({ path, type, isMe }: { path: string; type: string; is
       }
     };
     fetchUrl();
+    return () => { isMounted = false; };
+  }, [path]); // Only re-run when path changes — NOT when sound changes
 
+  // Effect 2: Cleanup sound on unmount only.
+  // Separated from the fetch effect to avoid the re-trigger cycle.
+  useEffect(() => {
     return () => {
-      isMounted = false;
-      if (sound) sound.unloadAsync();
+      soundRef.current?.unloadAsync().catch(() => {});
     };
-  }, [path, sound]);
+  }, []);
 
   const toggleAudio = async () => {
     if (!signedUrl) return;
@@ -71,17 +83,16 @@ const InlineAttachment = ({ path, type, isMe }: { path: string; type: string; is
               setIsPlaying(false);
               newSound.setPositionAsync(0);
             } else if (!status.isLoaded && status.error) {
-              Alert.alert('خطأ', 'لا يمكن تشغيل هذا الملف الصوتي.');
               setIsPlaying(false);
             }
           }
         );
+        soundRef.current = newSound; // sync ref for cleanup
         setSound(newSound);
         setIsPlaying(true);
       }
     } catch (e) {
       if (__DEV__) console.log('Audio play error', e);
-      Alert.alert('خطأ', 'تعذر تشغيل المقطع الصوتي، تأكد من اتصالك بالإنترنت.');
       setIsPlaying(false);
     }
   };

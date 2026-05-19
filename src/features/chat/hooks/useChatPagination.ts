@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { executeQuery } from '../../../lib/apiClient';
 import { showToast } from '../../../../components/AppToast';
@@ -12,6 +12,13 @@ export function useChatPagination(channelType: string, currentUserId: string | u
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  // 🔴 M1-FIX: stable ref for the last message cursor — prevents loadMoreMessages
+  // from being invalidated on every realtime update that adds to messages[].
+  const lastMessageRef = useRef<Message | null>(null);
+
+  useEffect(() => {
+    lastMessageRef.current = messages[messages.length - 1] ?? null;
+  }, [messages]);
 
   const openChat = useCallback(async () => {
     if (!currentUserId) return;
@@ -87,7 +94,8 @@ export function useChatPagination(channelType: string, currentUserId: string | u
     setLoadingMore(true);
     try {
       const role = channelType === 'doctor' ? 'doctor' : 'admin';
-      const lastMessage = messages[messages.length - 1];
+      // 🔴 M1-FIX: read cursor from ref, not from closure — no stale data
+      const lastMessage = lastMessageRef.current;
       if (!lastMessage) return;
 
       const { data: olderMessages, error } = await executeQuery<Message[]>(
@@ -115,7 +123,8 @@ export function useChatPagination(channelType: string, currentUserId: string | u
     } finally {
       setLoadingMore(false);
     }
-  }, [hasMore, loadingMore, receiverId, currentUserId, channelType, messages]);
+  // messages removed from deps — cursor is read via lastMessageRef instead
+  }, [hasMore, loadingMore, receiverId, currentUserId, channelType]);
 
   return { messages, setMessages, receiverId, lastSeen, loading, loadingMore, hasMore, openChat, loadMoreMessages };
 }

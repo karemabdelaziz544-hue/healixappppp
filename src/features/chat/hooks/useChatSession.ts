@@ -18,7 +18,8 @@ export function useChatSession(channelType: ChannelType, currentUserId: string |
     currentUserId, 
     pagination.receiverId, 
     attachments.attachment, 
-    attachments.setAttachment
+    attachments.setAttachment,
+    pagination.setMessages
   );
 
   useEffect(() => {

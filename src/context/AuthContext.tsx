@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Session } from '@supabase/supabase-js';
+import { clearQueryCache } from '../hooks/useSupabaseQuery';
 
 interface AuthContextType {
   session: Session | null;
@@ -21,9 +22,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     // مراقبة أي تغيير لحظي (دخول أو خروج)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // 🔴 C3-FIX: Flush cache on logout to prevent cross-session data leaks.
+      // Without this, User A's cached medical/plan data could be served to User B.
+      if (event === 'SIGNED_OUT') {
+        clearQueryCache();
+      }
       setSession(session);
-      setIsLoading(false); // ✅ BUG-05: ضمان إنهاء التحميل حتى لو الحدث وصل قبل getSession
+      setIsLoading(false);
     });
 
     return () => subscription.unsubscribe();

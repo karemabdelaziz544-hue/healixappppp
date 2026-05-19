@@ -27,10 +27,19 @@ class LRUCache<K, V> {
     }
     this.cache.set(key, value);
   }
+  clear() {
+    this.cache.clear();
+  }
 }
 
 const CACHE_EXPIRATION_MS = 5 * 60 * 1000; // 5 minutes
-const globalCache = new LRUCache<string, { data: any; timestamp: number }>(50); // Max 50 items
+const globalCache = new LRUCache<string, { data: any; timestamp: number }>(50);
+
+// 🔴 C2-FIX: Exported so AuthContext can flush on SIGNED_OUT, preventing
+// cross-session data leaks (User A's cached data served to User B).
+export function clearQueryCache() {
+  globalCache.clear();
+}
 
 export function useSupabaseQuery<T>(
   key: string,

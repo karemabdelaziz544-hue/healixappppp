@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { AppColors } from '../constants/AppTheme';
 import { supabase } from '../src/lib/supabase';
 import { logger } from '../src/lib/logger';
+import { showToast } from '../components/AppToast';
 
 export default function VerifyScreen() {
     const router = useRouter();
@@ -14,10 +15,20 @@ export default function VerifyScreen() {
     const [code, setCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [resending, setResending] = useState(false);
+    // 🔴 H5-FIX: OTP resend cooldown to prevent email bombing.
+    // Without this, users (or bots) can trigger unlimited email sends.
+    const [resendCooldown, setResendCooldown] = useState(0);
+    const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    useEffect(() => {
+      return () => {
+        if (cooldownRef.current) clearInterval(cooldownRef.current);
+      };
+    }, []);
 
     const handleVerify = async () => {
         if (!code || code.length < 8) {
-            Alert.alert('تنبيه', 'الرجاء إدخال الكود المكون من 8 أرقام');
+            showToast.error('الرجاء إدخال الكود المكون من 8 أرقام');
             return;
         }
 
@@ -46,13 +57,13 @@ export default function VerifyScreen() {
                 });
             }
 
-            Alert.alert('نجاح 🎉', 'تم تفعيل حسابك بنجاح!');
+            showToast.success('تم تفعيل حسابك بنجاح 🎉');
             // ✅ BUG-07: تأخير بسيط لإعطاء FamilyContext وقت للتحميل
             await new Promise(resolve => setTimeout(resolve, 800));
             router.replace('/(tabs)');
 
         } catch (error: any) {
-            Alert.alert('خطأ', 'الكود غير صحيح أو منتهي الصلاحية');
+            showToast.error('الكود غير صحيح أو منتهي الصلاحية');
             logger.error(error.message);
         } finally {
             setLoading(false);
@@ -62,9 +73,11 @@ export default function VerifyScreen() {
     // ✅ UX-04: إعادة إرسال الكود
     const handleResend = async () => {
         if (!email) {
-            Alert.alert('خطأ', 'لا يوجد بريد إلكتروني للإعادة');
+            showToast.error('لا يوجد بريد إلكتروني للإعادة');
             return;
         }
+        if (resendCooldown > 0) return; // guard against rapid calls
+
         setResending(true);
         try {
             const { error } = await supabase.auth.resend({
@@ -72,9 +85,20 @@ export default function VerifyScreen() {
                 email: email,
             });
             if (error) throw error;
-            Alert.alert('تم ✅', 'تم إعادة إرسال الكود إلى بريدك الإلكتروني');
+            showToast.success('تم إعادة إرسال الكود إلى بريدك ✅');
+            // Start 60-second cooldown
+            setResendCooldown(60);
+            cooldownRef.current = setInterval(() => {
+                setResendCooldown(prev => {
+                    if (prev <= 1) {
+                        clearInterval(cooldownRef.current!);
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
         } catch (error: any) {
-            Alert.alert('خطأ', 'فشل إعادة الإرسال: ' + error.message);
+            showToast.error('فشل إعادة الإرسال: ' + error.message);
         } finally {
             setResending(false);
         }
@@ -118,16 +142,22 @@ export default function VerifyScreen() {
                     )}
                 </TouchableOpacity>
 
-                {/* ✅ UX-04: زر إعادة إرسال الكود */}
+                {/* ✅ UX-04: زر إعادة إرسال الكود مع cooldown */}
                 <TouchableOpacity
-                    style={styles.resendButton}
+                    style={[styles.resendButton, (resending || resendCooldown > 0) && { opacity: 0.5 }]}
                     onPress={handleResend}
-                    disabled={resending}
+                    disabled={resending || resendCooldown > 0}
+                    accessibilityRole="button"
+                    accessibilityLabel="إعادة إرسال كود التحقق"
                 >
                     {resending ? (
                         <ActivityIndicator size="small" color={AppColors.accent} />
                     ) : (
-                        <Text style={styles.resendButtonText}>لم يصل الكود؟ أعد الإرسال</Text>
+                        <Text style={styles.resendButtonText}>
+                            {resendCooldown > 0
+                                ? `إعادة الإرسال (${resendCooldown})`
+                                : 'لم يصل الكود؟ أعد الإرسال'}
+                        </Text>
                     )}
                 </TouchableOpacity>
 

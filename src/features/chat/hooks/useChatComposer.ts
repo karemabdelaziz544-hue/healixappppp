@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Alert, Keyboard, Platform } from 'react-native';
+import { Keyboard, Platform } from 'react-native';
 import { Audio } from 'expo-av';
 import { supabase } from '../../../lib/supabase';
 import { showToast } from '../../../../components/AppToast';
@@ -11,7 +11,8 @@ export function useChatComposer(
   currentUserId: string | undefined, 
   receiverId: string | null, 
   attachment: Attachment | null, 
-  setAttachment: (att: Attachment | null) => void
+  setAttachment: (att: Attachment | null) => void,
+  setMessages: React.Dispatch<React.SetStateAction<import('../../../types').Message[]>>
 ) {
   const [newMessage, setNewMessage] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -21,7 +22,17 @@ export function useChatComposer(
   const [lastSentAt, setLastSentAt] = useState(0);
 
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingRef = useRef<Audio.Recording | null>(null);
   const MAX_MESSAGE_LENGTH = 1000;
+
+  // 🔴 C4-FIX: Cleanup on unmount — release microphone lock and stop timer
+  // if user navigates away mid-recording. Without this, the mic stays locked.
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingRef.current?.stopAndUnloadAsync().catch(() => {});
+    };
+  }, []);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -33,16 +44,33 @@ export function useChatComposer(
 
   const startRecording = async () => {
     try {
-      await Audio.requestPermissionsAsync();
+      // 🔴 C4-FIX: Check existing permission before requesting.
+      // Requesting immediately with no rationale risks App Store/Play Store rejection.
+      const { status: existingStatus } = await Audio.getPermissionsAsync();
+
+      if (existingStatus === 'denied') {
+        showToast.error('تم رفض صلاحية الميكروفون. يرجى تفعيلها من إعدادات الجهاز.');
+        return;
+      }
+
+      if (existingStatus !== 'granted') {
+        const { status: newStatus } = await Audio.requestPermissionsAsync();
+        if (newStatus !== 'granted') {
+          showToast.error('لا يمكن تسجيل صوتي بدون صلاحية الميكروفون');
+          return;
+        }
+      }
+
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
       const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       setRecording(recording);
+      recordingRef.current = recording;
       setRecordingDuration(0);
       recordingTimerRef.current = setInterval(() => {
         setRecordingDuration(prev => prev + 1);
       }, 1000);
     } catch (err) {
-      Alert.alert('خطأ', 'لا يمكن الوصول للميكروفون');
+      showToast.error('حدث خطأ أثناء تفعيل التسجيل');
     }
   };
 
@@ -98,19 +126,41 @@ export function useChatComposer(
             : 'file';
       }
 
+      const contentText = attachmentType === 'audio'
+        ? '🎤 رسالة صوتية'
+        : (newMessage || (attachmentType === 'image' ? '📷 صورة مرفقة' : '📎 ملف مرفق'));
+
+      // 🔴 H4-FIX: Optimistic UI — add message immediately so the user sees it without waiting
+      // for the Supabase round-trip + realtime delivery (typically 300-800ms delay).
+      const tempId = `temp-${Date.now()}`;
+      const optimisticMsg: import('../../../types').Message = {
+        id: tempId,
+        sender_id: currentUserId!,
+        receiver_id: receiverId!,
+        content: contentText,
+        attachment_url: null,
+        attachment_type: attachmentType as any,
+        recipient_type: channelType as 'doctor' | 'admin',
+        is_read: false,
+        created_at: new Date().toISOString(),
+      };
+      setMessages(prev => [optimisticMsg, ...prev]);
+
       const { error } = await supabase.from('messages').insert([{
         sender_id: currentUserId,
         receiver_id: receiverId,
-        content: attachmentType === 'audio'
-          ? '🎤 رسالة صوتية'
-          : (newMessage || (attachmentType === 'image' ? '📷 صورة مرفقة' : '📎 ملف مرفق')),
+        content: contentText,
         attachment_url: attachmentPath,
         attachment_type: attachmentType,
         recipient_type: channelType,
         is_read: false,
       }]);
 
-      if (error) throw error;
+      if (error) {
+        // Roll back optimistic update on failure
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+        throw error;
+      }
       setNewMessage('');
       setAttachment(null);
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

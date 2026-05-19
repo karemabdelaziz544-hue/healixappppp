@@ -7,10 +7,11 @@
     "icon": "./assets/images/icon.png",
     "scheme": "healixapp",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.healix.app",
+      "buildNumber": "1",
+      "newArchEnabled": true,
       "infoPlist": {
         "NSCameraUsageDescription": "يحتاج Healix للوصول للكاميرا لالتقاط صور التحاليل والقياسات الطبية.",
         "NSMicrophoneUsageDescription": "يحتاج Healix للوصول للميكروفون لإرسال الرسائل الصوتية للكوتش.",
@@ -18,14 +19,16 @@
       }
     },
     "android": {
+      "versionCode": 1,
+      "newArchEnabled": true,
       "adaptiveIcon": {
         "backgroundColor": "#F9F6F0",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
+      "edgeToEdgeEnabled": true,
       "package": "com.healix.app"
     },
     "web": {

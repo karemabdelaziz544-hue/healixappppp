@@ -4,16 +4,13 @@ import { Platform } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 
 // Custom Storage Adapter for Supabase Auth
+// 🔴 C1-FIX: setItem and removeItem MUST return their Promises.
+// Discarding them (fire-and-forget) means Supabase cannot await the write,
+// causing silent token persistence failures across app launches.
 const ExpoSecureStoreAdapter = {
-  getItem: (key: string) => {
-    return SecureStore.getItemAsync(key);
-  },
-  setItem: (key: string, value: string) => {
-    SecureStore.setItemAsync(key, value);
-  },
-  removeItem: (key: string) => {
-    SecureStore.deleteItemAsync(key);
-  },
+  getItem: (key: string) => SecureStore.getItemAsync(key),
+  setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
+  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
 };
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL as string;

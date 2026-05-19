@@ -7,6 +7,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const APP_URL = Deno.env.get('APP_URL');
 // 🔴 Security: Deny-by-default CORS. If APP_URL is missing, we don't fallback to '*'.
 const allowedOrigin = APP_URL ? APP_URL : 'https://healix.app';
+// 🔴 M2-FIX: Model name from env var — can be hot-swapped without a code redeploy
+// when Groq renames/deprecates the model (as has happened in the LLM ecosystem before).
+const GROQ_MODEL = Deno.env.get('GROQ_MODEL_NAME') ?? 'llama-3.2-90b-vision-preview';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': allowedOrigin,
@@ -46,7 +49,7 @@ Deno.serve(async (req: Request) => {
 
     // التأكد أن المستخدم يحاول قراءة ملف في المجلد الخاص به فقط
     if (!imagePath.startsWith(`inbody/${user.id}/`)) {
-      return new Response(JSON.stringify({ error: 'Forbidden: You can only access your own files' }), {
+      return new Response(JSON.stringify({ error: 'غير مصرح لك بالوصول إلى ملفات مستخدمين آخرين' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -61,7 +64,7 @@ Deno.serve(async (req: Request) => {
       .gte('created_at', oneDayAgo);
 
     if (!countError && count !== null && count >= 5) {
-      return new Response(JSON.stringify({ error: 'Too Many Requests: You have reached your daily limit for InBody analysis.' }), {
+      return new Response(JSON.stringify({ error: 'لقد تجاوزت الحد اليومي لتحليل InBody (5 تحاليل / 24 ساعة)' }), {
         status: 429,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -129,7 +132,7 @@ Deno.serve(async (req: Request) => {
         'Authorization': `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "llama-3.2-90b-vision", // 🌟 H-07: استخدام موديل الرؤية المستقر من Groq
+        model: GROQ_MODEL, // 🌟 M2-FIX: from env var, hot-swappable without redeploy
         messages: [
           {
             role: 'user',

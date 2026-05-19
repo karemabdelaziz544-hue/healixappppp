@@ -32,10 +32,21 @@ jobs:
         run: npm ci --legacy-peer-deps
         
       - name: Type Check
+        # H6-FIX: Inject env vars so tsc can resolve env-dependent types correctly
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
         run: npx tsc --noEmit
         
       - name: Run Tests
+        # H6-FIX: Tests that touch Supabase clients need real env vars to instantiate correctly
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
         run: npm test
         
       - name: Security Audit
         run: npm run audit:prod
+
