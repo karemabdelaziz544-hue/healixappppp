@@ -33,12 +33,23 @@ type SupabaseQuery =
  * Wraps a PromiseLike with a timeout deadline.
  * Rejects with a typed message if the operation exceeds the deadline.
  */
-function withTimeout<T>(thenable: PromiseLike<T>, ms: number): Promise<T> {
+/**
+ * Wraps a PromiseLike with a timeout deadline.
+ * If an AbortController is provided, it also aborts the in-flight request on timeout —
+ * 🔴 AUDIT FIX: previously the request kept running after timeout rejection,
+ * wasting network/battery/CPU.
+ */
+function withTimeout<T>(
+  thenable: PromiseLike<T>,
+  ms: number,
+  controller?: AbortController
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timeoutId = setTimeout(
-      () => reject(new Error('Request timed out')),
-      ms
-    );
+    const timeoutId = setTimeout(() => {
+      // Cancel the in-flight request BEFORE rejecting the promise
+      controller?.abort();
+      reject(new Error('Request timed out'));
+    }, ms);
     thenable.then(
       (val) => { clearTimeout(timeoutId); resolve(val); },
       (err) => { clearTimeout(timeoutId); reject(err); }
@@ -75,19 +86,22 @@ export async function executeQuery<T>(
   let attempt = 0;
 
   while (true) {
+    // 🔴 AUDIT FIX: Create controller per-attempt so retry gets a fresh signal
+    const controller = new AbortController();
+
     try {
       let resultThenable: PromiseLike<unknown>;
 
       // Supabase DB builders expose .abortSignal() for cancellation.
       // Storage & Functions return plain PromiseLike — no abort support.
       if (hasAbortSignal(query)) {
-        const controller = new AbortController();
         resultThenable = query.abortSignal(controller.signal);
       } else {
         resultThenable = query;
       }
 
-      const result = await withTimeout(resultThenable, timeoutMs) as { data?: T; error?: unknown };
+      // 🔴 AUDIT FIX: Pass controller to withTimeout so timeout triggers abort()
+      const result = await withTimeout(resultThenable, timeoutMs, controller) as { data?: T; error?: unknown };
 
       if (result?.error) {
         throw result.error;

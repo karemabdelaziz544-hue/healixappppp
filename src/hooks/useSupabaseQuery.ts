@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 // Bounded LRU Cache Implementation to prevent memory growth
 class LRUCache<K, V> {
@@ -27,18 +27,54 @@ class LRUCache<K, V> {
     }
     this.cache.set(key, value);
   }
+
   clear() {
     this.cache.clear();
+  }
+
+  /** 🔴 AUDIT FIX: Scoped invalidation — flush all keys matching a prefix */
+  deleteByPrefix(prefix: string) {
+    for (const key of this.cache.keys()) {
+      if (typeof key === 'string' && key.startsWith(prefix)) {
+        this.cache.delete(key);
+      }
+    }
   }
 }
 
 const CACHE_EXPIRATION_MS = 5 * 60 * 1000; // 5 minutes
-const globalCache = new LRUCache<string, { data: any; timestamp: number }>(50);
+const globalCache = new LRUCache<string, { data: unknown; timestamp: number }>(50);
+
+/**
+ * 🔴 AUDIT FIX: Typed query key builder.
+ * Creates structured cache keys as tuples (e.g. ['medical','profile', userId])
+ * that are joined with '||' to prevent collision
+ * (e.g. 'medical-profile-abc' vs 'medical-profile-abcd').
+ *
+ * @example
+ * const key = createQueryKey('medical', 'profile', userId);
+ * // → "medical||profile||abc-123"
+ */
+export function createQueryKey(...segments: (string | undefined | null)[]): string {
+  return segments.filter(Boolean).join('||');
+}
 
 // 🔴 C2-FIX: Exported so AuthContext can flush on SIGNED_OUT, preventing
 // cross-session data leaks (User A's cached data served to User B).
 export function clearQueryCache() {
   globalCache.clear();
+}
+
+/**
+ * 🔴 AUDIT FIX: Scoped cache invalidation.
+ * Flushes all cached queries whose key starts with the given feature prefix.
+ *
+ * @example
+ * invalidateQueries('medical'); // flushes all medical-related queries
+ * invalidateQueries('chat');    // flushes all chat-related queries
+ */
+export function invalidateQueries(featurePrefix: string) {
+  globalCache.deleteByPrefix(featurePrefix);
 }
 
 export function useSupabaseQuery<T>(
@@ -52,14 +88,12 @@ export function useSupabaseQuery<T>(
 
   const fetch = async (ignoreCache = false) => {
     // 🔴 AUDIT FIX: Check cache BEFORE setting loading=true to prevent flicker.
-    // Previously: setLoading(true) ran unconditionally, causing a spinner flash
-    // even when the cache had fresh data that would resolve synchronously.
     if (!ignoreCache) {
       const cachedItem = globalCache.get(key);
       if (cachedItem) {
         const isExpired = Date.now() - cachedItem.timestamp > options.cacheTime;
         if (!isExpired) {
-          setData(cachedItem.data);
+          setData(cachedItem.data as T);
           setLoading(false);
           return;
         }
