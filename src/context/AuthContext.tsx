@@ -15,8 +15,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // جلب الجلسة أول ما التطبيق يفتح
+    let isMounted = true;
+
+    // 🔴 AUDIT FIX: isMounted guard prevents stale state writes if the provider
+    // unmounts before getSession() resolves (e.g. rapid startup navigation).
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!isMounted) return;
       setSession(session);
       setIsLoading(false);
     });
@@ -32,7 +36,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (

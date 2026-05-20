@@ -2,6 +2,7 @@ import 'react-native-url-polyfill/auto';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
+import { validateEnv } from './validateEnv';
 
 // Custom Storage Adapter for Supabase Auth
 // 🔴 C1-FIX: setItem and removeItem MUST return their Promises.
@@ -13,12 +14,10 @@ const ExpoSecureStoreAdapter = {
   removeItem: (key: string) => SecureStore.deleteItemAsync(key),
 };
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL as string;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY as string;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn("تنبيه: مفاتيح Supabase غير موجودة. يرجى التأكد من ملف .env");
-}
+// 🔴 AUDIT FIX: Fail-fast env validation.
+// In production: throws immediately if vars are missing (prevents silent broken state).
+// In DEV: warns but continues to allow debugging without a real .env.
+const { supabaseUrl, supabaseAnonKey } = validateEnv();
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
