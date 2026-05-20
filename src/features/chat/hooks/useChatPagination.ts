@@ -81,7 +81,7 @@ export function useChatPagination(channelType: string, currentUserId: string | u
           supabase.from('messages').update({ is_read: true }).eq('receiver_id', currentUserId).eq('sender_id', targetReceiverId).eq('is_read', false)
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Failed to open chat:', err);
       showToast.error('فشل تحميل الرسائل، يرجى التحقق من اتصالك بالإنترنت');
     } finally {
@@ -117,7 +117,7 @@ export function useChatPagination(channelType: string, currentUserId: string | u
       } else {
         setHasMore(false);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Failed to load older messages:', err);
       showToast.error('فشل تحميل الرسائل القديمة');
     } finally {

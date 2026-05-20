@@ -139,7 +139,7 @@ export function useChatComposer(
         receiver_id: receiverId!,
         content: contentText,
         attachment_url: null,
-        attachment_type: attachmentType as any,
+        attachment_type: (attachmentType || null) as import('../../../types').Message['attachment_type'],
         recipient_type: channelType as 'doctor' | 'admin',
         is_read: false,
         created_at: new Date().toISOString(),

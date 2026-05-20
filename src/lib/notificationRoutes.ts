@@ -16,6 +16,8 @@ export const ALLOWED_NOTIFICATION_ROUTES = new Set([
   '/(tabs)/history',
   '/(tabs)/profile',
   '/subscriptions',
+  '/notifications',
+  '/support',
   '/verify',
 ] as const);
 

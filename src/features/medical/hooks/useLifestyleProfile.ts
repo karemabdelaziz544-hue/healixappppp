@@ -4,6 +4,13 @@ import { logger } from '../../../lib/logger';
 import { lifestyleProfileService } from '../services/lifestyleProfileService';
 import type { LifestyleProfile } from '../../../../src/types';
 
+/** Form state uses strings for numeric fields (parsed to number on submit) */
+interface LifestyleFormState extends Omit<LifestyleProfile, 'id' | 'user_id' | 'water_liters' | 'sleep_hours' | 'exercise_details'> {
+  water_liters: string;
+  sleep_hours: string;
+  exercise_details: { type: string; days: string };
+}
+
 export function useLifestyleProfile(
   userId: string, 
   initialProfile: LifestyleProfile | null, 
@@ -11,7 +18,7 @@ export function useLifestyleProfile(
   setUploading: (val: boolean) => void
 ) {
   const [isEditing, setIsEditing] = useState(false);
-  const [form, setForm] = useState<any>(
+  const [form, setForm] = useState<LifestyleFormState>(
     initialProfile
       ? {
           ...initialProfile,
@@ -52,13 +59,24 @@ export function useLifestyleProfile(
   const saveProfile = async () => {
     setUploading(true);
     try {
-      await lifestyleProfileService.upsertProfile({ ...form, user_id: userId });
+      // Convert string form fields back to numbers for the DB schema
+      const profileData: LifestyleProfile = {
+        ...form,
+        user_id: userId,
+        water_liters: parseFloat(form.water_liters) || 0,
+        sleep_hours: parseFloat(form.sleep_hours) || 0,
+        exercise_details: {
+          type: form.exercise_details.type,
+          days: form.exercise_details.days,
+        },
+      };
+      await lifestyleProfileService.upsertProfile(profileData);
       await onRefresh();
       setIsEditing(false);
       showToast.success('تم حفظ نمط الحياة بنجاح');
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('[saveLifestyleProfile]', err);
-      showToast.error('خطأ في الحفظ', err?.message);
+      showToast.error('خطأ في الحفظ', err instanceof Error ? err.message : undefined);
     } finally {
       setUploading(false);
     }

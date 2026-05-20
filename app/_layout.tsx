@@ -9,10 +9,23 @@ import OfflineBanner from '../components/OfflineBanner';
 import { AppToastProvider } from '../components/AppToast';
 import * as Sentry from '@sentry/react-native';
 
-Sentry.init({
-  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-  tracesSampleRate: 0.1, // 🌟 Adjusted from 1.0 to 0.1 to save bandwidth/battery in production
-});
+// 🔴 AUDIT FIX (H2): Environment-aware Sentry configuration.
+// Previously: hardcoded tracesSampleRate with no build-flavor awareness.
+// Now: explicit environment tag, conditional sample rates, debug only in dev.
+const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+const isStaging = process.env.EXPO_PUBLIC_APP_VARIANT === 'staging';
+
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment: isStaging ? 'staging' : __DEV__ ? 'development' : 'production',
+    debug: __DEV__,
+    // 100% in staging (full observability), 10% in production (cost/noise control)
+    tracesSampleRate: isStaging ? 1.0 : 0.1,
+    // Don't send events in development — rely on console
+    enabled: !__DEV__,
+  });
+}
 
 // 🛑 أوقف إخفاء الـ Splash تلقائياً — هنخفيه يدوياً بعد انتهاء التحقق من الـ auth
 SplashScreen.preventAutoHideAsync();

@@ -144,11 +144,12 @@ export interface AppNotification {
 export interface DailyLog {
   id: string;
   user_id: string;
-  log_date: string;
-  all_tasks_completed: boolean;
-  tasks_completed: number;
-  tasks_total: number;
-  created_at?: string;
+  /** Column is `date` (type: date) — not `log_date` */
+  date: string;
+  water_intake: number;
+  calories_consumed: number;
+  completed_tasks: unknown[];
+  updated_at?: string;
 }
 
 // ======== Subscriptions ========
@@ -160,7 +161,7 @@ export interface PaymentRequest {
   plan_type: string;
   status: 'pending' | 'approved' | 'rejected';
   receipt_url: string;
-  renewal_metadata?: any;
+  renewal_metadata?: Record<string, string | number | boolean> | null;
   created_at: string;
 }
 

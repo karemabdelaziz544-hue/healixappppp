@@ -1,5 +1,6 @@
 import { supabase } from '../../../lib/supabase';
 import { executeQuery } from '../../../lib/apiClient';
+import type { ClientDocument } from '../../../../src/types';
 
 export const documentsService = {
   uploadFile: async (filePath: string, arrayBuffer: ArrayBuffer, contentType: string) => {
@@ -11,7 +12,7 @@ export const documentsService = {
     if (error) throw error;
   },
 
-  insertDocumentRecord: async (record: any) => {
+  insertDocumentRecord: async (record: Omit<ClientDocument, 'id' | 'created_at'>) => {
     const { error } = await executeQuery(
       supabase.from('client_documents').insert(record),
       { retries: 1, isIdempotent: true }

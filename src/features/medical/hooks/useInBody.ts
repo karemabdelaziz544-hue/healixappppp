@@ -5,6 +5,16 @@ import { logger } from '../../../lib/logger';
 import { inBodyService } from '../services/inBodyService';
 import type { InbodyRecord } from '../../../types';
 
+/** Typed response from the analyze-inbody edge function */
+interface AnalysisResult {
+  analysis?: string;
+  extracted?: {
+    weight?: number;
+    muscle?: number;
+    fat?: number;
+  };
+}
+
 export function useInBody(userId: string, inbodyRecords: InbodyRecord[], onRefresh: () => Promise<void>, setUploading: (val: boolean) => void) {
   const [showForm, setShowForm] = useState(false);
   const [weight, setWeight] = useState('');
@@ -44,7 +54,7 @@ export function useInBody(userId: string, inbodyRecords: InbodyRecord[], onRefre
         const fileName = await inBodyService.uploadImage(userId, file);
         setImageUrl(fileName);
 
-        const fnData: any = await inBodyService.analyzeImage(fileName);
+        const fnData = await inBodyService.analyzeImage(fileName) as AnalysisResult | null;
 
         if (fnData?.extracted?.weight) setWeight(String(fnData.extracted.weight));
         if (fnData?.extracted?.muscle) setMuscle(String(fnData.extracted.muscle));
@@ -55,7 +65,7 @@ export function useInBody(userId: string, inbodyRecords: InbodyRecord[], onRefre
         showToast.success('تم تحليل الورقة! راجع الأرقام وتأكد منها.');
         setShowForm(true);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setAnalyzing(false);
       showToast.error('حدث خطأ أثناء رفع الصورة أو التحليل');
       logger.error('[handleAnalyzeImage]', err);

@@ -3,9 +3,12 @@ import { View, Text, StyleSheet, SectionList, TouchableOpacity, ActivityIndicato
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { executeQuery } from '../src/lib/apiClient';
 import { supabase } from '../src/lib/supabase';
 import { useFamily } from '../src/context/FamilyContext';
 import { AppColors } from '../constants/AppTheme';
+import { validateNotificationRoute } from '../src/lib/notificationRoutes';
+import { logger } from '../src/lib/logger';
 import type { AppNotification } from '../src/types';
 
 export default function NotificationsScreen() {
@@ -14,6 +17,8 @@ export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // 🔴 AUDIT FIX (M1): Explicit error state — previously silent failures left stale/empty UI.
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentProfile?.id) {
@@ -22,13 +27,24 @@ export default function NotificationsScreen() {
     }
   }, [currentProfile?.id]);
 
+  // 🔴 AUDIT FIX (H1): All Supabase calls now go through executeQuery
+  // for consistent timeout/retry/error classification.
   const fetchNotifications = useCallback(async () => {
-    const { data } = await supabase
-      .from('notifications')
-      .select('id, user_id, title, message, type, link, is_read, created_at')
-      .eq('user_id', currentProfile!.id)
-      .order('created_at', { ascending: false });
-    
+    setError(null);
+    const { data, error: queryError } = await executeQuery<AppNotification[]>(
+      supabase
+        .from('notifications')
+        .select('id, user_id, title, message, type, link, is_read, created_at')
+        .eq('user_id', currentProfile!.id)
+        .order('created_at', { ascending: false }),
+      { isIdempotent: true }
+    );
+
+    if (queryError) {
+      logger.error('[Notifications] Fetch failed:', queryError.message);
+      setError('تعذر تحميل الإشعارات. اسحب لأسفل لإعادة المحاولة.');
+    }
+
     setNotifications(data || []);
     setLoading(false);
   }, [currentProfile?.id]);
@@ -41,12 +57,29 @@ export default function NotificationsScreen() {
   }, [fetchNotifications]);
 
   const markAsRead = async () => {
-    await supabase
-      .from('notifications')
-      .update({ is_read: true })
-      .eq('user_id', currentProfile!.id)
-      .eq('is_read', false);
+    await executeQuery(
+      supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', currentProfile!.id)
+        .eq('is_read', false),
+      { isIdempotent: false }
+    );
   };
+
+  // 🔴 AUDIT FIX (C1): Validate DB notification links against the SAME allowlist
+  // used for push notification deep-links. Previously `router.push(item.link as any)`
+  // was a route-injection vector — a malicious DB row could navigate users to
+  // arbitrary internal routes (/admin, /debug, etc.).
+  const handleNotificationPress = useCallback((item: AppNotification) => {
+    if (!item.link) return;
+    const safeRoute = validateNotificationRoute(item.link);
+    if (safeRoute) {
+      router.push(safeRoute as any);
+    } else {
+      logger.warn(`[Notifications] Blocked invalid DB route: "${item.link}"`);
+    }
+  }, [router]);
 
   const renderIcon = (type: string) => {
     switch (type) {
@@ -117,6 +150,12 @@ export default function NotificationsScreen() {
         renderSectionHeader={({ section: { title } }) => (
           <Text style={styles.sectionHeader}>{title}</Text>
         )}
+        ListHeaderComponent={error ? (
+          <View style={styles.errorBanner}>
+            <Ionicons name="cloud-offline-outline" size={18} color="#EF4444" />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
         ListEmptyComponent={
           <View style={styles.emptyBox}>
             <Ionicons name="notifications-off-outline" size={60} color="#D1D5DB" />
@@ -126,11 +165,7 @@ export default function NotificationsScreen() {
         renderItem={({ item }) => (
           <TouchableOpacity 
             style={[styles.notificationCard, item.is_read ? null : styles.unreadCard]}
-            onPress={() => {
-              if (item.link) {
-                router.push(item.link as any);
-              }
-            }}
+            onPress={() => handleNotificationPress(item)}
             disabled={!item.link}
           >
             <View style={styles.iconBox}>
@@ -170,4 +205,7 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 18, color: AppColors.textMuted, fontWeight: '900', marginTop: 15 },
   emptyText: { fontSize: 14, color: AppColors.border, fontWeight: 'bold', marginTop: 6 },
   sectionHeader: { fontSize: 16, fontWeight: '900', color: '#4B5563', textAlign: 'right', marginBottom: 10, marginTop: 5 },
+  // Error banner styles
+  errorBanner: { flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: '#FEF2F2', borderRadius: 12, padding: 12, marginBottom: 12, gap: 8 },
+  errorText: { fontSize: 13, color: '#EF4444', fontWeight: '600', textAlign: 'right', flex: 1 },
 });

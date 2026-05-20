@@ -8,6 +8,7 @@ import Skeleton from '../Skeleton';
 import { AppColors } from '../../constants/AppTheme';
 import { useFamily } from '../../src/context/FamilyContext';
 import { supabase } from '../../src/lib/supabase';
+import { executeQuery } from '../../src/lib/apiClient';
 import { logger } from '../../src/lib/logger';
 import type { Plan, PlanTask } from '../../src/types';
 
@@ -66,29 +67,39 @@ export default function MainDashboardView() {
       today.setHours(0, 0, 0, 0);
       const todayStr = today.toISOString().split('T')[0];
 
-      // 🚀 Parallelize streak fetching
-      const streakPromise = supabase.from('daily_logs')
-        .select('log_date, all_tasks_completed')
-        .eq('user_id', userId)
-        .order('log_date', { ascending: false })
-        .limit(30);
+      // 🚀 Parallelize streak fetching — 🔴 CF-01 FIX: now through executeQuery
+      // 🔴 SCHEMA FIX: column is `date` (not `log_date`) and `completed_tasks` (jsonb[]) instead of `all_tasks_completed`
+      const streakPromise = executeQuery<{ date: string; completed_tasks: unknown[] | null }[]>(
+        supabase.from('daily_logs')
+          .select('date, completed_tasks')
+          .eq('user_id', userId)
+          .order('date', { ascending: false })
+          .limit(30),
+        { isIdempotent: true }
+      );
 
       // ✅ BUG-01: استعلام الخطة للمستخدم الحالي أولاً
-      let { data: activePlan } = await supabase.from('plans')
-        .select('id, user_id, title, status, start_date, created_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      let { data: activePlan } = await executeQuery<Plan | null>(
+        supabase.from('plans')
+          .select('id, user_id, title, status, start_date, created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        { isIdempotent: true }
+      );
 
       // ✅ BUG-01: لو مفيش خطة + ده حساب فرعي → جرب خطة المدير
       if (!activePlan && currentProfile?.manager_id) {
-        const { data: managerPlan } = await supabase.from('plans')
-          .select('id, user_id, title, status, start_date, created_at')
-          .eq('user_id', currentProfile.manager_id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        const { data: managerPlan } = await executeQuery<Plan | null>(
+          supabase.from('plans')
+            .select('id, user_id, title, status, start_date, created_at')
+            .eq('user_id', currentProfile.manager_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          { isIdempotent: true }
+        );
         activePlan = managerPlan;
       }
 
@@ -97,14 +108,20 @@ export default function MainDashboardView() {
         
         // 🚀 Parallelize Tasks & Logs fetching
         const [tasksRes, logsRes] = await Promise.all([
-          supabase.from('plan_tasks')
-            .select('id, plan_id, day_name, content, task_type, is_completed, order_index')
-            .eq('plan_id', activePlan.id)
-            .order('order_index', { ascending: true }),
-          supabase.from('daily_task_logs')
-             .select('task_id, is_completed')
-             .eq('user_id', userId)
-             .eq('log_date', todayStr)
+          executeQuery<PlanTask[]>(
+            supabase.from('plan_tasks')
+              .select('id, plan_id, day_name, content, task_type, is_completed, order_index')
+              .eq('plan_id', activePlan.id)
+              .order('order_index', { ascending: true }),
+            { isIdempotent: true }
+          ),
+          executeQuery<{ task_id: string; is_completed: boolean }[]>(
+            supabase.from('daily_task_logs')
+              .select('task_id, is_completed')
+              .eq('user_id', userId)
+              .eq('log_date', todayStr),
+            { isIdempotent: true }
+          ),
         ]);
 
         const allTasks = tasksRes.data;
@@ -156,9 +173,11 @@ export default function MainDashboardView() {
       let count = 0;
       const todayForStreak = new Date(); todayForStreak.setHours(0, 0, 0, 0);
       for (let i = 0; i < logs.length; i++) {
-        const logDate = new Date(logs[i].log_date); logDate.setHours(0, 0, 0, 0);
+        const logDate = new Date(logs[i].date); logDate.setHours(0, 0, 0, 0);
         const expectedDate = new Date(todayForStreak); expectedDate.setDate(expectedDate.getDate() - i);
-        if (logDate.getTime() !== expectedDate.getTime() || !logs[i].all_tasks_completed) break;
+        // A day counts as "completed" if completed_tasks array has at least 1 entry
+        const hasCompletedTasks = Array.isArray(logs[i].completed_tasks) && logs[i].completed_tasks!.length > 0;
+        if (logDate.getTime() !== expectedDate.getTime() || !hasCompletedTasks) break;
         count++;
       }
       setStreak(count);
@@ -188,12 +207,15 @@ export default function MainDashboardView() {
     await Haptics.impactAsync(newStatus ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
     try {
       const todayStr = new Date().toISOString().split('T')[0];
-      await supabase.from('daily_task_logs').upsert({
-         user_id: userId,
-         task_id: taskId,
-         log_date: todayStr,
-         is_completed: newStatus
-      }, { onConflict: 'user_id,task_id,log_date' });
+      await executeQuery(
+        supabase.from('daily_task_logs').upsert({
+          user_id: userId,
+          task_id: taskId,
+          log_date: todayStr,
+          is_completed: newStatus
+        }, { onConflict: 'user_id,task_id,log_date' }),
+        { isIdempotent: true }
+      );
     } catch (err) {
       fetchDashboardData();
     }

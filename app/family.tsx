@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform, Keyboard, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../src/lib/supabase';
+import { executeQuery } from '../src/lib/apiClient';
+import { logger } from '../src/lib/logger';
 import { useFamily } from '../src/context/FamilyContext';
 import { useRouter } from 'expo-router';
 
@@ -27,24 +29,31 @@ export default function FamilyScreen() {
 
     setLoading(true);
     try {
-      const { error } = await supabase.rpc('create_sub_member', {
-        member_name: formData.fullName,
-        member_gender: formData.gender,
-        member_birth: formData.birthYear ? `${formData.birthYear}-01-01` : '2000-01-01',
-        member_relation: formData.relation,
-        member_height: Number(formData.height),
-        member_weight: Number(formData.weight)
-      });
+      // 🔴 CF-01 FIX: Wrapped with executeQuery for timeout/error classification
+      const { error } = await executeQuery(
+        supabase.rpc('create_sub_member', {
+          member_name: formData.fullName,
+          member_gender: formData.gender,
+          member_birth: formData.birthYear ? `${formData.birthYear}-01-01` : '2000-01-01',
+          member_relation: formData.relation,
+          member_height: Number(formData.height),
+          member_weight: Number(formData.weight)
+        }),
+        { retries: 0 } // Not idempotent — creates a new profile
+      );
 
       if (error) throw error;
 
       Alert.alert("نجاح", "تم إضافة الفرد بنجاح 🎉");
       setShowForm(false);
       setFormData({ fullName: '', gender: 'male', height: '', weight: '', birthYear: '', relation: 'son' });
+      Keyboard.dismiss();
       refreshFamily();
 
-    } catch (error: any) {
-      Alert.alert("خطأ", error.message);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'فشل إضافة الفرد';
+      Alert.alert("خطأ", msg);
+      logger.error('[family] add member:', error);
     } finally {
       setLoading(false);
     }
@@ -66,7 +75,11 @@ export default function FamilyScreen() {
       { text: "إلغاء", style: "cancel" },
       { text: "حذف", style: "destructive", onPress: async () => {
           try {
-            const { error } = await supabase.from('profiles').delete().eq('id', id);
+            // 🔴 CF-01 FIX: Wrapped with executeQuery
+            const { error } = await executeQuery(
+              supabase.from('profiles').delete().eq('id', id),
+              { retries: 0 }
+            );
             if (error) throw error;
             Alert.alert("نجاح", "تم الحذف");
             refreshFamily();
@@ -74,8 +87,11 @@ export default function FamilyScreen() {
               const mainUser = familyMembers.find(m => !m.manager_id);
               if (mainUser) switchProfile(mainUser.id);
             }
-          } catch (error: any) {
-            Alert.alert("خطأ", "فشل الحذف: " + error.message);
+          } catch (error: unknown) {
+            // 🔴 AUDIT FIX: Don't leak PostgreSQL error messages to users
+            const msg = error instanceof Error ? error.message : 'فشل الحذف';
+            Alert.alert("خطأ", "فشل الحذف. يرجى المحاولة مرة أخرى.");
+            logger.error('[family] delete member:', msg);
           }
       }}
     ]);

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../src/lib/supabase';
+import { executeQuery } from '../src/lib/apiClient';
 import { logger } from '../src/lib/logger';
 import { useFamily } from '../src/context/FamilyContext';
 import { useRouter } from 'expo-router';
@@ -12,6 +13,18 @@ import Skeleton from '../components/Skeleton';
 import type { PaymentRequest } from '../src/types';
 import { SubscriptionConfig } from '../constants/subscriptionConfig';
 import { showToast } from '../components/AppToast';
+
+// 🔴 CF-02 FIX: File validation constants
+const MAX_RECEIPT_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_RECEIPT_TYPES = ['image/jpeg', 'image/png', 'image/heic', 'image/webp', 'application/pdf'];
+
+/** Typed receipt file — replaces the previous `any` */
+interface ReceiptFile {
+  uri: string;
+  name: string;
+  mimeType: string;
+  size?: number;
+}
 
 
 export default function SubscriptionsScreen() {
@@ -35,7 +48,7 @@ export default function SubscriptionsScreen() {
   const [step, setStep] = useState(1);
   const [newSubCount, setNewSubCount] = useState(0);
   const [selectedMembersToKeep, setSelectedMembersToKeep] = useState<string[]>([]);
-  const [receiptFile, setReceiptFile] = useState<any>(null);
+  const [receiptFile, setReceiptFile] = useState<ReceiptFile | null>(null);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
@@ -45,15 +58,27 @@ export default function SubscriptionsScreen() {
     }
   }, [userId, subAccountsCount]);
 
+  // 🔴 CF-01 FIX: All Supabase calls now go through executeQuery
   const fetchData = async () => {
     try {
-      const { data: pending } = await supabase.from('payment_requests')
-        .select('id, user_id, amount, plan_type, status, receipt_url, renewal_metadata, created_at').eq('user_id', userId).eq('status', 'pending').maybeSingle();
-      setPendingRequest(pending);
+      const selectCols = 'id, user_id, amount, plan_type, status, receipt_url, renewal_metadata, created_at';
 
-      const { data: hist } = await supabase.from('payment_requests')
-        .select('id, user_id, amount, plan_type, status, receipt_url, renewal_metadata, created_at').eq('user_id', userId).order('created_at', { ascending: false });
-      setHistory(hist || []);
+      const [pendingRes, histRes] = await Promise.all([
+        executeQuery<PaymentRequest | null>(
+          supabase.from('payment_requests').select(selectCols).eq('user_id', userId).eq('status', 'pending').maybeSingle(),
+          { isIdempotent: true }
+        ),
+        executeQuery<PaymentRequest[]>(
+          supabase.from('payment_requests').select(selectCols).eq('user_id', userId).order('created_at', { ascending: false }),
+          { isIdempotent: true }
+        ),
+      ]);
+
+      setPendingRequest(pendingRes.data);
+      setHistory(histRes.data || []);
+
+      if (pendingRes.error) logger.error('[subscriptions] fetch pending:', pendingRes.error.message);
+      if (histRes.error) logger.error('[subscriptions] fetch history:', histRes.error.message);
     } catch (error) {
       logger.error("Error fetching sub data:", error);
     } finally {
@@ -117,11 +142,23 @@ export default function SubscriptionsScreen() {
         const file = result.assets[0];
         const uriParts = file.uri.split('.');
         const fileExt = uriParts[uriParts.length - 1] || 'jpg';
+        const mimeType = file.mimeType || `image/${fileExt}`;
+
+        // 🔴 CF-02 FIX: MIME type validation
+        if (!ALLOWED_RECEIPT_TYPES.includes(mimeType)) {
+          return showToast.error('نوع الملف غير مدعوم. يُسمح فقط بـ JPEG, PNG, HEIC, PDF');
+        }
+        // 🔴 CF-02 FIX: File size validation (if available from picker)
+        if (file.fileSize && file.fileSize > MAX_RECEIPT_SIZE) {
+          return showToast.error('حجم الملف يتجاوز 10 ميغابايت');
+        }
+
         setReceiptFile({
           uri: file.uri,
           name: `receipt_${Date.now()}.${fileExt}`,
-          mimeType: file.mimeType || `image/${fileExt}`,
-        } as any);
+          mimeType,
+          size: file.fileSize ?? undefined,
+        });
       }
     } catch (err) {
       Alert.alert('خطأ', 'لا يمكن الوصول للاستوديو');
@@ -135,7 +172,24 @@ export default function SubscriptionsScreen() {
       copyToCacheDirectory: true,
     });
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setReceiptFile(result.assets[0]);
+      const asset = result.assets[0];
+      const mimeType = asset.mimeType || 'application/octet-stream';
+
+      // 🔴 CF-02 FIX: MIME type validation
+      if (!ALLOWED_RECEIPT_TYPES.includes(mimeType)) {
+        return showToast.error('نوع الملف غير مدعوم. يُسمح فقط بـ JPEG, PNG, HEIC, PDF');
+      }
+      // 🔴 CF-02 FIX: File size validation
+      if (asset.size && asset.size > MAX_RECEIPT_SIZE) {
+        return showToast.error('حجم الملف يتجاوز 10 ميغابايت');
+      }
+
+      setReceiptFile({
+        uri: asset.uri,
+        name: asset.name,
+        mimeType,
+        size: asset.size ?? undefined,
+      });
     }
   };
 
@@ -162,31 +216,51 @@ export default function SubscriptionsScreen() {
       const response = await fetch(receiptFile.uri);
       const blob = await response.blob();
 
-      const { error: uploadError } = await supabase.storage.from('receipts').upload(fileName, blob);
+      // 🔴 CF-02 FIX: File size validation at upload time (blob.size is reliable)
+      if (blob.size > MAX_RECEIPT_SIZE) {
+        setUploading(false);
+        return showToast.error('حجم الملف يتجاوز 10 ميغابايت');
+      }
+      // 🔴 CF-02 FIX: MIME type double-check on blob
+      if (blob.type && !ALLOWED_RECEIPT_TYPES.includes(blob.type)) {
+        setUploading(false);
+        return showToast.error('نوع الملف غير مدعوم');
+      }
+
+      // 🔴 CF-01 FIX: Storage upload through executeQuery for timeout/error classification
+      const { error: uploadError } = await executeQuery(
+        supabase.storage.from('receipts').upload(fileName, blob),
+        { retries: 1, timeoutMs: 30000 }
+      );
       if (uploadError) throw uploadError;
 
-      const { error: dbError } = await supabase.from('payment_requests').insert([{
-        user_id: userId,
-        amount: totalPrice,
-        plan_type: 'helix_integrated',
-        status: 'pending',
-        receipt_url: fileName,
-        renewal_metadata: { 
-          sub_count: newSubCount,
-          keep_member_ids: selectedMembersToKeep,
-          action_type: newSubCount < subAccountsCount ? 'downgrade' : 'upgrade'
-        }
-      }]);
+      // 🔴 CF-01 FIX: DB insert through executeQuery
+      const { error: dbError } = await executeQuery(
+        supabase.from('payment_requests').insert([{
+          user_id: userId,
+          amount: totalPrice,
+          plan_type: 'helix_integrated',
+          status: 'pending',
+          receipt_url: fileName,
+          renewal_metadata: { 
+            sub_count: newSubCount,
+            keep_member_ids: selectedMembersToKeep,
+            action_type: newSubCount < subAccountsCount ? 'downgrade' : 'upgrade'
+          }
+        }]),
+        { retries: 0 } // Don't retry payment inserts — not idempotent
+      );
 
       if (dbError) throw dbError;
 
-      // ✅ Toast بدل Alert.alert
       showToast.success('تم إرسال طلبك بنجاح!', 'سيتم مراجعته وتفعيل الباقة قريباً');
       setShowRenewForm(false);
       setStep(1);
       fetchData(); 
-    } catch (error: any) {
-      Alert.alert("خطأ", error.message);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'حدث خطأ أثناء إرسال الطلب';
+      showToast.error(msg);
+      logger.error('[subscriptions] submit error:', error);
     } finally {
       setUploading(false);
     }

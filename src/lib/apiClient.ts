@@ -47,7 +47,7 @@ function withTimeout<T>(thenable: PromiseLike<T>, ms: number): Promise<T> {
 }
 
 function hasAbortSignal(q: SupabaseQuery): q is { abortSignal: (s: AbortSignal) => PromiseLike<unknown> } {
-  return typeof (q as any).abortSignal === 'function';
+  return q !== null && typeof q === 'object' && 'abortSignal' in q && typeof (q as Record<string, unknown>).abortSignal === 'function';
 }
 
 /**
@@ -87,14 +87,14 @@ export async function executeQuery<T>(
         resultThenable = query;
       }
 
-      const result = await withTimeout(resultThenable, timeoutMs) as any;
+      const result = await withTimeout(resultThenable, timeoutMs) as { data?: T; error?: unknown };
 
       if (result?.error) {
         throw result.error;
       }
 
       // Storage & functions may return data directly or wrapped in { data }
-      const data: T = result?.data !== undefined ? result.data : result;
+      const data: T = result?.data !== undefined ? result.data : (result as unknown as T);
       return { data, error: null };
 
     } catch (raw: unknown) {
@@ -110,8 +110,8 @@ export async function executeQuery<T>(
         // Exponential backoff with jitter; rate-limit respects Retry-After
         const baseDelay = Math.pow(2, attempt) * 1000;
         const jitter = Math.random() * 300;
-        const delay = appError.code === 'RATE_LIMITED'
-          ? ((appError as any).retryAfterMs ?? 5000) + jitter
+        const delay = appError.code === 'RATE_LIMITED' && 'retryAfterMs' in appError
+          ? ((appError.retryAfterMs ?? 5000) + jitter)
           : baseDelay + jitter;
 
         await new Promise(res => setTimeout(res, delay));

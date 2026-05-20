@@ -17,7 +17,7 @@ export function useChatRealtime(
   receiverId: string | null,
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>
 ) {
-  const channelRef = useRef<any>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {
     if (!channelType || !receiverId || !currentUserId) return;

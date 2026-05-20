@@ -5,16 +5,75 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const APP_URL = Deno.env.get('APP_URL');
-// 🔴 Security: Deny-by-default CORS. If APP_URL is missing, we don't fallback to '*'.
-const allowedOrigin = APP_URL ? APP_URL : 'https://healix.app';
-// 🔴 M2-FIX: Model name from env var — can be hot-swapped without a code redeploy
-// when Groq renames/deprecates the model (as has happened in the LLM ecosystem before).
+// 🔴 AUDIT FIX (M2): If APP_URL is not set, use null → CORS will reject
+// all cross-origin requests. Previously hardcoded to 'https://healix.app'
+// which could cause drift between staging and production.
+const allowedOrigin = APP_URL ?? null;
+// 🔴 M2-FIX: Model name from env var — hot-swappable without code redeploy
 const GROQ_MODEL = Deno.env.get('GROQ_MODEL_NAME') ?? 'llama-3.2-90b-vision-preview';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': allowedOrigin,
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB hard cap
+
+const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  ...(allowedOrigin ? { 'Access-Control-Allow-Origin': allowedOrigin } : {}),
 };
+
+/**
+ * 🔴 AUDIT FIX (C3): Redact internal error details from 500 responses.
+ * Third-party API failures (Groq error payloads, Supabase internal messages)
+ * must never leak to the client. Users see a generic Arabic message; full
+ * error goes to function logs for debugging.
+ */
+function safeErrorResponse(error: unknown, statusOverride?: number): Response {
+  // Log the FULL error to Deno's runtime logs (visible in Supabase Dashboard → Logs)
+  console.error('[analyze-inbody] Internal error:', error instanceof Error ? error.stack ?? error.message : error);
+
+  const message = 'حدث خطأ داخلي أثناء تحليل الصورة. يرجى المحاولة مرة أخرى لاحقاً.';
+  return new Response(JSON.stringify({ error: message }), {
+    status: statusOverride ?? 500,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+/**
+ * 🔴 AUDIT FIX (C2): Stream-based byte cap for image download.
+ * The previous code checked `content-length` header before downloading,
+ * but if the header is absent or spoofed, the full payload was downloaded
+ * into memory and converted to base64 — causing memory spikes and DoS risk.
+ *
+ * This function reads the response body as a stream and aborts immediately
+ * when the cumulative size exceeds the cap, regardless of what the
+ * content-length header says.
+ */
+async function downloadWithByteCap(response: Response, maxBytes: number): Promise<Uint8Array> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('Response body is not readable');
+
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    totalBytes += value.byteLength;
+    if (totalBytes > maxBytes) {
+      // Abort the stream immediately — do not buffer any more data
+      await reader.cancel();
+      throw new Error(`PAYLOAD_TOO_LARGE: Image exceeds ${maxBytes} byte limit (read ${totalBytes} bytes so far)`);
+    }
+    chunks.push(value);
+  }
+
+  // Merge chunks into single Uint8Array
+  const result = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return result;
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -91,19 +150,9 @@ Deno.serve(async (req: Request) => {
       throw new Error('Could not generate signed URL for image');
     }
 
-    // ——— 3. تحميل الصورة وتحويلها لـ base64 ———
+    // ——— 3.5 تحميل الصورة بطريقة آمنة (streamed byte cap) ———
     const imageResponse = await fetch(urlData.signedUrl);
     if (!imageResponse.ok) throw new Error('Failed to fetch image from storage');
-
-    const contentLength = Number(imageResponse.headers.get('content-length') || 0);
-    const MAX_SIZE = 5 * 1024 * 1024; // 5MB limit to prevent memory crashes
-
-    if (contentLength > MAX_SIZE) {
-      return new Response(JSON.stringify({ error: 'Payload Too Large: Image exceeds 5MB limit' }), {
-        status: 413,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
 
     const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg';
     if (!mimeType.startsWith('image/')) {
@@ -113,8 +162,23 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const imageBuffer = await imageResponse.arrayBuffer();
-    const bytes = new Uint8Array(imageBuffer);
+    // 🔴 AUDIT FIX (C2): Stream-based byte cap.
+    // Previously: checked content-length header (easily spoofed), then downloaded
+    // the ENTIRE body via arrayBuffer(). If header was absent or lied, memory
+    // could spike unbounded.
+    // Now: reads body as a stream and aborts the moment cumulative bytes exceed cap.
+    let bytes: Uint8Array;
+    try {
+      bytes = await downloadWithByteCap(imageResponse, MAX_IMAGE_SIZE);
+    } catch (sizeErr: any) {
+      if (sizeErr?.message?.includes('PAYLOAD_TOO_LARGE')) {
+        return new Response(JSON.stringify({ error: 'حجم الصورة أكبر من الحد المسموح (5 ميجابايت)' }), {
+          status: 413,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      throw sizeErr; // Re-throw unexpected stream errors
+    }
 
     // تحويل آمن لـ base64 (بدون stack overflow للصور الكبيرة)
     let binary = '';
@@ -124,7 +188,7 @@ Deno.serve(async (req: Request) => {
     }
     const imageBase64 = btoa(binary);
 
-    // ——— 4. إرسال الصورة لـ Groq Vision (Llama 3.2 90B Vision) ———
+    // ——— 4. إرسال الصورة لـ Groq Vision ———
     const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -132,7 +196,7 @@ Deno.serve(async (req: Request) => {
         'Authorization': `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: GROQ_MODEL, // 🌟 M2-FIX: from env var, hot-swappable without redeploy
+        model: GROQ_MODEL,
         messages: [
           {
             role: 'user',
@@ -156,14 +220,21 @@ Deno.serve(async (req: Request) => {
             ],
           },
         ],
-        temperature: 0.1, // 🔴 تقليل درجة الإبداع لزيادة الدقة في استخراج الأرقام
+        temperature: 0.1,
         max_tokens: 500,
       }),
     });
 
     if (!groqRes.ok) {
+      // 🔴 AUDIT FIX (C3): Log full Groq error to Deno console but DO NOT
+      // return it to the client. Previously: `throw new Error(Groq API error: ... ${errBody})`
+      // which would leak Groq's internal error payload verbatim in the 500 response.
       const errBody = await groqRes.text();
-      throw new Error(`Groq API error: ${groqRes.status} — ${errBody}`);
+      console.error(`[analyze-inbody] Groq API error ${groqRes.status}:`, errBody);
+      return new Response(
+        JSON.stringify({ error: 'تعذر تحليل الصورة حالياً. يرجى المحاولة مرة أخرى بعد قليل.' }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const groqJson = await groqRes.json();
@@ -188,10 +259,9 @@ Deno.serve(async (req: Request) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
-  } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+  } catch (error: unknown) {
+    // 🔴 AUDIT FIX (C3): Generic error response with redacted internal details.
+    // Full error logged to Deno console for debugging; client gets safe message.
+    return safeErrorResponse(error);
   }
 });

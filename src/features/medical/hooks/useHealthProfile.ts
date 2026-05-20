@@ -44,9 +44,9 @@ export function useHealthProfile(
       await onRefresh();
       setIsEditing(false);
       showToast.success('تم حفظ الملف الطبي بنجاح');
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('[saveHealthProfile]', err);
-      showToast.error('خطأ في الحفظ', err?.message);
+      showToast.error('خطأ في الحفظ', err instanceof Error ? err.message : undefined);
     } finally {
       setUploading(false);
     }

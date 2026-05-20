@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../src/lib/supabase';
+import { executeQuery } from '../src/lib/apiClient';
 import { useFamily } from '../src/context/FamilyContext';
 import { logger } from '../src/lib/logger';
 import { AppColors } from '../constants/AppTheme';
@@ -29,15 +30,28 @@ export default function WaterTracker() {
 
   const fetchWaterData = async () => {
     try {
-      const { data: lifeData } = await supabase.from('lifestyle_profile').select('water_liters').eq('user_id', userId).single();
-      let target = 8;
-      if (lifeData && lifeData.water_liters) { target = Math.round(lifeData.water_liters * 4); setTargetGlasses(target); }
-
+      // 🔴 P-01 FIX: Parallel queries (was sequential — doubled loading time)
+      // 🔴 CF-01 FIX: All calls through executeQuery for timeout/retry
       const today = new Date(); today.setHours(0, 0, 0, 0);
-      const { data: waterData } = await supabase.from('water_tracking').select('amount').eq('user_id', userId).gte('recorded_at', today.toISOString());
+      const [lifeRes, waterRes] = await Promise.all([
+        executeQuery<{ water_liters: number } | null>(
+          supabase.from('lifestyle_profile').select('water_liters').eq('user_id', userId).single(),
+          { isIdempotent: true }
+        ),
+        executeQuery<{ amount: number }[]>(
+          supabase.from('water_tracking').select('amount').eq('user_id', userId).gte('recorded_at', today.toISOString()),
+          { isIdempotent: true }
+        ),
+      ]);
 
-      if (waterData) {
-        const totalConsumed = waterData.reduce((sum, record) => sum + (record.amount || 0), 0);
+      let target = 8;
+      if (lifeRes.data?.water_liters) {
+        target = Math.round(lifeRes.data.water_liters * 4);
+        setTargetGlasses(target);
+      }
+
+      if (waterRes.data) {
+        const totalConsumed = waterRes.data.reduce((sum, record) => sum + (record.amount || 0), 0);
         setConsumedGlasses(totalConsumed);
         animateWater(totalConsumed, target);
       }
@@ -72,7 +86,10 @@ export default function WaterTracker() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
-      const { error } = await supabase.from('water_tracking').insert([{ user_id: userId, amount: 1, recorded_at: new Date().toISOString() }]);
+      const { error } = await executeQuery(
+        supabase.from('water_tracking').insert([{ user_id: userId, amount: 1, recorded_at: new Date().toISOString() }]),
+        { retries: 1 }
+      );
       if (error) throw error;
     } catch (err) {
       logger.error('Error adding water:', err);
@@ -91,11 +108,17 @@ export default function WaterTracker() {
 
     try {
       const today = new Date(); today.setHours(0, 0, 0, 0);
-      const { data, error } = await supabase.from('water_tracking').select('id').eq('user_id', userId).gte('recorded_at', today.toISOString()).order('recorded_at', { ascending: false }).limit(1);
+      const { data, error } = await executeQuery<{ id: string }[]>(
+        supabase.from('water_tracking').select('id').eq('user_id', userId).gte('recorded_at', today.toISOString()).order('recorded_at', { ascending: false }).limit(1),
+        { isIdempotent: true }
+      );
       
       if (error) throw error;
       if (data && data.length > 0) {
-        const { error: deleteError } = await supabase.from('water_tracking').delete().eq('id', data[0].id);
+        const { error: deleteError } = await executeQuery(
+          supabase.from('water_tracking').delete().eq('id', data[0].id),
+          { retries: 0 }
+        );
         if (deleteError) throw deleteError;
       }
     } catch (err) {
