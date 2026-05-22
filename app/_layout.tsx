@@ -36,15 +36,18 @@ function PushNotificationManager() {
 
 type AppState = 'booting' | 'unauthenticated' | 'ready' | 'error';
 
-// 🔴 AUDIT FIX: Startup failure recovery screen
-// Shown when auth bootstrap fails — prevents stuck-on-splash perception.
+// ────────────────────────────────────────────────────
+// 🔴 AUDIT 7 FIX (Issue 1): Startup failure recovery screen.
+// Previously: AuthGuard was a sibling to <Stack />, so StartupErrorScreen
+// mounted ALONGSIDE the navigation tree — causing layout pollution.
+// Now: it's rendered by AppLayoutContent which GATES the entire tree.
+// ────────────────────────────────────────────────────
 function StartupErrorScreen({ error, onRetry }: { error: Error; onRetry: () => void }) {
   const [retrying, setRetrying] = useState(false);
 
   const handleRetry = () => {
     setRetrying(true);
     onRetry();
-    // Reset after a short delay in case retry completes fast
     setTimeout(() => setRetrying(false), 2000);
   };
 
@@ -65,6 +68,8 @@ function StartupErrorScreen({ error, onRetry }: { error: Error; onRetry: () => v
         onPress={handleRetry}
         disabled={retrying}
         activeOpacity={0.8}
+        accessibilityLabel="إعادة المحاولة"
+        accessibilityRole="button"
       >
         {retrying ? (
           <ActivityIndicator color="#FFF" />
@@ -89,66 +94,75 @@ const errorStyles = StyleSheet.create({
   retryText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
 });
 
-// 🌟 2. حارس التوجيه الذكي (Auth Guard) — يستخدم State Machine
-function AuthGuard() {
-  const { session, isLoading, authError, retryAuth } = useAuth();
+// ────────────────────────────────────────────────────
+// 🔴 AUDIT 7 FIX (Issue 2): Unified routing side-effect.
+// Previously: AuthGuard + app/index.tsx both fired competing router.replace()
+// calls, causing race conditions and cold-start flicker.
+// Now: ALL routing logic is centralized here. app/index.tsx is a
+// dumb loading portal only.
+// ────────────────────────────────────────────────────
+function AuthRoutingLogic() {
+  const { session, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const navigationState = useRootNavigationState();
 
   useEffect(() => {
-    if (!navigationState?.key) return;
+    if (!navigationState?.key || isLoading) return;
 
-    const currentSegment = segments[0] || '';
+    const currentSegment = (segments[0] || '') as string;
     const isAuthRoute = ['login', 'signup', 'verify'].includes(currentSegment);
     const isOnboardingRoute = currentSegment === 'onboarding';
-
-    // State Machine — now includes 'error' state
-    let appState: AppState = 'booting';
-    if (isLoading) {
-      appState = 'booting';
-    } else if (authError && !session) {
-      appState = 'error';
-    } else if (session) {
-      appState = 'ready';
-    } else {
-      appState = 'unauthenticated';
-    }
-
-    if (appState === 'booting') return;
+    // index route acts as a loading portal — let it redirect via layout
+    const isIndexRoute = currentSegment === '' || currentSegment === 'index';
 
     // ✅ أخفِ الـ Splash بعد التحقق من الـ auth مباشرة
     SplashScreen.hideAsync();
 
-    // Route based on state map
-    switch (appState) {
-      case 'error':
-        // 🔴 AUDIT FIX: Don't route — let StartupErrorScreen handle this
-        Sentry.captureException(authError, {
-          tags: { context: 'auth_bootstrap' },
-        });
-        break;
-
-      case 'unauthenticated':
-        if (!isAuthRoute && !isOnboardingRoute) {
-          router.replace('/login');
-        }
-        break;
-      
-      case 'ready':
-        if (isAuthRoute || isOnboardingRoute) {
-          router.replace('/(tabs)');
-        }
-        break;
+    if (session) {
+      // User is authenticated — redirect away from auth/onboarding/index
+      if (isAuthRoute || isOnboardingRoute || isIndexRoute) {
+        router.replace('/(tabs)');
+      }
+    } else {
+      // User is NOT authenticated — redirect away from protected routes
+      if (!isAuthRoute && !isOnboardingRoute) {
+        router.replace('/login');
+      }
     }
-  }, [session, segments, isLoading, navigationState?.key, authError]);
+  }, [session, segments, isLoading, navigationState?.key]);
 
-  // 🔴 AUDIT FIX: Show recovery screen on startup failure
+  return null;
+}
+
+// ────────────────────────────────────────────────────
+// 🔴 AUDIT 7 FIX (Issue 1): Layout Wrapper that GATES children.
+// Previously: AuthGuard was a sibling rendering component that returned
+// <StartupErrorScreen /> alongside <Stack />, causing flexbox pollution.
+// Now: AppLayoutContent is the parent wrapper — if auth fails, it
+// renders ONLY the error screen, fully replacing the Stack tree.
+// ────────────────────────────────────────────────────
+function AppLayoutContent() {
+  const { session, isLoading, authError, retryAuth } = useAuth();
+
+  // Guard early — prevents rendering broken Stack states
   if (!isLoading && authError && !session) {
+    // Report to Sentry once
+    Sentry.captureException(authError, {
+      tags: { context: 'auth_bootstrap' },
+    });
+    SplashScreen.hideAsync();
     return <StartupErrorScreen error={authError} onRetry={retryAuth} />;
   }
 
-  return null;
+  return (
+    <>
+      <AuthRoutingLogic />
+      <PushNotificationManager />
+      <Stack screenOptions={{ headerShown: false }} />
+      <OfflineBanner />
+    </>
+  );
 }
 
 function RootLayout() {
@@ -156,11 +170,7 @@ function RootLayout() {
     <ErrorBoundary>
       <AuthProvider>
         <FamilyProvider>
-          <AuthGuard />
-          <PushNotificationManager />
-
-          <Stack screenOptions={{ headerShown: false }} />
-          <OfflineBanner />
+          <AppLayoutContent />
         </FamilyProvider>
       </AuthProvider>
       {/* ✅ خارج كل الـ providers حتى يظهر فوق كل شيء بما فيه الـ modals */}

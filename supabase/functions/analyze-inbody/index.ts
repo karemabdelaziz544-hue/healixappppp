@@ -170,8 +170,9 @@ Deno.serve(async (req: Request) => {
     let bytes: Uint8Array;
     try {
       bytes = await downloadWithByteCap(imageResponse, MAX_IMAGE_SIZE);
-    } catch (sizeErr: any) {
-      if (sizeErr?.message?.includes('PAYLOAD_TOO_LARGE')) {
+    } catch (sizeErr: unknown) {
+      const errMsg = sizeErr instanceof Error ? sizeErr.message : '';
+      if (errMsg.includes('PAYLOAD_TOO_LARGE')) {
         return new Response(JSON.stringify({ error: 'حجم الصورة أكبر من الحد المسموح (5 ميجابايت)' }), {
           status: 413,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -189,41 +190,64 @@ Deno.serve(async (req: Request) => {
     const imageBase64 = btoa(binary);
 
     // ——— 4. إرسال الصورة لـ Groq Vision ———
-    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `أنت كوتش تغذية وطبيب متخصص. انظر لهذه الصورة من فحص InBody واستخرج الأرقام بدقة، ثم قدم تقييم ونصيحة.
+    // 🔴 AUDIT FIX: AbortController with 60s timeout prevents billing spike
+    // if Groq API hangs. Without this, the Edge Function would run until
+    // Supabase's execution limit (~150s), consuming resources on every hang.
+    const groqController = new AbortController();
+    const groqTimeout = setTimeout(() => groqController.abort(), 60_000);
+
+    let groqRes: Response;
+    try {
+      groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        signal: groqController.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: GROQ_MODEL,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: `أنت كوتش تغذية وطبيب متخصص. انظر لهذه الصورة من فحص InBody واستخرج الأرقام بدقة، ثم قدم تقييم ونصيحة.
 أجب بالعربية فقط والتزم حرفياً بهذا التنسيق بدون أي إضافات أخرى:
 الوزن: [الرقم]
 العضلات: [الرقم]
 الدهون: [الرقم]
 التقييم: [جملة أو جملتين]
 التوصية: [جملة]`,
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:${mimeType};base64,${imageBase64}`,
                 },
-              },
-            ],
-          },
-        ],
-        temperature: 0.1,
-        max_tokens: 500,
-      }),
-    });
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:${mimeType};base64,${imageBase64}`,
+                  },
+                },
+              ],
+            },
+          ],
+          temperature: 0.1,
+          max_tokens: 500,
+        }),
+      });
+    } catch (fetchErr: unknown) {
+      clearTimeout(groqTimeout);
+      // Abort errors mean timeout was hit
+      if (fetchErr instanceof DOMException && fetchErr.name === 'AbortError') {
+        console.error('[analyze-inbody] Groq API timeout after 60s');
+        return new Response(
+          JSON.stringify({ error: 'انتهت مهلة تحليل الصورة. يرجى المحاولة مرة أخرى.' }),
+          { status: 504, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      throw fetchErr;
+    } finally {
+      clearTimeout(groqTimeout);
+    }
 
     if (!groqRes.ok) {
       // 🔴 AUDIT FIX (C3): Log full Groq error to Deno console but DO NOT

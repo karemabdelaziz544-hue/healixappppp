@@ -7,7 +7,7 @@ import { logger } from '../lib/logger';
 interface AuthContextType {
   session: Session | null;
   isLoading: boolean;
-  /** 🔴 AUDIT FIX: Exposed so _layout can show a recovery screen instead of stuck splash */
+  /** Exposed so _layout can show a recovery screen instead of stuck splash */
   authError: Error | null;
   retryAuth: () => void;
 }
@@ -24,22 +24,64 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<Error | null>(null);
 
-  const bootstrapAuth = () => {
+  /**
+   * 🔴 AUDIT 7 FIX (Issue 3): Eliminated duplicate bootstrap.
+   *
+   * Previously: bootstrapAuth() called getSession() AND onAuthStateChange
+   * was subscribed simultaneously. Supabase's onAuthStateChange fires an
+   * INITIAL_SESSION event immediately on subscription, so getSession()
+   * was redundant — causing double state updates and render frame waste.
+   *
+   * Now: We rely exclusively on onAuthStateChange for the structural baseline.
+   * retryAuth() is kept for explicit user-triggered retries only.
+   */
+  const setupAuthListener = () => {
+    setIsLoading(true);
+    setAuthError(null);
+
+    try {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+        // 🔴 C3-FIX: Flush cache on logout to prevent cross-session data leaks.
+        if (event === 'SIGNED_OUT') {
+          clearQueryCache();
+        }
+
+        setSession(newSession);
+        setIsLoading(false);
+        setAuthError(null);
+      });
+
+      return subscription;
+    } catch (err: unknown) {
+      // Catches synchronous failures in subscription setup (corrupt client, etc.)
+      const error = err instanceof Error ? err : new Error('Auth listener setup failed');
+      logger.error('[AuthContext] onAuthStateChange setup failed:', error.message);
+      setAuthError(error);
+      setIsLoading(false);
+      return null;
+    }
+  };
+
+  /**
+   * retryAuth — for explicit user-triggered retry from StartupErrorScreen.
+   * Uses getSession() as a one-shot recovery mechanism since the listener
+   * may have failed to initialize.
+   */
+  const retryAuth = () => {
     setIsLoading(true);
     setAuthError(null);
 
     supabase.auth.getSession()
-      .then(({ data: { session }, error }) => {
+      .then(({ data: { session: newSession }, error }) => {
         if (error) {
-          logger.error('[AuthContext] getSession failed:', error.message);
+          logger.error('[AuthContext] retryAuth failed:', error.message);
           setAuthError(error);
         }
-        setSession(session);
+        setSession(newSession);
       })
       .catch((err: unknown) => {
-        // 🔴 AUDIT FIX: Catches network failures, corrupt storage, etc.
-        const error = err instanceof Error ? err : new Error('Auth startup failed');
-        logger.error('[AuthContext] getSession crashed:', error.message);
+        const error = err instanceof Error ? err : new Error('Auth retry failed');
+        logger.error('[AuthContext] retryAuth crashed:', error.message);
         setAuthError(error);
       })
       .finally(() => {
@@ -48,31 +90,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    let isMounted = true;
-
-    bootstrapAuth();
-
-    // مراقبة أي تغيير لحظي (دخول أو خروج)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      // 🔴 C3-FIX: Flush cache on logout to prevent cross-session data leaks.
-      if (event === 'SIGNED_OUT') {
-        clearQueryCache();
-      }
-      if (isMounted) {
-        setSession(session);
-        setIsLoading(false);
-        setAuthError(null); // Clear error on successful auth event
-      }
-    });
+    const subscription = setupAuthListener();
 
     return () => {
-      isMounted = false;
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, isLoading, authError, retryAuth: bootstrapAuth }}>
+    <AuthContext.Provider value={{ session, isLoading, authError, retryAuth }}>
       {children}
     </AuthContext.Provider>
   );
