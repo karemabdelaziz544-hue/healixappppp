@@ -9,21 +9,50 @@ Healix is a comprehensive health and lifestyle tracking mobile application built
 The application follows a modular, feature-based architecture pattern with clear separation of concerns.
 
 ```
-src/
-├── components/        # Shared UI components (Buttons, Toasts, Modals)
-├── context/           # Global state providers (Auth, Family)
-├── features/          # Domain-specific logic
-│   ├── medical/       # InBody analysis, Documents, Health Profiles
-│   │   ├── hooks/     # Business logic and state management
-│   │   ├── services/  # API and Supabase interactions
-│   │   └── ...        # UI Screens and Tabs
-│   └── chat/          # Real-time messaging
-├── lib/               # Core infrastructure
-│   ├── apiClient.ts   # Resilient Supabase wrapper (Retries, Timeouts)
-│   ├── schemas.ts     # Zod runtime validation schemas
-│   ├── supabase.ts    # Supabase client initialization
-│   └── logger.ts      # Telemetry wrapper
-├── types/             # TypeScript interfaces and domain models
+healix-app/
+├── app/                    # Expo Router file-based routes
+│   ├── _layout.tsx         # Root layout (AuthProvider, routing guard, Sentry)
+│   ├── index.tsx           # Loading portal (redirects via layout guard)
+│   ├── (tabs)/             # Tab navigator (Dashboard, Chat, Medical, History, Profile)
+│   ├── login.tsx           # Auth screens
+│   ├── signup.tsx
+│   ├── onboarding.tsx
+│   └── ...
+├── components/             # Shared UI components (root level)
+│   ├── chat/               # Chat-specific components (MessageBubble, etc.)
+│   ├── dashboard/          # Dashboard components (MainDashboardView, etc.)
+│   ├── auth/               # Auth form components (AuthInput, AuthButton)
+│   ├── ErrorBoundary.tsx
+│   ├── ChatView.tsx
+│   ├── WaterTracker.tsx
+│   └── ...
+├── hooks/                  # Shared app-level hooks (root level)
+│   ├── usePushNotifications.ts
+│   ├── useNetworkStatus.ts
+│   └── ...
+├── constants/              # Theme tokens (AppTheme.ts)
+├── src/
+│   ├── context/            # Global state providers (Auth, Family)
+│   ├── features/           # Domain-specific logic
+│   │   ├── medical/        # InBody analysis, Health Profiles
+│   │   │   ├── hooks/
+│   │   │   └── services/
+│   │   ├── chat/           # Real-time messaging hooks
+│   │   │   └── hooks/
+│   │   └── family/         # Family orchestration
+│   │       └── hooks/
+│   ├── hooks/              # Shared query hooks (useSupabaseQuery)
+│   ├── lib/                # Core infrastructure
+│   │   ├── apiClient.ts    # Resilient Supabase wrapper (Retries, Timeouts, Abort)
+│   │   ├── errors.ts       # Typed error taxonomy (AppError)
+│   │   ├── schemas.ts      # Zod runtime validation schemas
+│   │   ├── supabase.ts     # Supabase client initialization
+│   │   └── logger.ts       # Telemetry wrapper
+│   ├── screens/            # Full-screen components (Login, Signup, etc.)
+│   └── types/              # TypeScript interfaces and domain models
+├── supabase/
+│   └── functions/          # Edge Functions (analyze-inbody)
+├── __tests__/              # Jest test suites
 └── ...
 ```
 

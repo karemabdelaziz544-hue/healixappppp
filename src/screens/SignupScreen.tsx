@@ -40,9 +40,12 @@ export default function SignupScreen() {
       return;
     }
 
-    const phoneRegex = /^01[0125][0-9]{8}$/; // أرقام مصرية
+    // 🔴 AUDIT 8 NOTE: Egypt-only phone validation.
+    // If expanding to other markets, replace with E.164 validation + country picker.
+    // Current scope is Egypt-only as confirmed by product requirements.
+    const phoneRegex = /^01[0125][0-9]{8}$/;
     if (!phoneRegex.test(phone)) {
-      showToast.error('يرجى إدخال رقم هاتف صحيح (مثال: 01012345678)');
+      showToast.error('يرجى إدخال رقم هاتف مصري صحيح (مثال: 01012345678)');
       return;
     }
 
@@ -92,8 +95,8 @@ export default function SignupScreen() {
         params: { email: email.trim() }
       });
 
-    } catch (error: any) {
-      handleError(error, 'Signup');
+    } catch (err: unknown) {
+      handleError(err, 'Signup');
     } finally {
       setLoading(false);
     }

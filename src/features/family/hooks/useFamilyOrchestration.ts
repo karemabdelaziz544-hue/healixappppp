@@ -1,22 +1,36 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { executeQuery } from '../../../lib/apiClient';
 import { logger } from '../../../lib/logger';
 import type { Profile } from '../../../types';
 
+/**
+ * useFamilyOrchestration — manages family profile state.
+ *
+ * 🔴 AUDIT 8 FIX (Issue 1): Added explicit `familyError` state.
+ * Previously errors were swallowed in catch — user saw stale/empty data
+ * with no recovery CTA.
+ *
+ * 🔴 AUDIT 8 FIX (Issue 2): `switchProfile` returns Promise<void>.
+ * Previously typed as sync void but awaited by tab bar — causing
+ * a type/contract mismatch.
+ */
 export function useFamilyOrchestration(userId: string | undefined) {
   const [currentProfile, setCurrentProfile] = useState<Profile | null>(null);
   const [familyMembers, setFamilyMembers] = useState<Profile[]>([]);
   const [loadingFamily, setLoadingFamily] = useState(true);
+  // 🔴 AUDIT 8 FIX: Surfaced error state for UI recovery affordance
+  const [familyError, setFamilyError] = useState<Error | null>(null);
 
   const isInitialLoadDone = useRef(false);
   const currentProfileIdRef = useRef<string | null>(null);
 
-  const fetchFamily = async (silent = false) => {
+  const fetchFamily = useCallback(async (silent = false) => {
     if (!userId) {
       setCurrentProfile(null);
       setFamilyMembers([]);
       setLoadingFamily(false);
+      setFamilyError(null);
       isInitialLoadDone.current = false;
       currentProfileIdRef.current = null;
       return;
@@ -25,6 +39,8 @@ export function useFamilyOrchestration(userId: string | undefined) {
     if (!silent && !isInitialLoadDone.current) {
       setLoadingFamily(true);
     }
+    // Clear error on new fetch attempt
+    setFamilyError(null);
 
     try {
       const { data, error } = await executeQuery<Profile[]>(
@@ -72,13 +88,16 @@ export function useFamilyOrchestration(userId: string | undefined) {
           if (updatedCurrent) setCurrentProfile(updatedCurrent);
         }
       }
-    } catch (err) {
-      logger.error("Error fetching family:", err);
+    } catch (err: unknown) {
+      // 🔴 AUDIT 8 FIX: Surface error instead of swallowing it
+      const error = err instanceof Error ? err : new Error('فشل في تحميل بيانات العائلة');
+      logger.error('[FamilyOrchestration] Error fetching family:', error.message);
+      setFamilyError(error);
     } finally {
       setLoadingFamily(false);
       isInitialLoadDone.current = true;
     }
-  };
+  }, [userId]);
 
   useEffect(() => {
     isInitialLoadDone.current = false;
@@ -94,15 +113,28 @@ export function useFamilyOrchestration(userId: string | undefined) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [userId, fetchFamily]);
 
-  const switchProfile = (profileId: string) => {
+  /**
+   * 🔴 AUDIT 8 FIX (Issue 2): switchProfile is now async (Promise<void>).
+   * Previously typed as sync void but tab bar awaited it — contract mismatch.
+   * Now the caller can await and show toast after state is confirmed.
+   */
+  const switchProfile = useCallback(async (profileId: string): Promise<void> => {
     const profile = familyMembers.find(p => p.id === profileId);
     if (profile) {
       setCurrentProfile(profile);
       currentProfileIdRef.current = profile.id;
     }
-  };
+  }, [familyMembers]);
 
-  return { currentProfile, familyMembers, switchProfile, fetchFamily, loadingFamily };
+  return {
+    currentProfile,
+    familyMembers,
+    switchProfile,
+    fetchFamily,
+    loadingFamily,
+    /** 🔴 AUDIT 8 FIX: Error state for UI retry affordance */
+    familyError,
+  };
 }

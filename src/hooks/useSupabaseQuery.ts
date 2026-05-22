@@ -77,6 +77,24 @@ export function invalidateQueries(featurePrefix: string) {
   globalCache.deleteByPrefix(featurePrefix);
 }
 
+/**
+ * useSupabaseQuery — lightweight server state hook with LRU caching.
+ *
+ * @param key     Cache key (use createQueryKey() for structured keys)
+ * @param queryFn Async function that fetches data
+ * @param options Cache configuration
+ *
+ * ⚠️ STABILITY CONTRACT:
+ * The effect depends ONLY on `key` — NOT on `queryFn` or `options`.
+ * This is intentional to prevent unnecessary refetches.
+ *
+ * Callers MUST ensure `queryFn` is referentially stable:
+ *   ✅ useCallback(() => executeQuery(...), [userId])
+ *   ✅ Inline arrow that closes over stable values
+ *   ❌ New function reference on every render without memoization
+ *
+ * If you need queryFn changes to trigger refetch, change the `key` instead.
+ */
 export function useSupabaseQuery<T>(
   key: string,
   queryFn: () => Promise<T>,
@@ -114,9 +132,11 @@ export function useSupabaseQuery<T>(
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: queryFn must be stable (see contract above)
   useEffect(() => {
     fetch();
   }, [key]);
 
   return { data, loading, error, refetch: () => fetch(true) };
 }
+
