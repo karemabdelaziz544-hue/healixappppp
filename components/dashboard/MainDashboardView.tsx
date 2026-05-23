@@ -18,6 +18,7 @@ import { executeQuery } from '../../src/lib/apiClient';
 import { logger } from '../../src/lib/logger';
 import type { Plan, PlanTask } from '../../src/types';
 import { AppCache } from '../../src/lib/cache';
+import { OfflineQueue } from '../../src/lib/offlineQueue';
 
 
 
@@ -245,20 +246,13 @@ export default function MainDashboardView() {
       streak
     });
     await Haptics.impactAsync(newStatus ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
-    try {
-      const todayStr = new Date().toISOString().split('T')[0];
-      await executeQuery(
-        supabase.from('daily_task_logs').upsert({
-          user_id: userId,
-          task_id: taskId,
-          log_date: todayStr,
-          is_completed: newStatus
-        }, { onConflict: 'user_id,task_id,log_date' }),
-        { isIdempotent: true }
-      );
-    } catch (err) {
-      fetchDashboardData();
-    }
+    
+    const todayStr = new Date().toISOString().split('T')[0];
+    await OfflineQueue.addMutation('task_toggle', userId!, {
+      taskId,
+      isCompleted: newStatus,
+      logDate: todayStr
+    });
   };
 
   const completedCount = tasks.filter(t => t.is_completed).length;

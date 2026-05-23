@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { showToast } from '../../components/AppToast';
-import { AppColors } from '../../constants/AppTheme';
+import { AppColors, AppRadius, AppSpacing, AppFontSize } from '../../constants/AppTheme';
 import { handleError } from '../lib/errorHandler';
 import { supabase } from '../lib/supabase';
 import { AuthInput } from '../../components/auth/AuthInput';
@@ -114,22 +114,31 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9F6F0', justifyContent: 'center', padding: 20 },
+  container: { flex: 1, backgroundColor: AppColors.background, justifyContent: 'center', padding: AppSpacing.xl },
 
   bgCircle: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.4 },
-  circleTopRight: { backgroundColor: '#DEF7EC', top: -100, right: -150 },
-  circleBottomLeft: { backgroundColor: '#FFEDD5', bottom: -100, left: -150 },
+  circleTopRight: { backgroundColor: AppColors.successLight, top: -100, right: -150 },
+  circleBottomLeft: { backgroundColor: AppColors.accentBorder, bottom: -100, left: -150 },
 
-  formCard: { backgroundColor: '#FFF', padding: 30, borderRadius: 30, elevation: 10, shadowColor: '#2A4B46', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20 },
+  formCard: { 
+    backgroundColor: AppColors.surface, 
+    padding: AppSpacing.xxxl, 
+    borderRadius: AppRadius.xxl, 
+    elevation: 10, 
+    shadowColor: AppColors.primary, 
+    shadowOffset: { width: 0, height: 10 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 20 
+  },
 
-  header: { alignItems: 'center', marginBottom: 35 },
-  logo: { width: 80, height: 80, marginBottom: 15, borderRadius: 20 },
-  title: { fontSize: 32, fontWeight: '900', color: '#2A4B46', marginBottom: 5 },
-  subtitle: { fontSize: 14, color: '#6B7280', fontWeight: 'bold' },
+  header: { alignItems: 'center', marginBottom: AppSpacing.xxxl },
+  logo: { width: 80, height: 80, marginBottom: AppSpacing.lg, borderRadius: AppRadius.xl },
+  title: { fontSize: AppFontSize.title, fontWeight: '900', color: AppColors.primary, marginBottom: AppSpacing.xs },
+  subtitle: { fontSize: AppFontSize.md, color: AppColors.textSecondary, fontWeight: 'bold' },
 
-  forgotPasswordText: { fontSize: 12, color: AppColors.accent, fontWeight: 'bold' },
+  forgotPasswordText: { fontSize: AppFontSize.sm, color: AppColors.accent, fontWeight: 'bold' },
 
-  footer: { flexDirection: 'row-reverse', justifyContent: 'center', marginTop: 25 },
-  footerText: { color: AppColors.textSecondary, fontSize: 15, fontWeight: 'bold' },
-  signupLink: { color: AppColors.accent, fontSize: 15, fontWeight: '900' },
+  footer: { flexDirection: 'row-reverse', justifyContent: 'center', marginTop: AppSpacing.xxl },
+  footerText: { color: AppColors.textSecondary, fontSize: AppFontSize.lg, fontWeight: 'bold' },
+  signupLink: { color: AppColors.accent, fontSize: AppFontSize.lg, fontWeight: '900' },
 });

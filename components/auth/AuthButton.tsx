@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, ActivityIndicator, StyleSheet } from 'react-native';
-import { AppColors } from '../../constants/AppTheme';
+import { AppColors, AppRadius, AppSpacing, AppFontSize } from '../../constants/AppTheme';
 
 interface AuthButtonProps {
   title: string;
@@ -29,14 +29,14 @@ const styles = StyleSheet.create({
   submitBtn: { 
     backgroundColor: AppColors.primary, 
     height: 55, 
-    borderRadius: 15, 
+    borderRadius: AppRadius.lg, 
     justifyContent: 'center', 
     alignItems: 'center', 
-    marginTop: 15 
+    marginTop: AppSpacing.lg 
   },
   submitBtnText: { 
     color: '#FFF', 
-    fontSize: 18, 
+    fontSize: AppFontSize.xl, 
     fontWeight: 'bold' 
   },
   disabled: {

@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { showToast } from '../../components/AppToast';
 import { AuthInput } from '../../components/auth/AuthInput';
 import { AuthButton } from '../../components/auth/AuthButton';
+import { AppColors, AppRadius, AppSpacing, AppFontSize } from '../../constants/AppTheme';
 
 export default function SignupScreen() {
   const [name, setName] = useState('');
@@ -171,30 +172,39 @@ export default function SignupScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9F6F0' },
-  scrollContent: { flexGrow: 1, justifyContent: 'center', padding: 20 },
+  container: { flex: 1, backgroundColor: AppColors.background },
+  scrollContent: { flexGrow: 1, justifyContent: 'center', padding: AppSpacing.xl },
 
   bgCircle: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.4 },
-  circleTopRight: { backgroundColor: '#DEF7EC', top: -100, right: -150 },
-  circleBottomLeft: { backgroundColor: '#FFEDD5', bottom: -100, left: -150 },
+  circleTopRight: { backgroundColor: AppColors.successLight, top: -100, right: -150 },
+  circleBottomLeft: { backgroundColor: AppColors.accentBorder, bottom: -100, left: -150 },
 
-  formCard: { backgroundColor: '#FFF', padding: 30, borderRadius: 30, elevation: 10, shadowColor: '#2A4B46', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20 },
+  formCard: { 
+    backgroundColor: AppColors.surface, 
+    padding: AppSpacing.xxxl, 
+    borderRadius: AppRadius.xxl, 
+    elevation: 10, 
+    shadowColor: AppColors.primary, 
+    shadowOffset: { width: 0, height: 10 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 20 
+  },
 
-  header: { alignItems: 'center', marginBottom: 30 },
-  logo: { width: 70, height: 70, marginBottom: 15, borderRadius: 20 },
-  title: { fontSize: 28, fontWeight: '900', color: '#2A4B46', marginBottom: 5 },
-  subtitle: { fontSize: 14, color: '#6B7280', fontWeight: 'bold' },
+  header: { alignItems: 'center', marginBottom: AppSpacing.xxxl },
+  logo: { width: 70, height: 70, marginBottom: AppSpacing.lg, borderRadius: AppRadius.xl },
+  title: { fontSize: AppFontSize.title, fontWeight: '900', color: AppColors.primary, marginBottom: AppSpacing.xs },
+  subtitle: { fontSize: AppFontSize.md, color: AppColors.textSecondary, fontWeight: 'bold' },
 
-  row: { flexDirection: 'row-reverse', gap: 15, marginBottom: 15 },
-  label: { fontSize: 13, fontWeight: 'bold', color: '#4B5563', textAlign: 'right', marginBottom: 8 },
+  row: { flexDirection: 'row-reverse', gap: AppSpacing.lg, marginBottom: AppSpacing.lg },
+  label: { fontSize: AppFontSize.sm, fontWeight: 'bold', color: AppColors.textSecondary, textAlign: 'right', marginBottom: AppSpacing.sm },
 
-  genderToggle: { flexDirection: 'row-reverse', backgroundColor: '#F3F4F6', height: 55, borderRadius: 15, padding: 4 },
-  genderBtn: { flex: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 12 },
-  genderBtnActive: { backgroundColor: '#FFF', elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3 },
-  genderText: { fontSize: 14, fontWeight: 'bold', color: '#9CA3AF' },
-  genderTextActive: { color: '#2A4B46' },
+  genderToggle: { flexDirection: 'row-reverse', backgroundColor: AppColors.inputBg, height: 55, borderRadius: AppRadius.lg, padding: 4 },
+  genderBtn: { flex: 1, justifyContent: 'center', alignItems: 'center', borderRadius: AppRadius.md },
+  genderBtnActive: { backgroundColor: AppColors.surface, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3 },
+  genderText: { fontSize: AppFontSize.md, fontWeight: 'bold', color: AppColors.textMuted },
+  genderTextActive: { color: AppColors.primary },
 
-  footer: { flexDirection: 'row-reverse', justifyContent: 'center', marginTop: 25 },
-  footerText: { color: '#6B7280', fontSize: 14, fontWeight: 'bold' },
-  loginLink: { color: '#F97316', fontSize: 14, fontWeight: '900' },
+  footer: { flexDirection: 'row-reverse', justifyContent: 'center', marginTop: AppSpacing.xxl },
+  footerText: { color: AppColors.textSecondary, fontSize: AppFontSize.md, fontWeight: 'bold' },
+  loginLink: { color: AppColors.accent, fontSize: AppFontSize.md, fontWeight: '900' },
 });

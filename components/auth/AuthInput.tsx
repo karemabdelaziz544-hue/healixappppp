@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, TextInputProps } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { AppColors } from '../../constants/AppTheme';
+import { AppColors, AppRadius, AppSpacing, AppFontSize } from '../../constants/AppTheme';
 
 interface AuthInputProps extends TextInputProps {
   label: string;
@@ -28,7 +28,7 @@ export const AuthInput: React.FC<AuthInputProps> = ({ label, isPassword, hint, h
             accessibilityRole="button"
             accessibilityLabel={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
           >
-            <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color="#9CA3AF" />
+            <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color={AppColors.textMuted} />
           </TouchableOpacity>
           <TextInput
             {...props}
@@ -51,25 +51,25 @@ export const AuthInput: React.FC<AuthInputProps> = ({ label, isPassword, hint, h
 };
 
 const styles = StyleSheet.create({
-  inputGroup: { marginBottom: 15 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  label: { fontSize: 13, fontWeight: 'bold', color: '#4B5563', textAlign: 'right', flex: 1 },
+  inputGroup: { marginBottom: AppSpacing.lg },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: AppSpacing.sm },
+  label: { fontSize: AppFontSize.sm, fontWeight: 'bold', color: AppColors.textSecondary, textAlign: 'right', flex: 1 },
   input: { 
-    backgroundColor: AppColors.inputBg || '#F3F4F6', 
+    backgroundColor: AppColors.inputBg, 
     height: 55, 
-    borderRadius: 15, 
-    paddingHorizontal: 15, 
+    borderRadius: AppRadius.lg, 
+    paddingHorizontal: AppSpacing.lg, 
     textAlign: 'right', 
-    fontSize: 14, 
-    color: AppColors.textPrimary || '#1F2937' 
+    fontSize: AppFontSize.md, 
+    color: AppColors.textPrimary 
   },
   passwordContainer: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    backgroundColor: AppColors.inputBg || '#F3F4F6', 
+    backgroundColor: AppColors.inputBg, 
     height: 55, 
-    borderRadius: 15 
+    borderRadius: AppRadius.lg 
   },
-  eyeIcon: { padding: 12 },
-  hint: { fontSize: 11, color: AppColors.textMuted || '#9CA3AF', textAlign: 'right', marginTop: 5, fontWeight: 'bold' },
+  eyeIcon: { padding: AppSpacing.md },
+  hint: { fontSize: AppFontSize.xs, color: AppColors.textMuted, textAlign: 'right', marginTop: AppSpacing.xs, fontWeight: 'bold' },
 });

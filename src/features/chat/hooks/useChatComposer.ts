@@ -5,6 +5,8 @@ import { supabase } from '../../../lib/supabase';
 import { showToast } from '../../../../components/AppToast';
 import * as Haptics from 'expo-haptics';
 import type { Attachment } from './useChatAttachments';
+import { OfflineQueue, generateUUID } from '../../../lib/offlineQueue';
+import NetInfo from '@react-native-community/netinfo';
 
 export function useChatComposer(
   channelType: string, 
@@ -102,43 +104,52 @@ export function useChatComposer(
     setUploading(true);
     let attachmentPath = null;
     let attachmentType = null;
+    let attachmentPayload = null;
 
     try {
+      const state = await NetInfo.fetch();
+      const isOnline = state.isConnected;
+
       if (attachment) {
-        const fileExt = attachment.name.split('.').pop() || 'file';
-        const filePath = `${currentUserId}/${Date.now()}.${fileExt}`;
-
-        // 🌟 H-09: Safely upload using fetch arrayBuffer for cross-platform stability instead of FormData
-        const fileResponse = await fetch(attachment.uri);
-        const arrayBuffer = await fileResponse.arrayBuffer();
-
-        const { error: uploadError } = await supabase.storage.from('chat-attachments').upload(filePath, arrayBuffer, {
-            contentType: attachment.mimeType || 'application/octet-stream',
-        });
-        
-        if (uploadError) throw uploadError;
-
-        attachmentPath = filePath;
         attachmentType = attachment.mimeType.startsWith('image/')
           ? 'image'
           : attachment.mimeType.startsWith('audio/')
             ? 'audio'
             : 'file';
+
+        if (isOnline) {
+          const fileExt = attachment.name.split('.').pop() || 'file';
+          const filePath = `${currentUserId}/${Date.now()}.${fileExt}`;
+          const fileResponse = await fetch(attachment.uri);
+          const arrayBuffer = await fileResponse.arrayBuffer();
+
+          const { error: uploadError } = await supabase.storage
+            .from('chat-attachments')
+            .upload(filePath, arrayBuffer, {
+              contentType: attachment.mimeType || 'application/octet-stream',
+            });
+          if (uploadError) throw uploadError;
+          attachmentPath = filePath;
+        } else {
+          attachmentPayload = {
+            uri: attachment.uri,
+            name: attachment.name,
+            mimeType: attachment.mimeType
+          };
+        }
       }
 
       const contentText = attachmentType === 'audio'
         ? '🎤 رسالة صوتية'
         : (newMessage || (attachmentType === 'image' ? '📷 صورة مرفقة' : '📎 ملف مرفق'));
 
-      // 🔴 H4-FIX: Optimistic UI — add message immediately so the user sees it without waiting
-      // for the Supabase round-trip + realtime delivery (typically 300-800ms delay).
-      const tempId = `temp-${Date.now()}`;
+      const messageId = generateUUID();
       const optimisticMsg: import('../../../types').Message = {
-        id: tempId,
+        id: messageId,
         sender_id: currentUserId!,
         receiver_id: receiverId!,
         content: contentText,
-        attachment_url: null,
+        attachment_url: attachmentPath,
         attachment_type: (attachmentType || null) as import('../../../types').Message['attachment_type'],
         recipient_type: channelType as 'doctor' | 'admin',
         is_read: false,
@@ -146,21 +157,16 @@ export function useChatComposer(
       };
       setMessages(prev => [optimisticMsg, ...prev]);
 
-      const { error } = await supabase.from('messages').insert([{
-        sender_id: currentUserId,
-        receiver_id: receiverId,
+      await OfflineQueue.addMutation('chat_send', currentUserId, {
+        messageId,
+        receiverId,
         content: contentText,
-        attachment_url: attachmentPath,
-        attachment_type: attachmentType,
-        recipient_type: channelType,
-        is_read: false,
-      }]);
+        attachmentUrl: attachmentPath,
+        attachmentType,
+        attachment: attachmentPayload,
+        recipientType: channelType
+      });
 
-      if (error) {
-        // Roll back optimistic update on failure
-        setMessages(prev => prev.filter(m => m.id !== tempId));
-        throw error;
-      }
       setNewMessage('');
       setAttachment(null);
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
