@@ -9,6 +9,8 @@ import type { InbodyRecord } from '../../types';
 import { useInBody } from './hooks/useInBody';
 import { ARABIC_MONTHS, MedicalTabProps } from './medical.types';
 import { medicalStyles as styles } from './medicalStyles';
+import { AppFontFamily } from '../../../constants/AppTheme';
+
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -250,12 +252,12 @@ const localStyles = StyleSheet.create({
     paddingBottom: 10,
   },
   modalTitle: {
-    fontFamily: 'Tajawal-Bold', // تأكد من اسم الخط المستخدم في مشروعك
+    fontFamily: AppFontFamily.bold,
     fontSize: 20,
     color: '#2A4B46',
   },
   modalDate: {
-    fontFamily: 'Tajawal-Regular',
+    fontFamily: AppFontFamily.regular,
     fontSize: 14,
     color: '#6B7280',
     textAlign: 'center',
@@ -277,13 +279,13 @@ const localStyles = StyleSheet.create({
     borderColor: '#E5E7EB',
   },
   modalStatLabel: {
-    fontFamily: 'Tajawal-Medium',
+    fontFamily: AppFontFamily.medium,
     fontSize: 14,
     color: '#6B7280',
     marginBottom: 5,
   },
   modalStatValue: {
-    fontFamily: 'Tajawal-Bold',
+    fontFamily: AppFontFamily.bold,
     fontSize: 16,
     color: '#2A4B46',
   },
@@ -296,21 +298,21 @@ const localStyles = StyleSheet.create({
     marginBottom: 20,
   },
   modalReportTitle: {
-    fontFamily: 'Tajawal-Bold',
+    fontFamily: AppFontFamily.bold,
     fontSize: 16,
     color: '#9A3412',
     marginBottom: 10,
     textAlign: 'right',
   },
   modalReportText: {
-    fontFamily: 'Tajawal-Medium',
+    fontFamily: AppFontFamily.medium,
     fontSize: 15,
     color: '#431407',
     lineHeight: 24,
     textAlign: 'right',
   },
   noReportText: {
-    fontFamily: 'Tajawal-Regular',
+    fontFamily: AppFontFamily.regular,
     fontSize: 14,
     color: '#9CA3AF',
     textAlign: 'center',
@@ -324,12 +326,12 @@ const localStyles = StyleSheet.create({
     marginTop: 10,
   },
   closeBtnText: {
-    fontFamily: 'Tajawal-Bold',
+    fontFamily: AppFontFamily.bold,
     color: '#FFF',
     fontSize: 16,
   },
   clickForMoreText: {
-    fontFamily: 'Tajawal-Medium', // أو أي خط بتستخدمه
+    fontFamily: AppFontFamily.medium,
     fontSize: 13,
     color: '#F97316',
     marginRight: 4,

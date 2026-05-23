@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppColors } from '../../constants/AppTheme';
 import { Strings } from '../../constants/strings';
@@ -22,7 +22,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const safeActiveIndex = visibleRoutes.findIndex((r: any) => r.name === currentRouteName);
 
   return (
-    <View style={styles.tabBarContainer}>
+    <View style={[styles.tabBarContainer, { bottom: Math.max(insets.bottom + 10, 25) }]}>
       {visibleRoutes.map((route: any, index: number) => {
         const isFocused = safeActiveIndex === index;
 
@@ -62,7 +62,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               accessibilityLabel={a11yLabel}
               accessibilityState={{ selected: isFocused }}
             >
-          <View style={[
+              <View style={[
                 styles.centerButton,
                 // للتعويض عن كون StyleSheet.create لا يدعم Dynamic Values:
                 // نضع translateY كـ inline style حيث floatLift في نطاق المكون
@@ -72,6 +72,12 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               ]}>
                 <Ionicons name={iconName} size={28} color="#FFFFFF" />
               </View>
+              <Text style={[
+                styles.tabLabel,
+                { color: isFocused ? AppColors.accent : AppColors.primary, marginTop: -floatLift + 5 }
+              ]}>
+                {a11yLabel}
+              </Text>
             </TouchableOpacity>
           );
         }
@@ -89,11 +95,15 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           >
             <Ionicons
               name={iconName}
-              // تكبير بسيط للأيقونة لما تتفعل
-              size={isFocused ? 26 : 24}
-              // الأيقونة وهي مش متفعلة أخضر غامق، ولما تتفعل برتقالي (بدون أي خلفية)
+              size={20}
               color={isFocused ? AppColors.accent : AppColors.primary}
             />
+            <Text style={[
+              styles.tabLabel,
+              { color: isFocused ? AppColors.accent : AppColors.primary }
+            ]}>
+              {a11yLabel}
+            </Text>
           </TouchableOpacity>
         );
       })}
@@ -121,11 +131,10 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBarContainer: {
     position: 'absolute',
-    bottom: 25,
     left: 20,
     right: 20,
     height: 70,
-    backgroundColor: '#FFFFFF', // خلفية بيضاء
+    backgroundColor: AppColors.surface,
     borderRadius: 35, // دوران ناعم
     flexDirection: 'row-reverse', // ✅ Fix RTL alignment
     alignItems: 'center',
@@ -141,6 +150,12 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  tabLabel: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    marginTop: 4,
+    fontFamily: 'Tajawal-Medium',
   },
 
   // تنسيقات الزر اللي في النص (Floating)

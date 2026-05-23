@@ -10,6 +10,12 @@ import { StartupFailureBoundary } from '../components/bootstrap/StartupFailureBo
 import { AuthRoutingLogic } from '../components/bootstrap/AuthRoutingLogic';
 import { PushNotificationManager } from '../components/bootstrap/PushNotificationManager';
 import { GlobalOverlays } from '../components/bootstrap/GlobalOverlays';
+import {
+  useFonts,
+  Tajawal_400Regular,
+  Tajawal_500Medium,
+  Tajawal_700Bold,
+} from '@expo-google-fonts/tajawal';
 
 // 🔴 AUDIT FIX (H2): Environment-aware Sentry configuration.
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
@@ -47,6 +53,16 @@ function AppLayoutContent() {
 }
 
 function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    'Tajawal-Regular': Tajawal_400Regular,
+    'Tajawal-Medium': Tajawal_500Medium,
+    'Tajawal-Bold': Tajawal_700Bold,
+  });
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
     <ErrorBoundary>
       <AuthProvider>

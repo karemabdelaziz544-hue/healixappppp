@@ -235,25 +235,35 @@ export default function MainDashboardView() {
     setRefreshing(true); await fetchDashboardData(); setRefreshing(false);
   }, [fetchDashboardData]);
 
-  const toggleTask = async (taskId: string, currentStatus: boolean) => {
-    const newStatus = !currentStatus;
-    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, is_completed: newStatus } : t);
-    setTasks(updatedTasks);
-    // Update cache
-    await AppCache.set(`dashboard_${userId}`, {
-      plan,
-      tasks: updatedTasks,
-      streak
-    });
-    await Haptics.impactAsync(newStatus ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
+  const pendingTaskIds = useRef(new Set<string>());
+
+  const toggleTask = useCallback(async (taskId: string, currentStatus: boolean) => {
+    if (pendingTaskIds.current.has(taskId)) return;
+    pendingTaskIds.current.add(taskId);
     
-    const todayStr = new Date().toISOString().split('T')[0];
-    await OfflineQueue.addMutation('task_toggle', userId!, {
-      taskId,
-      isCompleted: newStatus,
-      logDate: todayStr
-    });
-  };
+    try {
+      const newStatus = !currentStatus;
+      const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, is_completed: newStatus } : t);
+      setTasks(updatedTasks);
+      // Update cache
+      await AppCache.set(`dashboard_${userId}`, {
+        plan,
+        tasks: updatedTasks,
+        streak
+      });
+      await Haptics.impactAsync(newStatus ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
+      
+      const todayStr = new Date().toISOString().split('T')[0];
+      await OfflineQueue.addMutation('task_toggle', userId!, {
+        taskId,
+        isCompleted: newStatus,
+        logDate: todayStr
+      });
+    } finally {
+      pendingTaskIds.current.delete(taskId);
+    }
+  }, [userId, tasks, plan, streak]);
+
 
   const completedCount = tasks.filter(t => t.is_completed).length;
   const progress = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;

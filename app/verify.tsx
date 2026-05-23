@@ -42,20 +42,9 @@ export default function VerifyScreen() {
 
             if (error) throw error;
 
-            // ✅ تأكيد إنشاء البروفايل هنا (لأن في شاشة التسجيل كان اليوزر بدون صلاحيات ففشل الحفظ بسبب RLS)
-            if (data?.user) {
-                const meta = data.user.user_metadata || {};
-                await supabase.from('profiles').upsert({
-                    id: data.user.id,
-                    full_name: meta.full_name,
-                    phone: meta.phone,
-                    gender: meta.gender,
-                    subscription_status: 'new', // تحديد كعميل جديد
-                    is_onboarded: false,
-                    role: 'client',
-                    updated_at: new Date().toISOString()
-                });
-            }
+            // 🔴 AUDIT FIX: تم نقل إنشاء البروفايل بالكامل إلى Database Trigger (handle_new_user)
+            // على جدول auth.users لضمان الحماية وتفادي تعديل الصلاحيات أو الاشتراك من طرف العميل (Client-Side).
+
 
             showToast.success('تم تفعيل حسابك بنجاح 🎉');
             // ✅ BUG-07: تأخير بسيط لإعطاء FamilyContext وقت للتحميل

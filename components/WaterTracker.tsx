@@ -210,6 +210,7 @@ export default function WaterTracker() {
         <TouchableOpacity 
           style={[styles.floatingAddBtn, consumedGlasses >= targetGlasses && { backgroundColor: HydrationColors.complete, shadowColor: HydrationColors.complete }]} 
           onPress={handleAddGlass} 
+          onLongPress={handleRemoveGlass}
           activeOpacity={0.8}
         >
           <Ionicons name={consumedGlasses >= targetGlasses ? "checkmark-done" : "add"} size={34} color="#FFF" />

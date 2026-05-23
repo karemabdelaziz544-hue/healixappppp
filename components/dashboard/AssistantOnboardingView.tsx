@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,7 +40,8 @@ export default function AssistantOnboardingView() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const steps: OnboardingStep[] = [
+  // 🔴 AUDIT FIX (ARCH-05): Memoize steps array to prevent recreation on every render
+  const steps = useMemo<OnboardingStep[]>(() => [
     {
       id: 'inbody',
       title: 'قياسات InBody',
@@ -93,21 +94,36 @@ export default function AssistantOnboardingView() {
         return !!data;
       },
     },
-  ];
+  ], []);
 
+  // 🔴 AUDIT FIX (UX-03): parallelize supabase onboarding step checks
   const checkAllSteps = useCallback(async () => {
     if (!userId) return;
-    const results: Record<string, boolean> = {};
-    for (const step of steps) {
-      try {
-        results[step.id] = await step.checkFn(userId);
-      } catch {
-        results[step.id] = false;
-      }
+    try {
+      const results = await Promise.all(
+        steps.map(async (step) => {
+          try {
+            const completed = await step.checkFn(userId);
+            return { id: step.id, completed };
+          } catch {
+            return { id: step.id, completed: false };
+          }
+        })
+      );
+
+      const statusMap: Record<string, boolean> = {};
+      results.forEach(({ id, completed }) => {
+        statusMap[id] = completed;
+      });
+
+      setCompletionStatus(statusMap);
+    } catch (err) {
+      logger.error('Error checking onboarding steps:', err);
+    } finally {
+      setLoading(false);
     }
-    setCompletionStatus(results);
-    setLoading(false);
-  }, [userId]);
+  }, [userId, steps]);
+
 
   useEffect(() => {
     setLoading(true);

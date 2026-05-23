@@ -201,7 +201,7 @@ export default function MedicalRecordsScreen() {
           </ScrollView>
         </View>
 
-        <View style={{ display: activeTab === 'inbody' ? 'flex' : 'none', flex: 1 }}>
+        {activeTab === 'inbody' && (
           <ScrollView
             contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
             showsVerticalScrollIndicator={false}
@@ -215,9 +215,9 @@ export default function MedicalRecordsScreen() {
               onRefresh={onRefresh}
             />
           </ScrollView>
-        </View>
+        )}
 
-        <View style={{ display: activeTab === 'docs' ? 'flex' : 'none', flex: 1 }}>
+        {activeTab === 'docs' && (
           <ScrollView
             contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
             showsVerticalScrollIndicator={false}
@@ -231,9 +231,9 @@ export default function MedicalRecordsScreen() {
               onRefresh={onRefresh}
             />
           </ScrollView>
-        </View>
+        )}
 
-        <View style={{ display: activeTab === 'health' ? 'flex' : 'none', flex: 1 }}>
+        {activeTab === 'health' && (
           <ScrollView
             contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
             showsVerticalScrollIndicator={false}
@@ -247,9 +247,9 @@ export default function MedicalRecordsScreen() {
               onRefresh={onRefresh}
             />
           </ScrollView>
-        </View>
+        )}
 
-        <View style={{ display: activeTab === 'lifestyle' ? 'flex' : 'none', flex: 1 }}>
+        {activeTab === 'lifestyle' && (
           <ScrollView
             contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
             showsVerticalScrollIndicator={false}
@@ -263,7 +263,7 @@ export default function MedicalRecordsScreen() {
               onRefresh={onRefresh}
             />
           </ScrollView>
-        </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

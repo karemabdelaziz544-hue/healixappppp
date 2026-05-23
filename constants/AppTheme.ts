@@ -99,3 +99,11 @@ export const HydrationColors = {
   complete:   '#10B981',
   borderSide: '#F1F5F9',
 };
+
+// 🔴 AUDIT FIX: خطوط التطبيق الموحدة
+export const AppFontFamily = {
+  regular: 'Tajawal-Regular',
+  medium: 'Tajawal-Medium',
+  bold: 'Tajawal-Bold',
+};
+

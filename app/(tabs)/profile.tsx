@@ -171,7 +171,7 @@ export default function ProfileScreen() {
   if (fetching) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2A4B46" />
+        <ActivityIndicator size="large" color={AppColors.primary} />
       </View>
     );
   }
@@ -181,7 +181,7 @@ export default function ProfileScreen() {
       {isSubAccount && (
         <View style={styles.subAccountBanner}>
           <View style={styles.bannerInfo}>
-            <Ionicons name="swap-horizontal-outline" size={20} color="#EA580C" />
+            <Ionicons name="swap-horizontal-outline" size={20} color={AppColors.accent} />
             <Text style={styles.bannerText}>
               {Strings.dashboard.subAccountViewing(currentProfile?.full_name || '')}
             </Text>
@@ -211,13 +211,13 @@ export default function ProfileScreen() {
           onPress={() => setActiveSection(activeSection === 'profile' ? null : 'profile')}
         >
           <View style={styles.subBtnLeft}>
-            <Ionicons name={activeSection === 'profile' ? "chevron-down" : "chevron-back"} size={20} color="#2A4B46" />
+            <Ionicons name={activeSection === 'profile' ? "chevron-down" : "chevron-back"} size={20} color={AppColors.primary} />
           </View>
           <View style={styles.subBtnRight}>
             <Text style={styles.subBtnTitle}>البيانات والصورة</Text>
             <Text style={styles.subBtnDesc}>تعديل الاسم والصورة الشخصية</Text>
           </View>
-          <View style={[styles.subBtnIcon, {backgroundColor: '#2A4B46'}]}>
+          <View style={[styles.subBtnIcon, {backgroundColor: AppColors.primary}]}>
             <Ionicons name="person" size={24} color="#FFF" />
           </View>
         </TouchableOpacity>
@@ -239,7 +239,7 @@ export default function ProfileScreen() {
                 </View>
                 {loading && (
                   <View style={styles.loadingOverlay}>
-                    <ActivityIndicator size="small" color="#F97316" />
+                    <ActivityIndicator size="small" color={AppColors.accent} />
                   </View>
                 )}
               </TouchableOpacity>
@@ -271,13 +271,13 @@ export default function ProfileScreen() {
               onPress={() => setActiveSection(activeSection === 'security' ? null : 'security')}
             >
               <View style={styles.subBtnLeft}>
-                <Ionicons name={activeSection === 'security' ? "chevron-down" : "chevron-back"} size={20} color="#F97316" />
+                <Ionicons name={activeSection === 'security' ? "chevron-down" : "chevron-back"} size={20} color={AppColors.accent} />
               </View>
               <View style={styles.subBtnRight}>
                 <Text style={styles.subBtnTitle}>الأمان وكلمة المرور</Text>
                 <Text style={styles.subBtnDesc}>تغيير كلمة المرور الخاصة بحسابك</Text>
               </View>
-              <View style={[styles.subBtnIcon, {backgroundColor: '#F97316'}]}>
+              <View style={[styles.subBtnIcon, {backgroundColor: AppColors.accent}]}>
                 <Ionicons name="lock-closed" size={24} color="#FFF" />
               </View>
             </TouchableOpacity>
@@ -304,13 +304,13 @@ export default function ProfileScreen() {
             {/* 3. إدارة الاشتراك */}
             <TouchableOpacity style={styles.subBtn} onPress={() => router.push('/subscriptions')}>
               <View style={styles.subBtnLeft}>
-                <Ionicons name="chevron-back" size={20} color="#2A4B46" />
+                <Ionicons name="chevron-back" size={20} color={AppColors.primary} />
               </View>
               <View style={styles.subBtnRight}>
                 <Text style={styles.subBtnTitle}>إدارة الاشتراك</Text>
                 <Text style={styles.subBtnDesc}>تجديد، تعديل الباقة، وتأكيد الدفع</Text>
               </View>
-              <View style={[styles.subBtnIcon, {backgroundColor: '#2A4B46'}]}>
+              <View style={[styles.subBtnIcon, {backgroundColor: AppColors.primary}]}>
                 <Ionicons name="card" size={24} color="#FFF" />
               </View>
             </TouchableOpacity>
@@ -318,13 +318,13 @@ export default function ProfileScreen() {
             {/* 4. إدارة العائلة */}
             <TouchableOpacity style={styles.subBtn} onPress={() => router.push('/family')}>
               <View style={styles.subBtnLeft}>
-                <Ionicons name="chevron-back" size={20} color="#F97316" />
+                <Ionicons name="chevron-back" size={20} color={AppColors.accent} />
               </View>
               <View style={styles.subBtnRight}>
                 <Text style={styles.subBtnTitle}>إدارة العائلة</Text>
                 <Text style={styles.subBtnDesc}>أضف وبدل بين أفراد عائلتك</Text>
               </View>
-              <View style={[styles.subBtnIcon, {backgroundColor: '#F97316'}]}>
+              <View style={[styles.subBtnIcon, {backgroundColor: AppColors.accent}]}>
                 <Ionicons name="people" size={24} color="#FFF" />
               </View>
             </TouchableOpacity>
@@ -333,7 +333,7 @@ export default function ProfileScreen() {
 
         {/* زر تسجيل الخروج */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+          <Ionicons name="log-out-outline" size={20} color={AppColors.danger} />
           <Text style={styles.logoutBtnText}>تسجيل الخروج</Text>
         </TouchableOpacity>
 
@@ -344,14 +344,14 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9F6F0' },
+  container: { flex: 1, backgroundColor: AppColors.background },
   subAccountBanner: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFF7ED',
+    backgroundColor: AppColors.accentLight,
     borderBottomWidth: 1,
-    borderColor: '#FFEDD5',
+    borderColor: AppColors.accentBorder,
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 10,
@@ -364,57 +364,57 @@ const styles = StyleSheet.create({
   },
   bannerText: {
     fontSize: 14,
-    color: '#C2410C',
+    color: AppColors.warning,
     fontWeight: 'bold',
     textAlign: 'right',
   },
   bannerBtn: {
-    backgroundColor: '#EA580C',
+    backgroundColor: AppColors.accent,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
   },
   bannerBtnText: {
-    color: '#FFF',
+    color: AppColors.surface,
     fontSize: 12,
     fontWeight: 'bold',
   },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scrollContent: { padding: 20 },
-  pageTitle: { fontSize: 28, fontWeight: '900', color: '#2A4B46', textAlign: 'right', marginBottom: 25 },
+  pageTitle: { fontSize: 28, fontWeight: '900', color: AppColors.primary, textAlign: 'right', marginBottom: 25 },
   
   // تنسيقات الأزرار الرئيسية (المنيو)
-  subBtn: { flexDirection: 'row', backgroundColor: '#FFF', padding: 20, borderRadius: 25, marginBottom: 15, elevation: 2, alignItems: 'center', justifyContent: 'space-between' },
-  subBtnActive: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, marginBottom: 0, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', elevation: 0 },
+  subBtn: { flexDirection: 'row', backgroundColor: AppColors.surface, padding: 20, borderRadius: 25, marginBottom: 15, elevation: 2, alignItems: 'center', justifyContent: 'space-between' },
+  subBtnActive: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, marginBottom: 0, borderBottomWidth: 1, borderBottomColor: AppColors.borderLight, elevation: 0 },
   subBtnIcon: { width: 50, height: 50, borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginLeft: 15 },
   subBtnRight: { flex: 1, alignItems: 'flex-end' },
-  subBtnTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
-  subBtnDesc: { fontSize: 12, color: '#6B7280', marginTop: 4 },
+  subBtnTitle: { fontSize: 18, fontWeight: 'bold', color: AppColors.textPrimary },
+  subBtnDesc: { fontSize: 12, color: AppColors.textSecondary, marginTop: 4 },
   subBtnLeft: { padding: 5 },
 
   // تنسيقات الكارت الممتد (الفورم)
-  expandedCard: { backgroundColor: '#FFF', padding: 20, borderBottomLeftRadius: 25, borderBottomRightRadius: 25, marginBottom: 15, elevation: 2, borderTopWidth: 0 },
+  expandedCard: { backgroundColor: AppColors.surface, padding: 20, borderBottomLeftRadius: 25, borderBottomRightRadius: 25, marginBottom: 15, elevation: 2, borderTopWidth: 0 },
 
   avatarSection: { alignItems: 'center', marginBottom: 25 },
   avatarWrapper: { width: 110, height: 110, borderRadius: 55, borderWidth: 3, borderColor: 'rgba(42, 75, 70, 0.2)', position: 'relative' },
   avatarImage: { width: '100%', height: '100%', borderRadius: 55 },
-  avatarPlaceholder: { width: '100%', height: '100%', borderRadius: 55, backgroundColor: '#2A4B46', justifyContent: 'center', alignItems: 'center' },
-  avatarInitial: { fontSize: 40, fontWeight: 'bold', color: '#FFF' },
-  cameraIconBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#F97316', width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#FFF' },
+  avatarPlaceholder: { width: '100%', height: '100%', borderRadius: 55, backgroundColor: AppColors.primary, justifyContent: 'center', alignItems: 'center' },
+  avatarInitial: { fontSize: 40, fontWeight: 'bold', color: AppColors.surface },
+  cameraIconBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: AppColors.accent, width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: AppColors.surface },
   loadingOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 55, justifyContent: 'center', alignItems: 'center' },
-  avatarHint: { color: '#9CA3AF', fontSize: 12, marginTop: 10, fontWeight: 'bold' },
-
+  avatarHint: { color: AppColors.textMuted, fontSize: 12, marginTop: 10, fontWeight: 'bold' },
+ 
   inputGroup: { marginBottom: 15 },
-  inputLabel: { fontSize: 13, color: '#6B7280', fontWeight: 'bold', textAlign: 'right', marginBottom: 8 },
-  input: { backgroundColor: '#F3F4F6', height: 55, borderRadius: 15, paddingHorizontal: 15, textAlign: 'right', fontSize: 15, color: '#1F2937' },
-  disabledInput: { color: '#9CA3AF', backgroundColor: '#F9FAFB' },
-
-  saveBtn: { backgroundColor: '#2A4B46', height: 55, borderRadius: 15, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 10 },
-  saveBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-
-  outlineBtn: { backgroundColor: '#FFF', height: 55, borderRadius: 15, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#D1D5DB', marginTop: 10 },
-  outlineBtnText: { color: '#4B5563', fontSize: 16, fontWeight: 'bold' },
-
-  logoutBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 10, paddingVertical: 15, backgroundColor: '#FEF2F2', borderRadius: 15, borderWidth: 1, borderColor: '#FEE2E2' },
-  logoutBtnText: { color: '#EF4444', fontSize: 16, fontWeight: 'bold' },
+  inputLabel: { fontSize: 13, color: AppColors.textSecondary, fontWeight: 'bold', textAlign: 'right', marginBottom: 8 },
+  input: { backgroundColor: AppColors.inputBg, height: 55, borderRadius: 15, paddingHorizontal: 15, textAlign: 'right', fontSize: 15, color: AppColors.textPrimary },
+  disabledInput: { color: AppColors.textMuted, backgroundColor: AppColors.borderLight },
+ 
+  saveBtn: { backgroundColor: AppColors.primary, height: 55, borderRadius: 15, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 10 },
+  saveBtnText: { color: AppColors.surface, fontSize: 16, fontWeight: 'bold' },
+ 
+  outlineBtn: { backgroundColor: AppColors.surface, height: 55, borderRadius: 15, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: AppColors.border, marginTop: 10 },
+  outlineBtnText: { color: AppColors.textSecondary, fontSize: 16, fontWeight: 'bold' },
+ 
+  logoutBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 10, paddingVertical: 15, backgroundColor: AppColors.dangerBg, borderRadius: 15, borderWidth: 1, borderColor: AppColors.dangerLight },
+  logoutBtnText: { color: AppColors.danger, fontSize: 16, fontWeight: 'bold' },
 });

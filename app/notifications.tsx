@@ -23,7 +23,6 @@ export default function NotificationsScreen() {
   useEffect(() => {
     if (currentProfile?.id) {
       fetchNotifications();
-      markAsRead();
     }
   }, [currentProfile?.id]);
 
@@ -52,26 +51,28 @@ export default function NotificationsScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchNotifications();
-    await markAsRead();
     setRefreshing(false);
   }, [fetchNotifications]);
 
-  const markAsRead = async () => {
-    await executeQuery(
-      supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('user_id', currentProfile!.id)
-        .eq('is_read', false),
-      { isIdempotent: false }
-    );
-  };
+  // 🔴 AUDIT FIX (UX-01): Mark individual notifications as read on tap
+  const handleNotificationPress = useCallback(async (item: AppNotification) => {
+    if (!item.is_read) {
+      // Update local state optimistically
+      setNotifications(prev => prev.map(n => n.id === item.id ? { ...n, is_read: true } : n));
+      
+      try {
+        await executeQuery(
+          supabase
+            .from('notifications')
+            .update({ is_read: true })
+            .eq('id', item.id),
+          { isIdempotent: false }
+        );
+      } catch (err: any) {
+        logger.error(`[Notifications] Failed to mark as read ${item.id}:`, err.message);
+      }
+    }
 
-  // 🔴 AUDIT FIX (C1): Validate DB notification links against the SAME allowlist
-  // used for push notification deep-links. Previously `router.push(item.link as any)`
-  // was a route-injection vector — a malicious DB row could navigate users to
-  // arbitrary internal routes (/admin, /debug, etc.).
-  const handleNotificationPress = useCallback((item: AppNotification) => {
     if (!item.link) return;
     const safeRoute = validateNotificationRoute(item.link);
     if (safeRoute) {
@@ -80,6 +81,7 @@ export default function NotificationsScreen() {
       logger.warn(`[Notifications] Blocked invalid DB route: "${item.link}"`);
     }
   }, [router]);
+
 
   const renderIcon = (type: string) => {
     switch (type) {
@@ -166,7 +168,6 @@ export default function NotificationsScreen() {
           <TouchableOpacity 
             style={[styles.notificationCard, item.is_read ? null : styles.unreadCard]}
             onPress={() => handleNotificationPress(item)}
-            disabled={!item.link}
           >
             <View style={styles.iconBox}>
               {renderIcon(item.type)}
