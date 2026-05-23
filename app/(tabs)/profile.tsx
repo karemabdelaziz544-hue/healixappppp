@@ -12,12 +12,13 @@ import { useFamily } from '../../src/context/FamilyContext';
 import SupportFAB from '../../components/SupportFAB';
 import { showToast } from '../../components/AppToast';
 import { AppColors } from '../../constants/AppTheme';
+import { Strings } from '../../constants/strings';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { session } = useAuth();
   const user = session?.user;
-  const { currentProfile } = useFamily();
+  const { currentProfile, familyMembers, switchProfile } = useFamily();
   const insets = useSafeAreaInsets();
 
   // 👈 التأكد إذا كان الحساب فرعي
@@ -39,30 +40,35 @@ export default function ProfileScreen() {
   // ✅ UX-03: استخدام بيانات currentProfile بدل API call إضافي
   useEffect(() => {
     const loadAvatar = async () => {
-      if (currentProfile && !isSubAccount) {
+      if (currentProfile) {
         setFullName(currentProfile.full_name || '');
         const path = currentProfile.avatar_url;
         if (path) {
           setAvatarPath(path);
           if (!path.startsWith('http')) {
-            const { data } = await supabase.storage.from('avatars').createSignedUrl(path, 3600); // 1 hour expiry
-            if (data?.signedUrl) setAvatarDisplayUrl(data.signedUrl);
+            try {
+              const { data } = await supabase.storage.from('avatars').createSignedUrl(path, 3600); // 1 hour expiry
+              if (data?.signedUrl) setAvatarDisplayUrl(data.signedUrl);
+            } catch (err) {
+              logger.error('Error fetching avatar url:', err);
+            }
           } else {
             setAvatarDisplayUrl(path);
           }
         }
-        setFetching(false);
       }
+      setFetching(false);
     };
     loadAvatar();
-  }, [currentProfile, isSubAccount]);
+  }, [currentProfile]);
 
   const handleUpdateProfile = async () => {
-    if (!user?.id) return;
+    const profileId = currentProfile?.id;
+    if (!profileId) return;
     setLoading(true);
     try {
       const updates = {
-        id: user.id,
+        id: profileId,
         full_name: fullName,
         avatar_url: avatarPath,
         updated_at: new Date().toISOString(),
@@ -100,7 +106,7 @@ export default function ProfileScreen() {
       const base64FileData = pickerResult.assets[0].base64;
       const fileExt = pickerResult.assets[0].uri.split('.').pop() || 'jpeg';
       const fileId = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-      const fileName = `${user?.id}/${fileId}.${fileExt}`;
+      const fileName = `${currentProfile?.id}/${fileId}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
@@ -160,10 +166,7 @@ export default function ProfileScreen() {
     ]);
   };
 
-  // 🔥 لو الحساب فرعي وحاول يدخل الصفحة دي (حتى لو بزرار الرجوع)، اطرده للرئيسية فوراً
-  if (isSubAccount) {
-    return <Redirect href="/" />;
-  }
+  // 🔴 AUDIT FIX: Sub-accounts can view their profile and switch back
 
   if (fetching) {
     return (
@@ -175,6 +178,29 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {isSubAccount && (
+        <View style={styles.subAccountBanner}>
+          <View style={styles.bannerInfo}>
+            <Ionicons name="swap-horizontal-outline" size={20} color="#EA580C" />
+            <Text style={styles.bannerText}>
+              {Strings.dashboard.subAccountViewing(currentProfile?.full_name || '')}
+            </Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.bannerBtn} 
+            onPress={async () => {
+              const mainUser = familyMembers.find(m => !m.manager_id);
+              if (mainUser) {
+                await switchProfile(mainUser.id);
+                showToast.success(Strings.tabs.switchedBack);
+              }
+            }}
+          >
+            <Text style={styles.bannerBtnText}>{Strings.tabs.switchBack}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]} showsVerticalScrollIndicator={false}>
         
         <Text style={styles.pageTitle}>إعدادات الحساب</Text>
@@ -237,69 +263,73 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* 2. زرار الأمان وكلمة المرور */}
-        <TouchableOpacity 
-          style={[styles.subBtn, activeSection === 'security' && styles.subBtnActive]} 
-          onPress={() => setActiveSection(activeSection === 'security' ? null : 'security')}
-        >
-          <View style={styles.subBtnLeft}>
-            <Ionicons name={activeSection === 'security' ? "chevron-down" : "chevron-back"} size={20} color="#F97316" />
-          </View>
-          <View style={styles.subBtnRight}>
-            <Text style={styles.subBtnTitle}>الأمان وكلمة المرور</Text>
-            <Text style={styles.subBtnDesc}>تغيير كلمة المرور الخاصة بحسابك</Text>
-          </View>
-          <View style={[styles.subBtnIcon, {backgroundColor: '#F97316'}]}>
-            <Ionicons name="lock-closed" size={24} color="#FFF" />
-          </View>
-        </TouchableOpacity>
-
-        {/* فورم كلمة المرور */}
-        {activeSection === 'security' && (
-          <View style={styles.expandedCard}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>كلمة المرور الجديدة</Text>
-              <TextInput style={styles.input} value={newPassword} onChangeText={setNewPassword} placeholder="••••••••" secureTextEntry />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>تأكيد كلمة المرور</Text>
-              <TextInput style={styles.input} value={confirmPassword} onChangeText={setConfirmPassword} placeholder="••••••••" secureTextEntry />
-            </View>
-
-            <TouchableOpacity style={[styles.outlineBtn, (!newPassword || loading) && { opacity: 0.5 }]} onPress={handleChangePassword} disabled={!newPassword || loading}>
-              <Text style={styles.outlineBtnText}>تحديث كلمة المرور</Text>
+        {!isSubAccount && (
+          <>
+            {/* 2. زرار الأمان وكلمة المرور */}
+            <TouchableOpacity 
+              style={[styles.subBtn, activeSection === 'security' && styles.subBtnActive]} 
+              onPress={() => setActiveSection(activeSection === 'security' ? null : 'security')}
+            >
+              <View style={styles.subBtnLeft}>
+                <Ionicons name={activeSection === 'security' ? "chevron-down" : "chevron-back"} size={20} color="#F97316" />
+              </View>
+              <View style={styles.subBtnRight}>
+                <Text style={styles.subBtnTitle}>الأمان وكلمة المرور</Text>
+                <Text style={styles.subBtnDesc}>تغيير كلمة المرور الخاصة بحسابك</Text>
+              </View>
+              <View style={[styles.subBtnIcon, {backgroundColor: '#F97316'}]}>
+                <Ionicons name="lock-closed" size={24} color="#FFF" />
+              </View>
             </TouchableOpacity>
-          </View>
+
+            {/* فورم كلمة المرور */}
+            {activeSection === 'security' && (
+              <View style={styles.expandedCard}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>كلمة المرور الجديدة</Text>
+                  <TextInput style={styles.input} value={newPassword} onChangeText={setNewPassword} placeholder="••••••••" secureTextEntry />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>تأكيد كلمة المرور</Text>
+                  <TextInput style={styles.input} value={confirmPassword} onChangeText={setConfirmPassword} placeholder="••••••••" secureTextEntry />
+                </View>
+
+                <TouchableOpacity style={[styles.outlineBtn, (!newPassword || loading) && { opacity: 0.5 }]} onPress={handleChangePassword} disabled={!newPassword || loading}>
+                  <Text style={styles.outlineBtnText}>تحديث كلمة المرور</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* 3. إدارة الاشتراك */}
+            <TouchableOpacity style={styles.subBtn} onPress={() => router.push('/subscriptions')}>
+              <View style={styles.subBtnLeft}>
+                <Ionicons name="chevron-back" size={20} color="#2A4B46" />
+              </View>
+              <View style={styles.subBtnRight}>
+                <Text style={styles.subBtnTitle}>إدارة الاشتراك</Text>
+                <Text style={styles.subBtnDesc}>تجديد، تعديل الباقة، وتأكيد الدفع</Text>
+              </View>
+              <View style={[styles.subBtnIcon, {backgroundColor: '#2A4B46'}]}>
+                <Ionicons name="card" size={24} color="#FFF" />
+              </View>
+            </TouchableOpacity>
+
+            {/* 4. إدارة العائلة */}
+            <TouchableOpacity style={styles.subBtn} onPress={() => router.push('/family')}>
+              <View style={styles.subBtnLeft}>
+                <Ionicons name="chevron-back" size={20} color="#F97316" />
+              </View>
+              <View style={styles.subBtnRight}>
+                <Text style={styles.subBtnTitle}>إدارة العائلة</Text>
+                <Text style={styles.subBtnDesc}>أضف وبدل بين أفراد عائلتك</Text>
+              </View>
+              <View style={[styles.subBtnIcon, {backgroundColor: '#F97316'}]}>
+                <Ionicons name="people" size={24} color="#FFF" />
+              </View>
+            </TouchableOpacity>
+          </>
         )}
-
-        {/* 3. إدارة الاشتراك */}
-        <TouchableOpacity style={styles.subBtn} onPress={() => router.push('/subscriptions')}>
-          <View style={styles.subBtnLeft}>
-            <Ionicons name="chevron-back" size={20} color="#2A4B46" />
-          </View>
-          <View style={styles.subBtnRight}>
-            <Text style={styles.subBtnTitle}>إدارة الاشتراك</Text>
-            <Text style={styles.subBtnDesc}>تجديد، تعديل الباقة، وتأكيد الدفع</Text>
-          </View>
-          <View style={[styles.subBtnIcon, {backgroundColor: '#2A4B46'}]}>
-            <Ionicons name="card" size={24} color="#FFF" />
-          </View>
-        </TouchableOpacity>
-
-        {/* 4. إدارة العائلة */}
-        <TouchableOpacity style={styles.subBtn} onPress={() => router.push('/family')}>
-          <View style={styles.subBtnLeft}>
-            <Ionicons name="chevron-back" size={20} color="#F97316" />
-          </View>
-          <View style={styles.subBtnRight}>
-            <Text style={styles.subBtnTitle}>إدارة العائلة</Text>
-            <Text style={styles.subBtnDesc}>أضف وبدل بين أفراد عائلتك</Text>
-          </View>
-          <View style={[styles.subBtnIcon, {backgroundColor: '#F97316'}]}>
-            <Ionicons name="people" size={24} color="#FFF" />
-          </View>
-        </TouchableOpacity>
 
         {/* زر تسجيل الخروج */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
@@ -315,6 +345,40 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9F6F0' },
+  subAccountBanner: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF7ED',
+    borderBottomWidth: 1,
+    borderColor: '#FFEDD5',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  bannerInfo: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  bannerText: {
+    fontSize: 14,
+    color: '#C2410C',
+    fontWeight: 'bold',
+    textAlign: 'right',
+  },
+  bannerBtn: {
+    backgroundColor: '#EA580C',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  bannerBtnText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scrollContent: { padding: 20 },
   pageTitle: { fontSize: 28, fontWeight: '900', color: '#2A4B46', textAlign: 'right', marginBottom: 25 },

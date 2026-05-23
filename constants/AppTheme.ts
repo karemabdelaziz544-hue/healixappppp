@@ -79,3 +79,23 @@ export const AppFontSize = {
   xxl: 22,
   title: 28,
 };
+
+// 🔴 AUDIT FIX: ألوان التغذية — بدل الـ hex المتكررة في MainDashboardView
+export const NutritionalColors = {
+  breakfast: { main: '#10B981', bg: '#D1FAE5' },
+  lunch:     { main: '#3B82F6', bg: '#DBEAFE' },
+  dinner:    { main: '#8B5CF6', bg: '#EDE9FE' },
+  snack:     { main: '#F59E0B', bg: '#FEF3C7' },
+  workout:   { main: AppColors.accent, bg: AppColors.accentLight },
+  fallback:  { main: AppColors.primary, bg: AppColors.primaryLight },
+};
+
+// 🔴 AUDIT FIX: ألوان الترطيب — بدل الـ hex المتكررة في WaterTracker
+export const HydrationColors = {
+  bgLight:    '#E0F2FE',
+  waveLight:  '#38BDF8',
+  waveDark:   '#0284C7',
+  textDark:   '#0369A1',
+  complete:   '#10B981',
+  borderSide: '#F1F5F9',
+};

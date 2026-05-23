@@ -8,17 +8,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { Message } from '../src/types';
 import { AppColors } from '../constants/AppTheme';
+import { Strings } from '../constants/strings';
 import { useChatSession, ChannelType } from '../src/features/chat/hooks/useChatSession';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { MessageBubble } from './chat/MessageBubble';
 
-// 🔴 AUDIT FIX: Stable getItemLayout for FlatList performance (P-03)
-const ESTIMATED_MSG_HEIGHT = 80;
-const getItemLayout = (_data: ArrayLike<Message> | null | undefined, index: number) => ({
-  length: ESTIMATED_MSG_HEIGHT,
-  offset: ESTIMATED_MSG_HEIGHT * index,
-  index,
-});
 
 // 🌟 المكون المشترك للشات
 interface ChatViewProps {
@@ -79,7 +73,7 @@ export default function ChatView({
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}>
         <View style={styles.chatHeader}>
           {showBackButton && onBack && (
-            <TouchableOpacity onPress={onBack} style={styles.backBtn} accessibilityLabel="رجوع" accessibilityRole="button">
+            <TouchableOpacity onPress={onBack} style={styles.backBtn} accessibilityLabel={Strings.common.back} accessibilityRole="button">
               <Ionicons name="arrow-back" size={24} color={AppColors.textPrimary} />
             </TouchableOpacity>
           )}
@@ -87,7 +81,7 @@ export default function ChatView({
             <Text style={styles.chatHeaderTitle}>{headerTitle}</Text>
             {lastSeen && (
               <Text style={{ fontSize: 11, color: AppColors.textMuted, marginTop: 2, fontWeight: 'bold' }}>
-                آخر ظهور: {new Date(lastSeen).toLocaleDateString('ar-EG')} {new Date(lastSeen).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                {Strings.chat.lastSeen} {new Date(lastSeen).toLocaleDateString('ar-EG')} {new Date(lastSeen).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
               </Text>
             )}
           </View>
@@ -108,13 +102,16 @@ export default function ChatView({
             inverted={true}
             onEndReached={loadMoreMessages}
             onEndReachedThreshold={0.5}
-            getItemLayout={getItemLayout}
+            removeClippedSubviews={true}
+            windowSize={15}
+            maxToRenderPerBatch={10}
+            updateCellsBatchingPeriod={50}
             ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={AppColors.primary} style={{ marginVertical: 10 }} /> : null}
             ListEmptyComponent={
               <View style={styles.emptyStateContainer}>
                 <Ionicons name="chatbubbles-outline" size={48} color={AppColors.textMuted} />
-                <Text style={styles.emptyStateText}>لا توجد رسائل حتى الآن.</Text>
-                <Text style={styles.emptyStateSubtext}>ابدأ المحادثة الآن!</Text>
+                <Text style={styles.emptyStateText}>{Strings.chat.noMessages}</Text>
+                <Text style={styles.emptyStateSubtext}>{Strings.chat.startChat}</Text>
               </View>
             }
           />
@@ -124,7 +121,7 @@ export default function ChatView({
           {showNetworkStatus && !isConnected && (
             <View style={styles.offlineBar}>
               <Ionicons name="cloud-offline-outline" size={16} color="#FFF" />
-              <Text style={styles.offlineBarText}>لا يوجد اتصال بالإنترنت — لا يمكن الإرسال</Text>
+              <Text style={styles.offlineBarText}>{Strings.chat.noInternetSend}</Text>
             </View>
           )}
           {attachment ? (
@@ -147,10 +144,10 @@ export default function ChatView({
                 <Text style={styles.recordingTimerText}>
                   {String(Math.floor(recordingDuration / 60)).padStart(2, '0')}:{String(recordingDuration % 60).padStart(2, '0')}
                 </Text>
-                <Text style={styles.recordingLabel}>جاري التسجيل...</Text>
+                <Text style={styles.recordingLabel}>{Strings.chat.recording}</Text>
               </View>
             ) : (
-              <TextInput style={styles.textInput} placeholder="اكتب رسالتك..." value={newMessage} onChangeText={setNewMessage} multiline editable={!uploading} />
+              <TextInput style={styles.textInput} placeholder={Strings.chat.placeholder} value={newMessage} onChangeText={setNewMessage} multiline editable={!uploading} />
             )}
 
             {(newMessage.trim().length > 0 || attachment) ? (
@@ -158,7 +155,7 @@ export default function ChatView({
                 style={[styles.sendBtn, !isConnected && { opacity: 0.4 }]}
                 onPress={sendMessage}
                 disabled={uploading || !isConnected}
-                accessibilityLabel="إرسال"
+                accessibilityLabel={Strings.common.send}
                 accessibilityRole="button"
               >
                 {uploading ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="send" size={20} color="#FFF" />}
@@ -167,7 +164,7 @@ export default function ChatView({
               <TouchableOpacity
                 style={[styles.micBtn, recording ? styles.recordingBtn : null]}
                 onPress={recording ? stopRecording : startRecording}
-                accessibilityLabel={recording ? 'إيقاف التسجيل' : 'تسجيل صوتي'}
+                accessibilityLabel={recording ? Strings.chat.stopRecording : Strings.chat.voiceRecord}
                 accessibilityRole="button"
               >
                 <Ionicons name={recording ? 'stop' : 'mic'} size={24} color={recording ? '#FFF' : AppColors.textSecondary} />

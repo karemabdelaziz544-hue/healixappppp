@@ -5,11 +5,11 @@ import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppColors } from '../../constants/AppTheme';
-import { showToast } from '../../components/AppToast';
+import { Strings } from '../../constants/strings';
 import { useFamily } from '../../src/context/FamilyContext';
 
 function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
-  const { currentProfile, switchProfile } = useFamily();
+  const { currentProfile } = useFamily();
   const isSubAccount = currentProfile?.manager_id !== null && currentProfile?.manager_id !== undefined;
   // 🔴 AUDIT FIX (Medium): Use safe area insets to calculate the correct floating button lift.
   // translateY: -15 caused overlap on iPhones with large bottom safe area (e.g. iPhone 15 Pro).
@@ -21,47 +21,33 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const currentRouteName = state.routes[state.index].name;
   const safeActiveIndex = visibleRoutes.findIndex((r: any) => r.name === currentRouteName);
 
-  const handleSwitchBack = async () => {
-    if (currentProfile?.manager_id) {
-      // 🔴 AUDIT FIX (High): Await switchProfile before showing toast.
-      // Previously a 300ms setTimeout was used — brittle and not tied to actual completion.
-      await switchProfile(currentProfile.manager_id);
-      showToast.info('تم الرجوع للحساب الرئيسي');
-    }
-  };
-
   return (
     <View style={styles.tabBarContainer}>
       {visibleRoutes.map((route: any, index: number) => {
         const isFocused = safeActiveIndex === index;
 
         const onPress = () => {
-          if (route.name === 'profile' && isSubAccount) {
-            // Await so toast fires after the profile switch is confirmed, not on a fixed timer
-            handleSwitchBack();
-          } else {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
+          const event = navigation.emit({
+            type: 'tabPress',
+            target: route.key,
+            canPreventDefault: true,
+          });
+          if (!isFocused && !event.defaultPrevented) {
+            navigation.navigate(route.name);
           }
         };
 
         // تحديد الأيقونات والعناوين للوصولية (Accessibility)
         let iconName: any = 'home';
         let a11yLabel = '';
-        if (route.name === 'index') { iconName = isFocused ? 'home' : 'home-outline'; a11yLabel = 'الرئيسية'; }
-        if (route.name === 'chat') { iconName = isFocused ? 'chatbubbles' : 'chatbubbles-outline'; a11yLabel = 'المحادثات'; }
-        if (route.name === 'medical') { iconName = isFocused ? 'pulse' : 'pulse-outline'; a11yLabel = 'القسم الطبي'; }
-        if (route.name === 'history') { iconName = isFocused ? 'time' : 'time-outline'; a11yLabel = 'الخطط والبرامج'; }
+        if (route.name === 'index') { iconName = isFocused ? 'home' : 'home-outline'; a11yLabel = Strings.tabs.home; }
+        if (route.name === 'chat') { iconName = isFocused ? 'chatbubbles' : 'chatbubbles-outline'; a11yLabel = Strings.tabs.chat; }
+        if (route.name === 'medical') { iconName = isFocused ? 'pulse' : 'pulse-outline'; a11yLabel = Strings.tabs.medical; }
+        if (route.name === 'history') { iconName = isFocused ? 'time' : 'time-outline'; a11yLabel = Strings.tabs.history; }
 
         if (route.name === 'profile') {
           iconName = isSubAccount ? 'swap-horizontal-outline' : (isFocused ? 'person' : 'person-outline');
-          a11yLabel = isSubAccount ? 'العودة للحساب الرئيسي' : 'الملف الشخصي';
+          a11yLabel = isSubAccount ? Strings.tabs.switchBack : Strings.tabs.profile;
         }
 
         // 🔴 تصميم الزر الأوسط البارز (صفحة القياسات - الطبية)

@@ -10,8 +10,10 @@ import Skeleton from '../../components/Skeleton';
 import ExpiredState from '../../components/ExpiredState';
 import LockedTabView from '../../components/LockedTabView';
 import type { InbodyRecord, ClientDocument, HealthProfile, LifestyleProfile } from '../../src/types';
+import { AppCache } from '../../src/lib/cache';
 
 import { medicalStyles as styles } from '../../src/features/medical/medicalStyles';
+import { AppColors } from '../../constants/AppTheme';
 import InBodyTab from '../../src/features/medical/InBodyTab';
 import DocumentsTab from '../../src/features/medical/DocumentsTab';
 import HealthProfileTab from '../../src/features/medical/HealthProfileTab';
@@ -38,10 +40,43 @@ export default function MedicalRecordsScreen() {
   const [uploading, setUploading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  const loadCachedData = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const cached = await AppCache.get<{
+        inbodyRecords: InbodyRecord[];
+        docs: ClientDocument[];
+        healthProfile: HealthProfile | null;
+        lifestyleProfile: LifestyleProfile | null;
+      }>(`medical_${userId}`);
+      
+      if (cached) {
+        setInbodyRecords(cached.inbodyRecords);
+        setDocs(cached.docs);
+        setHealthProfile(cached.healthProfile);
+        setLifestyleProfile(cached.lifestyleProfile);
+        setLoading(false);
+      }
+    } catch (e) {
+      logger.error('Error loading cached medical data:', e);
+    }
+  }, [userId]);
+
   const fetchAllData = useCallback(async () => {
     if (!userId) return;
     try {
-      await Promise.all([fetchInbody(), fetchDocs(), fetchProfiles()]);
+      const [inbodyRecordsVal, docsVal, profilesVal] = await Promise.all([
+        fetchInbody(),
+        fetchDocs(),
+        fetchProfiles()
+      ]);
+      
+      await AppCache.set(`medical_${userId}`, {
+        inbodyRecords: inbodyRecordsVal,
+        docs: docsVal,
+        healthProfile: profilesVal.health,
+        lifestyleProfile: profilesVal.life
+      });
     } catch (error) {
       logger.error('Error fetching all medical data:', error);
     } finally {
@@ -52,9 +87,11 @@ export default function MedicalRecordsScreen() {
   useEffect(() => {
     if (userId) {
       setLoading(true);
-      fetchAllData();
+      loadCachedData().then(() => {
+        fetchAllData();
+      });
     }
-  }, [fetchAllData, userId]);
+  }, [fetchAllData, loadCachedData, userId]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -64,20 +101,28 @@ export default function MedicalRecordsScreen() {
 
   const fetchProfiles = async () => {
     const { data: health } = await supabase.from('health_profile').select('id, user_id, diseases, has_allergies, allergies_details, diet_type, family_history, medications, surgeries, injuries, digestive_issues, hormonal_status').eq('user_id', userId).single();
-    setHealthProfile(health || null);
+    const currentHealth = health || null;
+    setHealthProfile(currentHealth);
 
     const { data: life } = await supabase.from('lifestyle_profile').select('id, user_id, goal, meals_per_day, has_breakfast, has_snacks, late_night_eating, favorite_foods, disliked_foods, water_liters, beverages, activity_level, does_exercise, exercise_details, sleep_hours, sleep_quality, smoker, stress_level, work_nature, emotional_eating, diet_history, supplements, caffeine_intake, appetite_level, weight_plateau').eq('user_id', userId).single();
-    setLifestyleProfile(life || null);
+    const currentLife = life || null;
+    setLifestyleProfile(currentLife);
+    
+    return { health: currentHealth, life: currentLife };
   };
 
   const fetchInbody = async () => {
     const { data } = await supabase.from('inbody_records').select('id, user_id, weight, muscle_mass, fat_percent, record_date, ai_summary, image_url').eq('user_id', userId).order('record_date', { ascending: true });
-    setInbodyRecords(data || []);
+    const records = data || [];
+    setInbodyRecords(records);
+    return records;
   };
 
   const fetchDocs = async () => {
     const { data } = await supabase.from('client_documents').select('id, user_id, file_name, file_url, file_type, created_at').eq('user_id', userId).order('created_at', { ascending: false });
-    setDocs(data || []);
+    const docsList = data || [];
+    setDocs(docsList);
+    return docsList;
   };
 
   // 🛡️ Loading State — Skeleton
@@ -128,40 +173,40 @@ export default function MedicalRecordsScreen() {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <View style={styles.header}>
-          <Text style={styles.title}>مركز القياسات <Ionicons name="pulse" size={24} color="#F97316" /></Text>
+          <Text style={styles.title}>مركز القياسات <Ionicons name="pulse" size={24} color={AppColors.accent} /></Text>
           <Text style={styles.subtitle}>البيانات الطبية، نمط الحياة، والتحاليل</Text>
         </View>
 
         <View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScrollContainer}>
             <TouchableOpacity style={[styles.tabBtn, activeTab === 'inbody' && styles.tabBtnActive]} onPress={() => setActiveTab('inbody')}>
-              <Ionicons name="body" size={18} color={activeTab === 'inbody' ? "#2A4B46" : "#9CA3AF"} />
+              <Ionicons name="body" size={18} color={activeTab === 'inbody' ? AppColors.primary : AppColors.textMuted} />
               <Text style={[styles.tabText, activeTab === 'inbody' && styles.tabTextActive]}>InBody</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={[styles.tabBtn, activeTab === 'docs' && styles.tabBtnActive]} onPress={() => setActiveTab('docs')}>
-              <Ionicons name="document-text" size={18} color={activeTab === 'docs' ? "#2A4B46" : "#9CA3AF"} />
+              <Ionicons name="document-text" size={18} color={activeTab === 'docs' ? AppColors.primary : AppColors.textMuted} />
               <Text style={[styles.tabText, activeTab === 'docs' && styles.tabTextActive]}>التحاليل</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={[styles.tabBtn, activeTab === 'health' && styles.tabBtnActive]} onPress={() => setActiveTab('health')}>
-              <Ionicons name="heart-half" size={18} color={activeTab === 'health' ? "#2A4B46" : "#9CA3AF"} />
+              <Ionicons name="heart-half" size={18} color={activeTab === 'health' ? AppColors.primary : AppColors.textMuted} />
               <Text style={[styles.tabText, activeTab === 'health' && styles.tabTextActive]}>الملف الطبي</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={[styles.tabBtn, activeTab === 'lifestyle' && styles.tabBtnActive]} onPress={() => setActiveTab('lifestyle')}>
-              <Ionicons name="cafe" size={18} color={activeTab === 'lifestyle' ? "#2A4B46" : "#9CA3AF"} />
+              <Ionicons name="cafe" size={18} color={activeTab === 'lifestyle' ? AppColors.primary : AppColors.textMuted} />
               <Text style={[styles.tabText, activeTab === 'lifestyle' && styles.tabTextActive]}>نمط الحياة</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
 
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#F97316', '#2A4B46']} tintColor="#2A4B46" />}
-        >
-          {activeTab === 'inbody' && (
+        <View style={{ display: activeTab === 'inbody' ? 'flex' : 'none', flex: 1 }}>
+          <ScrollView
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[AppColors.accent, AppColors.primary]} tintColor={AppColors.primary} />}
+          >
             <InBodyTab
               userId={userId!}
               inbodyRecords={inbodyRecords}
@@ -169,9 +214,15 @@ export default function MedicalRecordsScreen() {
               setUploading={setUploading}
               onRefresh={onRefresh}
             />
-          )}
+          </ScrollView>
+        </View>
 
-          {activeTab === 'docs' && (
+        <View style={{ display: activeTab === 'docs' ? 'flex' : 'none', flex: 1 }}>
+          <ScrollView
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[AppColors.accent, AppColors.primary]} tintColor={AppColors.primary} />}
+          >
             <DocumentsTab
               userId={userId!}
               docs={docs}
@@ -179,9 +230,15 @@ export default function MedicalRecordsScreen() {
               setUploading={setUploading}
               onRefresh={onRefresh}
             />
-          )}
+          </ScrollView>
+        </View>
 
-          {activeTab === 'health' && (
+        <View style={{ display: activeTab === 'health' ? 'flex' : 'none', flex: 1 }}>
+          <ScrollView
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[AppColors.accent, AppColors.primary]} tintColor={AppColors.primary} />}
+          >
             <HealthProfileTab
               userId={userId!}
               healthProfile={healthProfile}
@@ -189,9 +246,15 @@ export default function MedicalRecordsScreen() {
               setUploading={setUploading}
               onRefresh={onRefresh}
             />
-          )}
+          </ScrollView>
+        </View>
 
-          {activeTab === 'lifestyle' && (
+        <View style={{ display: activeTab === 'lifestyle' ? 'flex' : 'none', flex: 1 }}>
+          <ScrollView
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[AppColors.accent, AppColors.primary]} tintColor={AppColors.primary} />}
+          >
             <LifestyleProfileTab
               userId={userId!}
               lifestyleProfile={lifestyleProfile}
@@ -199,8 +262,8 @@ export default function MedicalRecordsScreen() {
               setUploading={setUploading}
               onRefresh={onRefresh}
             />
-          )}
-        </ScrollView>
+          </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

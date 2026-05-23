@@ -5,7 +5,9 @@ import { supabase } from '../src/lib/supabase';
 import { executeQuery } from '../src/lib/apiClient';
 import { useFamily } from '../src/context/FamilyContext';
 import { logger } from '../src/lib/logger';
-import { AppColors } from '../constants/AppTheme';
+import { AppColors, HydrationColors } from '../constants/AppTheme';
+import { Strings } from '../constants/strings';
+import { AppCache } from '../src/lib/cache';
 import * as Haptics from 'expo-haptics';
 
 const CIRCLE_SIZE = 160; // كبرنا الدايرة شوية
@@ -22,9 +24,27 @@ export default function WaterTracker() {
   const fillAnim = useRef(new Animated.Value(0)).current;
   const shakeAnim = useRef(new Animated.Value(0)).current; // هزة خفيفة عند الإضافة
 
+  const loadCachedData = async () => {
+    if (!userId) return;
+    try {
+      const cached = await AppCache.get<{ consumed: number; target: number }>(`water_${userId}`);
+      if (cached) {
+        setConsumedGlasses(cached.consumed);
+        setTargetGlasses(cached.target);
+        animateWater(cached.consumed, cached.target);
+        setLoading(false);
+      }
+    } catch (e) {
+      logger.error('Error loading cached water data:', e);
+    }
+  };
+
   useEffect(() => {
     if (userId) {
-      fetchWaterData();
+      setLoading(true);
+      loadCachedData().then(() => {
+        fetchWaterData();
+      });
     }
   }, [userId]);
 
@@ -50,11 +70,15 @@ export default function WaterTracker() {
         setTargetGlasses(target);
       }
 
+      let totalConsumed = 0;
       if (waterRes.data) {
-        const totalConsumed = waterRes.data.reduce((sum, record) => sum + (record.amount || 0), 0);
+        totalConsumed = waterRes.data.reduce((sum, record) => sum + (record.amount || 0), 0);
         setConsumedGlasses(totalConsumed);
         animateWater(totalConsumed, target);
       }
+
+      // Save to cache
+      await AppCache.set(`water_${userId}`, { consumed: totalConsumed, target });
     } catch (error) { logger.error('Error water data:', error); } finally { setLoading(false); }
   };
 
@@ -85,6 +109,9 @@ export default function WaterTracker() {
     shakeWater(); // تشغيل الهزة البصرية
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    // Save to cache immediately (optimistic UI)
+    await AppCache.set(`water_${userId}`, { consumed: newAmount, target: targetGlasses });
+
     try {
       const { error } = await executeQuery(
         supabase.from('water_tracking').insert([{ user_id: userId, amount: 1, recorded_at: new Date().toISOString() }]),
@@ -96,6 +123,7 @@ export default function WaterTracker() {
       // Rollback on error
       setConsumedGlasses(consumedGlasses);
       animateWater(consumedGlasses, targetGlasses);
+      await AppCache.set(`water_${userId}`, { consumed: consumedGlasses, target: targetGlasses });
     }
   };
 
@@ -105,6 +133,9 @@ export default function WaterTracker() {
     setConsumedGlasses(newAmount);
     animateWater(newAmount, targetGlasses);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Save to cache immediately (optimistic UI)
+    await AppCache.set(`water_${userId}`, { consumed: newAmount, target: targetGlasses });
 
     try {
       const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -126,6 +157,7 @@ export default function WaterTracker() {
       // Rollback on error
       setConsumedGlasses(consumedGlasses);
       animateWater(consumedGlasses, targetGlasses);
+      await AppCache.set(`water_${userId}`, { consumed: consumedGlasses, target: targetGlasses });
     }
   };
 
@@ -142,8 +174,8 @@ export default function WaterTracker() {
     <View style={styles.container}>
       {/* هيدر ناعم ومدمج */}
       <View style={styles.header}>
-        <Text style={styles.motivationText}>اشرب بانتظام لصحة أفضل ✨</Text>
-        <Text style={styles.cardTitle}>ترطيب الجسم</Text>
+        <Text style={styles.motivationText}>{Strings.water.motivation}</Text>
+        <Text style={styles.cardTitle}>{Strings.water.title}</Text>
       </View>
 
       <View style={styles.mainContent}>
@@ -163,10 +195,10 @@ export default function WaterTracker() {
                 
                 <View style={styles.textOverlay}>
                     <View style={styles.iconCountRow}>
-                        <Ionicons name="water" size={18} color={percentage > 60 ? '#E0F2FE' : '#0369A1'} style={{marginLeft: 5}}/>
-                        <Text style={[styles.glassCount, { color: percentage > 60 ? '#FFF' : '#0369A1' }]}>{consumedGlasses}</Text>
+                        <Ionicons name="water" size={18} color={percentage > 60 ? HydrationColors.bgLight : HydrationColors.textDark} style={{marginLeft: 5}}/>
+                        <Text style={[styles.glassCount, { color: percentage > 60 ? '#FFF' : HydrationColors.textDark }]}>{consumedGlasses}</Text>
                     </View>
-                    <Text style={[styles.glassTarget, { color: percentage > 60 ? 'rgba(255,255,255,0.7)' : '#38BDF8' }]}>من {targetGlasses} أكواب</Text>
+                    <Text style={[styles.glassTarget, { color: percentage > 60 ? 'rgba(255,255,255,0.7)' : HydrationColors.waveLight }]}>{Strings.water.glassesOf(targetGlasses)}</Text>
                 </View>
                 
                 {/* طبقة تظليل زجاجية */}
@@ -176,7 +208,7 @@ export default function WaterTracker() {
 
         {/* 🌟 زرار الإضافة العائم المتوهج */}
         <TouchableOpacity 
-          style={[styles.floatingAddBtn, consumedGlasses >= targetGlasses && { backgroundColor: '#10B981', shadowColor: '#10B981' }]} 
+          style={[styles.floatingAddBtn, consumedGlasses >= targetGlasses && { backgroundColor: HydrationColors.complete, shadowColor: HydrationColors.complete }]} 
           onPress={handleAddGlass} 
           activeOpacity={0.8}
         >
@@ -191,18 +223,18 @@ const styles = StyleSheet.create({
   container: { marginBottom: 35 },
   header: { alignItems: 'flex-end', paddingHorizontal: 5, marginBottom: 15 },
   cardTitle: { fontSize: 22, fontWeight: '900', color: AppColors.textPrimary, textAlign: 'right' },
-  motivationText: { fontSize: 13, color: '#38BDF8', fontWeight: 'bold', marginBottom: 2 },
+  motivationText: { fontSize: 13, color: HydrationColors.waveLight, fontWeight: 'bold', marginBottom: 2 },
   
   mainContent: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 15 },
   
   // تنسيقات الدايرة المائية المجسمة
-  glassContainer: { elevation: 8, shadowColor: '#38BDF8', shadowOpacity: 0.3, shadowRadius: 15 },
-  circleOuter: { width: CIRCLE_SIZE, height: CIRCLE_SIZE, borderRadius: CIRCLE_SIZE / 2, backgroundColor: '#E0F2FE', overflow: 'hidden', borderWidth: 6, borderColor: '#FFF', justifyContent: 'center', alignItems: 'center', position: 'relative' },
+  glassContainer: { elevation: 8, shadowColor: HydrationColors.waveLight, shadowOpacity: 0.3, shadowRadius: 15 },
+  circleOuter: { width: CIRCLE_SIZE, height: CIRCLE_SIZE, borderRadius: CIRCLE_SIZE / 2, backgroundColor: HydrationColors.bgLight, overflow: 'hidden', borderWidth: 6, borderColor: '#FFF', justifyContent: 'center', alignItems: 'center', position: 'relative' },
   
   // أنيميشن الموجة المائية المزدوجة
   waveFill: { position: 'absolute', left: -50, right: -50, height: CIRCLE_SIZE },
-  waveTop: { height: 25, backgroundColor: '#38BDF8', borderRadius: 25, transform: [{ scaleX: 1.5 }], borderTopLeftRadius: 50, borderTopRightRadius: 50 },
-  waveBody: { flex: 1, backgroundColor: '#0284C7' },
+  waveTop: { height: 25, backgroundColor: HydrationColors.waveLight, borderRadius: 25, transform: [{ scaleX: 1.5 }], borderTopLeftRadius: 50, borderTopRightRadius: 50 },
+  waveBody: { flex: 1, backgroundColor: HydrationColors.waveDark },
   
   textOverlay: { zIndex: 20, alignItems: 'center' },
   iconCountRow: { flexDirection: 'row-reverse', alignItems: 'baseline', marginBottom: -5 },
@@ -213,6 +245,6 @@ const styles = StyleSheet.create({
   glassShine: { position: 'absolute', top: 15, left: 25, width: 30, height: CIRCLE_SIZE / 2.5, backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: 15, transform: [{ rotate: '-15deg' }], zIndex: 10 },
 
   // الأزرار الجديدة
-  floatingAddBtn: { width: 70, height: 70, backgroundColor: '#0284C7', borderRadius: 35, justifyContent: 'center', alignItems: 'center', elevation: 6, shadowColor: '#0284C7', shadowOffset: {width: 0, height: 6}, shadowOpacity: 0.5, shadowRadius: 10 },
-  sideBtn: { width: 45, height: 45, backgroundColor: '#FFF', borderRadius: 22.5, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3 }
+  floatingAddBtn: { width: 70, height: 70, backgroundColor: HydrationColors.waveDark, borderRadius: 35, justifyContent: 'center', alignItems: 'center', elevation: 6, shadowColor: HydrationColors.waveDark, shadowOffset: {width: 0, height: 6}, shadowOpacity: 0.5, shadowRadius: 10 },
+  sideBtn: { width: 45, height: 45, backgroundColor: '#FFF', borderRadius: 22.5, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: HydrationColors.borderSide, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3 }
 });

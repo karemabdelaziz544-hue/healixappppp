@@ -1,22 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, FlatList, LayoutAnimation, Platform, RefreshControl, StyleSheet, Text, TouchableOpacity, UIManager, View } from 'react-native';
+
+// 🔴 AUDIT FIX: تفعيل LayoutAnimation على أندرويد
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import NotificationBell from '../NotificationBell';
 import Skeleton from '../Skeleton';
-import { AppColors } from '../../constants/AppTheme';
+import { AppColors, NutritionalColors } from '../../constants/AppTheme';
+import { Strings } from '../../constants/strings';
 import { useFamily } from '../../src/context/FamilyContext';
 import { supabase } from '../../src/lib/supabase';
 import { executeQuery } from '../../src/lib/apiClient';
 import { logger } from '../../src/lib/logger';
 import type { Plan, PlanTask } from '../../src/types';
+import { AppCache } from '../../src/lib/cache';
 
-const MOTIVATIONAL_QUOTES = [
-  "🌟 يومك فاضي — جسمك بيشكرك على الراحة!",
-  "💪 استعد ليوم جديد مليان طاقة",
-  "🧘 خذ نفس عميق — الاستراحة جزء من النجاح",
-];
+
 
 const getFormattedDate = () => {
   const date = new Date();
@@ -24,25 +27,21 @@ const getFormattedDate = () => {
   return `اليوم، ${date.toLocaleDateString('ar-EG', options)}`;
 };
 
-// 🔴 دالة ذكية لتحديد نوع المهمة (فطار، غداء، عشاء، تمرين) من محتواها
+// 🔴 AUDIT FIX: دالة لتحديد نوع المهمة — تستخدم NutritionalColors و Strings بدل hex و نصوص مباشرة
 const getTaskMeta = (task: PlanTask) => {
   const type = task.task_type;
   
-  if (type === 'workout') return { title: 'تمرين رياضي', icon: 'barbell', color: AppColors.accent, bg: AppColors.accentLight };
-  if (type === 'breakfast') return { title: 'وجبة الإفطار', icon: 'cafe', color: '#10B981', bg: '#D1FAE5' };
-  if (type === 'lunch') return { title: 'وجبة الغداء', icon: 'restaurant', color: '#3B82F6', bg: '#DBEAFE' };
-  if (type === 'dinner') return { title: 'وجبة العشاء', icon: 'moon', color: '#8B5CF6', bg: '#EDE9FE' };
-  if (type === 'snack') return { title: 'سناك خفيف', icon: 'apple', color: '#F59E0B', bg: '#FEF3C7' };
+  if (type === 'workout') return { title: Strings.dashboard.tasks.workout, icon: 'barbell', color: NutritionalColors.workout.main, bg: NutritionalColors.workout.bg };
+  if (type === 'breakfast') return { title: Strings.dashboard.tasks.breakfast, icon: 'cafe', color: NutritionalColors.breakfast.main, bg: NutritionalColors.breakfast.bg };
+  if (type === 'lunch') return { title: Strings.dashboard.tasks.lunch, icon: 'restaurant', color: NutritionalColors.lunch.main, bg: NutritionalColors.lunch.bg };
+  if (type === 'dinner') return { title: Strings.dashboard.tasks.dinner, icon: 'moon', color: NutritionalColors.dinner.main, bg: NutritionalColors.dinner.bg };
+  if (type === 'snack') return { title: Strings.dashboard.tasks.snack, icon: 'apple', color: NutritionalColors.snack.main, bg: NutritionalColors.snack.bg };
   
-  // Fallback for older data without exact task_type
-  const text = task.content || '';
-  if (text.includes('تمرين')) return { title: 'تمرين رياضي', icon: 'barbell', color: AppColors.accent, bg: AppColors.accentLight };
-  if (text.includes('فطار') || text.includes('إفطار') || text.includes('الريق')) return { title: 'وجبة الإفطار', icon: 'cafe', color: '#10B981', bg: '#D1FAE5' };
-  if (text.includes('غداء') || text.includes('غذاء')) return { title: 'وجبة الغداء', icon: 'restaurant', color: '#3B82F6', bg: '#DBEAFE' };
-  if (text.includes('عشاء')) return { title: 'وجبة العشاء', icon: 'moon', color: '#8B5CF6', bg: '#EDE9FE' };
-  if (text.includes('سناك') || text.includes('وجبة خفيفة')) return { title: 'سناك خفيف', icon: 'apple', color: '#F59E0B', bg: '#FEF3C7' };
-
-  return { title: 'مهمة نظام', icon: 'nutrition', color: AppColors.primary, bg: AppColors.primaryLight };
+  // 🔴 AUDIT FIX: Narrow the fallback to return fallback styling instead of guessing from content
+  if (__DEV__ && !type) {
+    logger.warn(`Task ${task.id} missing task_type — needs database backfill migration`);
+  }
+  return { title: Strings.dashboard.tasks.system, icon: 'nutrition', color: NutritionalColors.fallback.main, bg: NutritionalColors.fallback.bg };
 };
 
 export default function MainDashboardView() {
@@ -57,8 +56,8 @@ export default function MainDashboardView() {
   const [streak, setStreak] = useState(0);
   const progressAnim = useRef(new Animated.Value(0)).current;
 
-  const userName = currentProfile?.full_name?.split(' ')[0] || 'يا بطل';
-  const randomQuote = React.useMemo(() => MOTIVATIONAL_QUOTES[Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length)], []);
+  const userName = currentProfile?.full_name?.split(' ')[0] || Strings.dashboard.defaultName;
+  const randomQuote = React.useMemo(() => Strings.dashboard.quotes[Math.floor(Math.random() * Strings.dashboard.quotes.length)], []);
 
   const fetchDashboardData = useCallback(async () => {
     if (!userId) return;
@@ -102,6 +101,8 @@ export default function MainDashboardView() {
         );
         activePlan = managerPlan;
       }
+
+      let finalTasks: PlanTask[] = [];
 
       if (activePlan) {
         setPlan(activePlan as Plan);
@@ -159,28 +160,41 @@ export default function MainDashboardView() {
              is_completed: logsMap.has(t.id) ? logsMap.get(t.id) : false
           }));
 
-          setTasks(tasksWithProgress);
+          finalTasks = tasksWithProgress;
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setTasks(finalTasks);
         } else {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
           setTasks([]);
         }
       } else {
-        setPlan(null); setTasks([]);
+        setPlan(null);
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setTasks([]);
       }
 
       // Streak Calculation
       const { data: logs } = await streakPromise;
-      if (!logs || logs.length === 0) { setStreak(0); return; }
       let count = 0;
-      const todayForStreak = new Date(); todayForStreak.setHours(0, 0, 0, 0);
-      for (let i = 0; i < logs.length; i++) {
-        const logDate = new Date(logs[i].date); logDate.setHours(0, 0, 0, 0);
-        const expectedDate = new Date(todayForStreak); expectedDate.setDate(expectedDate.getDate() - i);
-        // A day counts as "completed" if completed_tasks array has at least 1 entry
-        const hasCompletedTasks = Array.isArray(logs[i].completed_tasks) && logs[i].completed_tasks!.length > 0;
-        if (logDate.getTime() !== expectedDate.getTime() || !hasCompletedTasks) break;
-        count++;
+      if (logs && logs.length > 0) {
+        const todayForStreak = new Date(); todayForStreak.setHours(0, 0, 0, 0);
+        for (let i = 0; i < logs.length; i++) {
+          const logDate = new Date(logs[i].date); logDate.setHours(0, 0, 0, 0);
+          const expectedDate = new Date(todayForStreak); expectedDate.setDate(expectedDate.getDate() - i);
+          // A day counts as "completed" if completed_tasks array has at least 1 entry
+          const hasCompletedTasks = Array.isArray(logs[i].completed_tasks) && logs[i].completed_tasks!.length > 0;
+          if (logDate.getTime() !== expectedDate.getTime() || !hasCompletedTasks) break;
+          count++;
+        }
       }
       setStreak(count);
+
+      // 💾 Save to cache
+      await AppCache.set(`dashboard_${userId}`, {
+        plan: activePlan ? (activePlan as Plan) : null,
+        tasks: finalTasks,
+        streak: count
+      });
     } catch (err) {
       logger.error("Error fetching data:", err);
     } finally {
@@ -188,14 +202,33 @@ export default function MainDashboardView() {
     }
   }, [userId, currentProfile?.manager_id]);
 
+  // Load cached dashboard data
+  const loadCachedData = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const cached = await AppCache.get<{ plan: Plan | null; tasks: PlanTask[]; streak: number }>(`dashboard_${userId}`);
+      if (cached) {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setPlan(cached.plan);
+        setTasks(cached.tasks);
+        setStreak(cached.streak);
+        setLoading(false);
+      }
+    } catch (e) {
+      logger.error("Error loading cached dashboard data:", e);
+    }
+  }, [userId]);
+
   // ✅ BUG-02: مسح البيانات القديمة فوراً عند تغيير userId
   useEffect(() => {
     setPlan(null);
     setTasks([]);
     setStreak(0);
     setLoading(true);
-    fetchDashboardData();
-  }, [fetchDashboardData]);
+    loadCachedData().then(() => {
+      fetchDashboardData();
+    });
+  }, [fetchDashboardData, loadCachedData]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true); await fetchDashboardData(); setRefreshing(false);
@@ -203,7 +236,14 @@ export default function MainDashboardView() {
 
   const toggleTask = async (taskId: string, currentStatus: boolean) => {
     const newStatus = !currentStatus;
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, is_completed: newStatus } : t));
+    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, is_completed: newStatus } : t);
+    setTasks(updatedTasks);
+    // Update cache
+    await AppCache.set(`dashboard_${userId}`, {
+      plan,
+      tasks: updatedTasks,
+      streak
+    });
     await Haptics.impactAsync(newStatus ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
     try {
       const todayStr = new Date().toISOString().split('T')[0];
@@ -232,6 +272,119 @@ export default function MainDashboardView() {
     }).start();
   }, [progress]);
 
+  // 🔴 AUDIT FIX: renderItem مع useCallback لتحسين أداء القائمة
+  const renderTaskItem = useCallback(({ item: task }: { item: PlanTask }) => {
+    const meta = getTaskMeta(task);
+    return (
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() => toggleTask(task.id, task.is_completed)}
+        style={[styles.taskRowCard, task.is_completed && styles.taskRowCardCompleted]}
+      >
+        {/* 1. الأيقونة على اليمين (في الـ RTL) */}
+        <View style={[styles.taskIconBox, { backgroundColor: task.is_completed ? '#F3F4F6' : meta.bg }]}>
+          <Ionicons name={meta.icon as any} size={26} color={task.is_completed ? '#9CA3AF' : meta.color} />
+        </View>
+
+        {/* 2. المحتوى في المنتصف */}
+        <View style={styles.taskContentWrap}>
+          <Text style={[styles.taskTypeTitle, task.is_completed && { color: '#9CA3AF' }]}>
+            {meta.title}
+          </Text>
+          <Text style={[styles.taskDesc, task.is_completed && styles.textCompleted]} numberOfLines={2}>
+            {task.content}
+          </Text>
+        </View>
+
+        {/* 3. دائرة التحقق على اليسار */}
+        <View style={styles.taskCheckWrap}>
+          {task.is_completed ? (
+            <Ionicons name="checkmark-circle" size={32} color={AppColors.success} />
+          ) : (
+            <Ionicons name="ellipse-outline" size={32} color="#D1D5DB" />
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  }, [toggleTask]);
+
+  const keyExtractor = useCallback((item: PlanTask) => item.id, []);
+
+  // 🔴 AUDIT FIX: ListHeaderComponent — العناصر الثابتة فوق القائمة
+  const ListHeader = useCallback(() => (
+    <>
+      {/* 🔥 Header */}
+      <View style={styles.header}>
+        <View style={styles.avatarPlaceholder}>
+          <Ionicons name="person" size={24} color="#FFF" />
+        </View>
+        <View style={styles.headerTextWrap}>
+          <Text style={styles.greeting}>{Strings.dashboard.greeting(userName)}</Text>
+          <Text style={styles.subGreeting}>{getFormattedDate()}</Text>
+        </View>
+        <TouchableOpacity style={styles.iconCircle}>
+          <NotificationBell />
+        </TouchableOpacity>
+      </View>
+
+      {/* 🔥 Premium Hero Progress Card */}
+      <View style={styles.heroCard}>
+        <View style={styles.heroHeader}>
+          <View>
+            <Text style={styles.heroTitle}>{Strings.dashboard.todayPlan}</Text>
+            <Text style={styles.heroSubtitle}>{plan?.title || Strings.dashboard.activePlan}</Text>
+          </View>
+          <View style={styles.streakBadge}>
+            <Ionicons name="flame" size={16} color={AppColors.accent} />
+            <Text style={styles.streakBadgeText}>{Strings.dashboard.daysStreak(streak)}</Text>
+          </View>
+        </View>
+
+        <View style={styles.progressWrap}>
+          <View style={styles.progressHeader}>
+            <Text style={styles.progressPercent}>{progress}%</Text>
+            <Text style={styles.progressLabel}>{Strings.dashboard.taskCount(completedCount, tasks.length)}</Text>
+          </View>
+          <View style={styles.progressBarBg}>
+            <Animated.View
+              style={[
+                styles.progressBarFill,
+                {
+                  width: progressAnim.interpolate({
+                    inputRange: [0, 100],
+                    outputRange: ['0%', '100%'],
+                    extrapolate: 'clamp',
+                  }),
+                },
+              ]}
+            />
+          </View>
+        </View>
+
+        {progress === 100 && tasks.length > 0 && (
+          <View style={styles.celebrationBanner}>
+            <Ionicons name="checkmark-circle" size={18} color="#FFF" />
+            <Text style={styles.celebrationText}>{Strings.dashboard.allComplete}</Text>
+          </View>
+        )}
+        <View style={styles.heroDecoration} />
+      </View>
+
+      <Text style={styles.sectionTitle}>{Strings.dashboard.dailyMap}</Text>
+    </>
+  ), [userName, plan, streak, progress, completedCount, tasks.length, progressAnim]);
+
+  // 🔴 AUDIT FIX: ListEmptyComponent — حالة فارغة بنفس ارتفاع القائمة لمنع القفز البصري
+  const ListEmpty = useCallback(() => (
+    <View style={styles.emptyState}>
+      <View style={styles.emptyStateIconWrap}>
+        <Ionicons name="cafe-outline" size={50} color={AppColors.primary} />
+      </View>
+      <Text style={styles.emptyTitle}>{Strings.dashboard.restDay}</Text>
+      <Text style={styles.emptySub}>{randomQuote}</Text>
+    </View>
+  ), [randomQuote]);
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -251,129 +404,20 @@ export default function MainDashboardView() {
       {currentProfile?.manager_id && (
         <View style={styles.subAccountBanner}>
           <Ionicons name="swap-horizontal" size={16} color="#FFF" />
-          <Text style={styles.subAccountBannerText}>تعرض حساب: {currentProfile.full_name}</Text>
+          <Text style={styles.subAccountBannerText}>{Strings.dashboard.subAccountViewing(currentProfile.full_name)}</Text>
         </View>
       )}
-      <ScrollView
+      {/* 🔴 AUDIT FIX: FlatList بدل ScrollView + .map() — يدعم إعادة تدوير العناصر */}
+      <FlatList
+        data={tasks}
+        renderItem={renderTaskItem}
+        keyExtractor={keyExtractor}
+        ListHeaderComponent={ListHeader}
+        ListEmptyComponent={ListEmpty}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[AppColors.primary]} />}
-      >
-        {/* 🔥 Header */}
-        <View style={styles.header}>
-          <View style={styles.avatarPlaceholder}>
-            <Ionicons name="person" size={24} color="#FFF" />
-          </View>
-          <View style={styles.headerTextWrap}>
-            <Text style={styles.greeting}>مرحباً، {userName}</Text>
-            <Text style={styles.subGreeting}>{getFormattedDate()}</Text>
-          </View>
-          <TouchableOpacity style={styles.iconCircle}>
-            <NotificationBell />
-          </TouchableOpacity>
-        </View>
-
-        {/* 🔥 Premium Hero Progress Card */}
-        <View style={styles.heroCard}>
-          <View style={styles.heroHeader}>
-            <View>
-              <Text style={styles.heroTitle}>خطة اليوم</Text>
-              <Text style={styles.heroSubtitle}>{plan?.title || 'النظام النشط حالياً'}</Text>
-            </View>
-            <View style={styles.streakBadge}>
-              <Ionicons name="flame" size={16} color={AppColors.accent} />
-              <Text style={styles.streakBadgeText}>{streak} أيام</Text>
-            </View>
-          </View>
-
-          <View style={styles.progressWrap}>
-            <View style={styles.progressHeader}>
-              <Text style={styles.progressPercent}>{progress}%</Text>
-              <Text style={styles.progressLabel}>{completedCount} من {tasks.length} مهام</Text>
-            </View>
-            <View style={styles.progressBarBg}>
-              <Animated.View
-                style={[
-                  styles.progressBarFill,
-                  {
-                    width: progressAnim.interpolate({
-                      inputRange: [0, 100],
-                      outputRange: ['0%', '100%'],
-                      extrapolate: 'clamp',
-                    }),
-                  },
-                ]}
-              />
-            </View>
-          </View>
-
-          {progress === 100 && tasks.length > 0 && (
-            <View style={styles.celebrationBanner}>
-              <Ionicons name="checkmark-circle" size={18} color="#FFF" />
-              <Text style={styles.celebrationText}>رائع! أنهيت كل مهام اليوم</Text>
-            </View>
-          )}
-          <View style={styles.heroDecoration} />
-        </View>
-
-        <Text style={styles.sectionTitle}>خريطتك اليومية</Text>
-
-        {/* 🔥 Horizontal Tasks List (كروت بالعرض) */}
-        {tasks.length > 0 ? (
-          <View style={styles.tasksList}>
-            {tasks.map((task) => {
-              const meta = getTaskMeta(task); // استدعاء الدالة لتحديد نوع المهمة
-
-              return (
-                <TouchableOpacity
-                  key={task.id}
-                  activeOpacity={0.8}
-                  onPress={() => toggleTask(task.id, task.is_completed)}
-                  style={[
-                    styles.taskRowCard,
-                    task.is_completed && styles.taskRowCardCompleted
-                  ]}
-                >
-                  {/* 1. الأيقونة على اليمين (في الـ RTL) */}
-                  <View style={[styles.taskIconBox, { backgroundColor: task.is_completed ? '#F3F4F6' : meta.bg }]}>
-                    <Ionicons name={meta.icon as any} size={26} color={task.is_completed ? '#9CA3AF' : meta.color} />
-                  </View>
-
-                  {/* 2. المحتوى في المنتصف */}
-                  <View style={styles.taskContentWrap}>
-                    <Text style={[styles.taskTypeTitle, task.is_completed && { color: '#9CA3AF' }]}>
-                      {meta.title}
-                    </Text>
-                    <Text
-                      style={[styles.taskDesc, task.is_completed && styles.textCompleted]}
-                      numberOfLines={2}
-                    >
-                      {task.content}
-                    </Text>
-                  </View>
-
-                  {/* 3. دائرة التحقق على اليسار */}
-                  <View style={styles.taskCheckWrap}>
-                    {task.is_completed ? (
-                      <Ionicons name="checkmark-circle" size={32} color={AppColors.success} />
-                    ) : (
-                      <Ionicons name="ellipse-outline" size={32} color="#D1D5DB" />
-                    )}
-                  </View>
-                </TouchableOpacity>
-              )
-            })}
-          </View>
-        ) : (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyStateIconWrap}>
-              <Ionicons name="cafe-outline" size={50} color={AppColors.primary} />
-            </View>
-            <Text style={styles.emptyTitle}>يوم راحة مستحق!</Text>
-            <Text style={styles.emptySub}>{randomQuote}</Text>
-          </View>
-        )}
-      </ScrollView>
+      />
     </SafeAreaView>
   );
 }
