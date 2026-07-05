@@ -114,6 +114,19 @@ export interface LifestyleProfile {
 
 // ======== Chat & Messages ========
 
+export type InquiryCategory = 'nutrition' | 'meals' | 'weight' | 'symptoms' | 'exercises' | 'other';
+export type InquiryStatus = 'open' | 'under_review' | 'replied' | 'closed';
+
+export interface Inquiry {
+  id: string;
+  user_id: string;
+  title: string;
+  category: InquiryCategory;
+  status: InquiryStatus;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Message {
   id: string;
   sender_id: string;
@@ -122,6 +135,7 @@ export interface Message {
   attachment_url: string | null;
   attachment_type: 'image' | 'audio' | 'file' | null;
   recipient_type: 'doctor' | 'admin';
+  inquiry_id?: string; // Threaded ticket connection
   is_read: boolean;
   created_at: string;
 }

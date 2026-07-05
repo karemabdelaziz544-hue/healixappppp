@@ -12,7 +12,7 @@ function prependUnique(msg: Message): React.SetStateAction<Message[]> {
 }
 
 export function useChatRealtime(
-  channelType: string,
+  inquiryId: string,
   currentUserId: string | undefined,
   receiverId: string | null,
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>
@@ -20,26 +20,32 @@ export function useChatRealtime(
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {
-    if (!channelType || !receiverId || !currentUserId) return;
-    const channelName = `chat_${channelType}_${currentUserId}`;
+    if (!inquiryId || !receiverId || !currentUserId) return;
+    const channelName = `chat_inquiry_${inquiryId}_${currentUserId}`;
     
-    channelRef.current = supabase.channel(channelName)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${currentUserId}` }, (payload) => {
-        const msg = payload.new as Message;
-        if (msg.sender_id === receiverId) {
-          setMessages(prependUnique(msg));
-        }
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `sender_id=eq.${currentUserId}` }, (payload) => {
-        const msg = payload.new as Message;
-        if (msg.receiver_id === receiverId) {
-          setMessages(prependUnique(msg));
-        }
-      }).subscribe();
+    if (inquiryId === 'support') {
+      channelRef.current = supabase.channel(channelName)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${currentUserId}` }, (payload) => {
+          const msg = payload.new as Message;
+          if (msg.sender_id === receiverId) setMessages(prependUnique(msg));
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `sender_id=eq.${currentUserId}` }, (payload) => {
+          const msg = payload.new as Message;
+          if (msg.receiver_id === receiverId) setMessages(prependUnique(msg));
+        }).subscribe();
+    } else {
+      channelRef.current = supabase.channel(channelName)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `inquiry_id=eq.${inquiryId}` }, (payload) => {
+          const msg = payload.new as Message;
+          if (msg.sender_id !== currentUserId) {
+            setMessages(prependUnique(msg));
+          }
+        }).subscribe();
+    }
 
     return () => { 
       if (channelRef.current) supabase.removeChannel(channelRef.current); 
     };
-  }, [channelType, receiverId, currentUserId, setMessages]);
+  }, [inquiryId, receiverId, currentUserId, setMessages]);
 }
 

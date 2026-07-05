@@ -16,7 +16,8 @@ export default function SupportScreen() {
 
   return (
     <ChatView
-      channelType="admin"
+      inquiryId="support"
+      status="open"
       currentUserId={currentUserId}
       headerTitle="خدمة العملاء"
       headerIcon="headset"

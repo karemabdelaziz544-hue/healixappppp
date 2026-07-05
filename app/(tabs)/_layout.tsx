@@ -4,7 +4,7 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppColors } from '../../constants/AppTheme';
+import { AppColors, AppFontFamily } from '../../constants/AppTheme';
 import { Strings } from '../../constants/strings';
 import { useFamily } from '../../src/context/FamilyContext';
 
@@ -62,6 +62,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               accessibilityLabel={a11yLabel}
               accessibilityState={{ selected: isFocused }}
             >
+              {isFocused && <View style={styles.activeIndicator} />}
               <View style={[
                 styles.centerButton,
                 // للتعويض عن كون StyleSheet.create لا يدعم Dynamic Values:
@@ -70,11 +71,15 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
                 // برتقالي في العادي، وأخضر غامق لما نقف عليه
                 { backgroundColor: isFocused ? AppColors.primary : AppColors.accent }
               ]}>
-                <Ionicons name={iconName} size={28} color="#FFFFFF" />
+                <Ionicons name={iconName} size={30} color="#FFFFFF" />
               </View>
               <Text style={[
                 styles.tabLabel,
-                { color: isFocused ? AppColors.accent : AppColors.primary, marginTop: -floatLift + 5 }
+                { 
+                  color: isFocused ? AppColors.accent : AppColors.primary, 
+                  marginTop: -floatLift + 5,
+                  fontFamily: isFocused ? AppFontFamily.bold : AppFontFamily.medium
+                }
               ]}>
                 {a11yLabel}
               </Text>
@@ -93,14 +98,18 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             accessibilityLabel={a11yLabel}
             accessibilityState={{ selected: isFocused }}
           >
+            {isFocused && <View style={styles.activeIndicator} />}
             <Ionicons
               name={iconName}
-              size={20}
+              size={26}
               color={isFocused ? AppColors.accent : AppColors.primary}
             />
             <Text style={[
               styles.tabLabel,
-              { color: isFocused ? AppColors.accent : AppColors.primary }
+              { 
+                color: isFocused ? AppColors.accent : AppColors.primary,
+                fontFamily: isFocused ? AppFontFamily.bold : AppFontFamily.medium
+              }
             ]}>
               {a11yLabel}
             </Text>
@@ -152,10 +161,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabLabel: {
-    fontSize: 9,
-    fontWeight: 'bold',
+    fontSize: 12,
     marginTop: 4,
-    fontFamily: 'Tajawal-Medium',
+    textAlign: 'center',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    top: 0,
+    width: 32,
+    height: 4,
+    backgroundColor: AppColors.accent,
+    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 4,
   },
 
   // تنسيقات الزر اللي في النص (Floating)

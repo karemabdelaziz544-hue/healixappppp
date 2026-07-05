@@ -9,6 +9,7 @@ import { AuthButton } from '../../components/auth/AuthButton';
 import { AppColors, AppRadius, AppSpacing, AppFontSize } from '../../constants/AppTheme';
 
 export default function SignupScreen() {
+  const [step, setStep] = useState(1);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -28,9 +29,29 @@ export default function SignupScreen() {
     ]).start();
   }, []);
 
-  const handleSignup = async () => {
-    // 1. التحقق من البيانات (Validation)
-    if (!name || !email || !phone || !password) {
+  const getPasswordStrength = (pass: string) => {
+    if (!pass) return { score: 0, label: 'أدخل كلمة المرور', color: AppColors.textMuted };
+    if (pass.length < 6) return { score: 1, label: 'ضعيفة جداً (يجب أن تكون 6 أحرف على الأقل) 🛑', color: AppColors.danger };
+    
+    let score = 2; // starts as medium
+    const hasLetters = /[a-zA-Z]/.test(pass);
+    const hasNumbers = /[0-9]/.test(pass);
+    const hasSpecial = /[^A-Za-z0-9]/.test(pass);
+    
+    if (pass.length >= 8 && hasLetters && hasNumbers && hasSpecial) {
+      score = 3; // strong
+    }
+    
+    if (score === 3) {
+      return { score: 3, label: 'قوية جداً! 🔥', color: AppColors.success };
+    }
+    return { score: 2, label: 'متوسطة (أضف أرقاماً ورموزاً) ⚠️', color: AppColors.warning };
+  };
+
+  const passwordStrength = getPasswordStrength(password);
+
+  const handleNextStep = () => {
+    if (!name || !email || !phone) {
       showToast.error('يرجى إكمال جميع الحقول');
       return;
     }
@@ -41,12 +62,18 @@ export default function SignupScreen() {
       return;
     }
 
-    // 🔴 AUDIT 8 NOTE: Egypt-only phone validation.
-    // If expanding to other markets, replace with E.164 validation + country picker.
-    // Current scope is Egypt-only as confirmed by product requirements.
     const phoneRegex = /^01[0125][0-9]{8}$/;
     if (!phoneRegex.test(phone)) {
       showToast.error('يرجى إدخال رقم هاتف مصري صحيح (مثال: 01012345678)');
+      return;
+    }
+
+    setStep(2);
+  };
+
+  const handleSignup = async () => {
+    if (!password || !confirmPassword) {
+      showToast.error('يرجى إكمال جميع الحقول');
       return;
     }
 
@@ -83,13 +110,12 @@ export default function SignupScreen() {
         id: data.user.id,
         full_name: name,
         phone: phone,
-        gender: gender,                 // ✅ BUG-03: حفظ النوع في profiles
-        subscription_status: 'new',     // ✅ BUG-03: تعيين الحالة الافتراضية
-        role: 'client', // افتراضياً أي مسجل جديد هو عميل
+        gender: gender,
+        subscription_status: 'new',
+        role: 'client',
         updated_at: new Date().toISOString(),
       });
 
-      // 🔴 التعديل هنا: توجيه المستخدم لصفحة إدخال الكود بدل الدخول المباشر للتابات
       showToast.success('تم إنشاء الحساب! تفقد بريدك لإدخال الكود.');
       router.push({
         pathname: '/verify',
@@ -122,40 +148,89 @@ export default function SignupScreen() {
             <Text style={styles.subtitle}>ابدأ رحلة صحية جديدة ومخصصة لك</Text>
           </View>
 
-          {/* نموذج التسجيل */}
-          <AuthInput label="الاسم بالكامل" placeholder="مثال: أحمد محمد" value={name} onChangeText={setName} />
-          
-          <AuthInput label="البريد الإلكتروني" placeholder="name@example.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-
-          <View style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <AuthInput label="رقم الهاتف" placeholder="01xxxxxxxxx" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-            </View>
-
-            <View style={{ flex: 1 }}>
-              <Text style={styles.label}>النوع</Text>
-              <View style={styles.genderToggle}>
-                <TouchableOpacity style={[styles.genderBtn, gender === 'male' && styles.genderBtnActive]} onPress={() => setGender('male')}>
-                  <Text style={[styles.genderText, gender === 'male' && styles.genderTextActive]}>ذكر</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.genderBtn, gender === 'female' && styles.genderBtnActive]} onPress={() => setGender('female')}>
-                  <Text style={[styles.genderText, gender === 'female' && styles.genderTextActive]}>أنثى</Text>
-                </TouchableOpacity>
+          {/* Progress Stepper */}
+          <View style={styles.stepperContainer}>
+            <View style={styles.stepIndicator}>
+              <View style={[styles.stepCircle, step >= 1 && styles.stepCircleActive]}>
+                <Text style={[styles.stepCircleText, step >= 1 && styles.stepCircleTextActive]}>1</Text>
               </View>
+              <Text style={[styles.stepLabel, step === 1 && styles.stepLabelActive]}>الهوية والاتصال</Text>
+            </View>
+            <View style={[styles.stepLine, step === 2 && styles.stepLineActive]} />
+            <View style={styles.stepIndicator}>
+              <View style={[styles.stepCircle, step === 2 && styles.stepCircleActive]}>
+                <Text style={[styles.stepCircleText, step === 2 && styles.stepCircleTextActive]}>2</Text>
+              </View>
+              <Text style={[styles.stepLabel, step === 2 && styles.stepLabelActive]}>الأمان وكلمة المرور</Text>
             </View>
           </View>
 
-          <View style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <AuthInput label="كلمة المرور" isPassword placeholder="••••••••" value={password} onChangeText={setPassword} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <AuthInput label="تأكيد المرور" isPassword placeholder="••••••••" value={confirmPassword} onChangeText={setConfirmPassword} />
-            </View>
-          </View>
+          {step === 1 ? (
+            <>
+              {/* نموذج التسجيل - الخطوة الأولى */}
+              <AuthInput label="الاسم بالكامل" placeholder="مثال: أحمد محمد" value={name} onChangeText={setName} />
+              
+              <AuthInput label="البريد الإلكتروني" placeholder="name@example.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
 
-          {/* زر التسجيل */}
-          <AuthButton title="إنشاء حساب جديد" onPress={handleSignup} loading={loading} />
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <AuthInput label="رقم الهاتف" placeholder="01xxxxxxxxx" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>النوع</Text>
+                  <View style={styles.genderToggle}>
+                    <TouchableOpacity style={[styles.genderBtn, gender === 'male' && styles.genderBtnActive]} onPress={() => setGender('male')}>
+                      <Text style={[styles.genderText, gender === 'male' && styles.genderTextActive]}>ذكر</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.genderBtn, gender === 'female' && styles.genderBtnActive]} onPress={() => setGender('female')}>
+                      <Text style={[styles.genderText, gender === 'female' && styles.genderTextActive]}>أنثى</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+
+              <AuthButton title="التالي" onPress={handleNextStep} />
+            </>
+          ) : (
+            <>
+              {/* نموذج التسجيل - الخطوة الثانية */}
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <AuthInput label="كلمة المرور" isPassword placeholder="••••••••" value={password} onChangeText={setPassword} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AuthInput label="تأكيد المرور" isPassword placeholder="••••••••" value={confirmPassword} onChangeText={setConfirmPassword} />
+                </View>
+              </View>
+
+              {/* Password Strength Indicator */}
+              {password.length > 0 && (
+                <View style={styles.strengthContainer}>
+                  <View style={styles.strengthBarBg}>
+                    <View 
+                      style={[
+                        styles.strengthBarFill, 
+                        { 
+                          width: passwordStrength.score === 1 ? '33%' : passwordStrength.score === 2 ? '66%' : '100%',
+                          backgroundColor: passwordStrength.color 
+                        }
+                      ]} 
+                    />
+                  </View>
+                  <Text style={[styles.strengthText, { color: passwordStrength.color }]}>
+                    {passwordStrength.label}
+                  </Text>
+                </View>
+              )}
+
+              <AuthButton title="إنشاء حساب جديد" onPress={handleSignup} loading={loading} />
+
+              <TouchableOpacity style={styles.backStepBtn} onPress={() => setStep(1)} activeOpacity={0.8}>
+                <Text style={styles.backStepBtnText}>العودة للخطوة السابقة</Text>
+              </TouchableOpacity>
+            </>
+          )}
 
           {/* رابط تسجيل الدخول */}
           <View style={styles.footer}>
@@ -207,4 +282,26 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row-reverse', justifyContent: 'center', marginTop: AppSpacing.xxl },
   footerText: { color: AppColors.textSecondary, fontSize: AppFontSize.md, fontWeight: 'bold' },
   loginLink: { color: AppColors.accent, fontSize: AppFontSize.md, fontWeight: '900' },
+
+  // Stepper Styles
+  stepperContainer: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', marginBottom: AppSpacing.xxxl, gap: 10 },
+  stepIndicator: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
+  stepCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: AppColors.inputBg, justifyContent: 'center', alignItems: 'center' },
+  stepCircleActive: { backgroundColor: AppColors.primary },
+  stepCircleText: { fontSize: 12, fontWeight: 'bold', color: AppColors.textMuted, fontFamily: 'Tajawal-Bold' },
+  stepCircleTextActive: { color: '#FFF' },
+  stepLabel: { fontSize: 13, color: AppColors.textMuted, fontFamily: 'Tajawal-Bold' },
+  stepLabelActive: { color: AppColors.primary },
+  stepLine: { flex: 1, height: 2, backgroundColor: AppColors.inputBg, maxWidth: 60 },
+  stepLineActive: { backgroundColor: AppColors.primary },
+
+  // Password Strength
+  strengthContainer: { width: '100%', marginBottom: AppSpacing.lg, alignItems: 'flex-end' },
+  strengthBarBg: { width: '100%', height: 6, backgroundColor: AppColors.inputBg, borderRadius: 3, overflow: 'hidden', marginBottom: 6 },
+  strengthBarFill: { height: '100%', borderRadius: 3 },
+  strengthText: { fontSize: 12, fontFamily: 'Tajawal-Medium' },
+
+  // Back Button
+  backStepBtn: { marginTop: 15, paddingVertical: 12, alignItems: 'center', width: '100%' },
+  backStepBtnText: { color: AppColors.textSecondary, fontSize: 14, fontFamily: 'Tajawal-Bold' },
 });

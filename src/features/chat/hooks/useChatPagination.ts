@@ -5,7 +5,7 @@ import { showToast } from '../../../../components/AppToast';
 import { logger } from '../../../lib/logger';
 import type { Message } from '../../../types';
 
-export function useChatPagination(channelType: string, currentUserId: string | undefined) {
+export function useChatPagination(inquiryId: string, currentUserId: string | undefined) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [receiverId, setReceiverId] = useState<string | null>(null);
   const [lastSeen, setLastSeen] = useState<string | null>(null);
@@ -24,30 +24,28 @@ export function useChatPagination(channelType: string, currentUserId: string | u
     if (!currentUserId) return;
     setLoading(true);
     try {
-      const role = channelType === 'doctor' ? 'doctor' : 'admin';
       let targetReceiverId: string | null = null;
       let targetLastSeen: string | null = null;
 
-      // 🌟 Phase 1: Optimize sequential latency by fetching coach/admin faster
-      if (channelType === 'doctor') {
-        const { data: userProfile, error: profileErr } = await executeQuery<{ assigned_coach_id: string }>(
-          supabase.from('profiles').select('assigned_coach_id').eq('id', currentUserId).single()
-        );
-        
-        if (!profileErr && userProfile?.assigned_coach_id) {
-           const { data: coachData } = await executeQuery<{ id: string; updated_at: string }>(
-             supabase.from('profiles').select('id, updated_at').eq('id', userProfile.assigned_coach_id).single()
-           );
-           if (coachData) {
-             targetReceiverId = coachData.id;
-             targetLastSeen = coachData.updated_at;
-           }
-        }
+      // 🌟 Fetch coach as the receiver
+      const { data: userProfile, error: profileErr } = await executeQuery<{ assigned_coach_id: string }>(
+        supabase.from('profiles').select('assigned_coach_id').eq('id', currentUserId).single()
+      );
+      
+      if (!profileErr && userProfile?.assigned_coach_id) {
+         const { data: coachData } = await executeQuery<{ id: string; updated_at: string }>(
+           supabase.from('profiles').select('id, updated_at').eq('id', userProfile.assigned_coach_id).single()
+         );
+         if (coachData) {
+           targetReceiverId = coachData.id;
+           targetLastSeen = coachData.updated_at;
+         }
       }
 
       if (!targetReceiverId) {
+        // Fallback to an admin if no coach assigned
         const { data: adminData, error: adminErr } = await executeQuery<{ id: string; updated_at: string }>(
-          supabase.from('profiles').select('id, updated_at').eq('role', role).limit(1).single()
+          supabase.from('profiles').select('id, updated_at').eq('role', 'admin').limit(1).single()
         );
         if (!adminErr && adminData) {
           targetReceiverId = adminData.id;
@@ -59,14 +57,18 @@ export function useChatPagination(channelType: string, currentUserId: string | u
         setReceiverId(targetReceiverId);
         setLastSeen(targetLastSeen);
         
-        const { data: messagesData, error: msgsErr } = await executeQuery<Message[]>(
-          supabase
+        let query = supabase
             .from('messages')
-            .select('id, sender_id, receiver_id, content, attachment_url, attachment_type, recipient_type, is_read, created_at')
-            .eq('recipient_type', role)
-            .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${targetReceiverId}),and(sender_id.eq.${targetReceiverId},receiver_id.eq.${currentUserId})`)
-            .order('created_at', { ascending: false })
-            .limit(30)
+            .select('id, sender_id, receiver_id, content, attachment_url, attachment_type, recipient_type, inquiry_id, is_read, created_at');
+            
+        if (inquiryId === 'support') {
+            query = query.eq('recipient_type', 'admin').or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${targetReceiverId}),and(sender_id.eq.${targetReceiverId},receiver_id.eq.${currentUserId})`);
+        } else {
+            query = query.eq('inquiry_id', inquiryId);
+        }
+
+        const { data: messagesData, error: msgsErr } = await executeQuery<Message[]>(
+            query.order('created_at', { ascending: false }).limit(30)
         );
           
         if (msgsErr) throw msgsErr;
@@ -87,26 +89,29 @@ export function useChatPagination(channelType: string, currentUserId: string | u
     } finally {
       setLoading(false);
     }
-  }, [channelType, currentUserId]);
+  }, [inquiryId, currentUserId]);
 
   const loadMoreMessages = useCallback(async () => {
     if (!hasMore || loadingMore || !receiverId || !currentUserId) return;
     setLoadingMore(true);
     try {
-      const role = channelType === 'doctor' ? 'doctor' : 'admin';
       // 🔴 M1-FIX: read cursor from ref, not from closure — no stale data
       const lastMessage = lastMessageRef.current;
       if (!lastMessage) return;
 
-      const { data: olderMessages, error } = await executeQuery<Message[]>(
-        supabase
+      let query = supabase
           .from('messages')
-          .select('id, sender_id, receiver_id, content, attachment_url, attachment_type, recipient_type, is_read, created_at')
-          .eq('recipient_type', role)
-          .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${receiverId}),and(sender_id.eq.${receiverId},receiver_id.eq.${currentUserId})`)
-          .lt('created_at', lastMessage.created_at)
-          .order('created_at', { ascending: false })
-          .limit(30)
+          .select('id, sender_id, receiver_id, content, attachment_url, attachment_type, recipient_type, inquiry_id, is_read, created_at')
+          .lt('created_at', lastMessage.created_at);
+          
+      if (inquiryId === 'support') {
+          query = query.eq('recipient_type', 'admin').or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${receiverId}),and(sender_id.eq.${receiverId},receiver_id.eq.${currentUserId})`);
+      } else {
+          query = query.eq('inquiry_id', inquiryId);
+      }
+
+      const { data: olderMessages, error } = await executeQuery<Message[]>(
+        query.order('created_at', { ascending: false }).limit(30)
       );
 
       if (error) throw error;
@@ -124,7 +129,7 @@ export function useChatPagination(channelType: string, currentUserId: string | u
       setLoadingMore(false);
     }
   // messages removed from deps — cursor is read via lastMessageRef instead
-  }, [hasMore, loadingMore, receiverId, currentUserId, channelType]);
+  }, [hasMore, loadingMore, receiverId, currentUserId, inquiryId]);
 
   return { messages, setMessages, receiverId, lastSeen, loading, loadingMore, hasMore, openChat, loadMoreMessages };
 }

@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, I18nManager } from 'react-native';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, I18nManager, TextInput } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../src/lib/supabase';
@@ -11,7 +11,7 @@ import LockedTabView from '../../components/LockedTabView';
 import ExpiredState from '../../components/ExpiredState';
 import Skeleton from '../../components/Skeleton';
 import type { Plan } from '../../src/types';
-import { AppColors } from '../../constants/AppTheme';
+import { AppColors, AppRadius, AppSpacing, AppFontSize, AppFontFamily } from '../../constants/AppTheme';
 
 // ✅ أيقونة الـ chevron دائماً تشير لليسار كما طلب المستخدم
 const chevronIcon = 'chevron-back';
@@ -27,6 +27,8 @@ export default function HistoryScreen() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFilter, setSelectedFilter] = useState<'all' | 'active' | 'archived'>('all');
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -58,13 +60,31 @@ export default function HistoryScreen() {
     setRefreshing(false);
   }, [fetchHistory]);
 
+  // تصفية الخطط محلياً بناءً على البحث والفلتر المختار
+  const filteredPlans = useMemo(() => {
+    return plans.filter((plan) => {
+      const matchesSearch = plan.title 
+        ? plan.title.toLowerCase().includes(searchQuery.toLowerCase()) 
+        : false;
+      
+      const isCurrent = plan.status === 'active';
+      if (selectedFilter === 'active') {
+        return matchesSearch && isCurrent;
+      }
+      if (selectedFilter === 'archived') {
+        return matchesSearch && !isCurrent;
+      }
+      return matchesSearch;
+    });
+  }, [plans, searchQuery, selectedFilter]);
+
   // 🔒 Lead — مقفول بالكامل
   if (!isGuardLoading && userLifecycleState === 'lead') {
     return (
       <LockedTabView
         icon="time"
-        iconColor="#F97316"
-        iconBg="#FFF7ED"
+        iconColor={AppColors.accent}
+        iconBg={AppColors.accentLight}
         title="اشترك لتتبع رحلتك 📊"
         subtitle="سجل اشتراكك في Healix لتتمكن من متابعة سجل خططك وإنجازاتك الصحية بالكامل."
         buttonText="اشترك الآن"
@@ -98,7 +118,7 @@ export default function HistoryScreen() {
       {/* الهيدر ثابت وبيظهر دايماً */}
       <View style={styles.header}>
         <View style={styles.titleRowMain}>
-          <Ionicons name="time-outline" size={28} color="#F97316" />
+          <Ionicons name="time-outline" size={28} color={AppColors.accent} />
           <Text style={styles.title}>أرشيف رحلتك</Text>
         </View>
         <Text style={styles.subtitle}>سجل كامل لجميع خططك الغذائية والتدريبية</Text>
@@ -108,83 +128,194 @@ export default function HistoryScreen() {
       {loading || isGuardLoading ? (
         <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]} showsVerticalScrollIndicator={false}>
           {[1, 2, 3, 4, 5].map((i) => (
-            <Skeleton key={i} width="100%" height={90} borderRadius={20} style={{ marginBottom: 15 }} />
+            <Skeleton key={i} width="100%" height={90} borderRadius={AppRadius.xl} style={{ marginBottom: 15 }} />
           ))}
         </ScrollView>
       ) : plans.length === 0 ? (
-        <ScrollView contentContainerStyle={styles.centerContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#F97316']} />}>
-          <Ionicons name="document-text-outline" size={60} color="#D1D5DB" />
+        <ScrollView contentContainerStyle={styles.centerContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[AppColors.accent]} />}>
+          <Ionicons name="document-text-outline" size={60} color={AppColors.textMuted} />
           <Text style={styles.emptyText}>لا يوجد سجل تاريخي حتى الآن.</Text>
         </ScrollView>
       ) : (
-        <ScrollView 
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#F97316', '#2A4B46']} tintColor="#2A4B46" />}
-        >
-          {plans.map((plan) => {
-            const isCurrent = plan.status === 'active';
-            const taskCount = plan.plan_tasks?.[0]?.count || 0;
-
-            return (
+        <View style={{ flex: 1 }}>
+          {/* قسم البحث والفلاتر الذكية */}
+          <View style={styles.searchFilterContainer}>
+            <View style={styles.searchBar}>
+              <Ionicons name="search-outline" size={20} color={AppColors.textSecondary} style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="بحث باسم الخطة..."
+                placeholderTextColor={AppColors.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                textAlign="right"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Ionicons name="close-circle" size={18} color={AppColors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              contentContainerStyle={styles.filtersContainer}
+            >
               <TouchableOpacity 
-                key={plan.id} style={[styles.planCard, isCurrent && styles.currentPlanCard]} activeOpacity={0.8}
-                onPress={() => router.push({ pathname: '/(tabs)/plan-details', params: { planId: plan.id } })} 
+                style={[styles.filterChip, selectedFilter === 'all' && styles.filterChipActive]} 
+                onPress={() => setSelectedFilter('all')}
               >
-                <View style={styles.cardLeft}>
-                  <View style={[styles.taskCountBadge, isCurrent && styles.taskCountBadgeCurrent]}>
-                    <Text style={[styles.taskCountText, isCurrent && styles.taskCountTextCurrent]}>{taskCount} مهمة</Text>
-                  </View>
-                  <Ionicons name={chevronIcon as any} size={20} color={isCurrent ? "#F97316" : "#9CA3AF"} />
-                </View>
-
-                <View style={styles.cardRight}>
-                  <View style={styles.titleRow}>
-                    {isCurrent && <View style={styles.activeTag}><Text style={styles.activeTagText}>الحالية</Text></View>}
-                    <Text style={[styles.planTitle, isCurrent && styles.planTitleCurrent]}>{plan.title || 'خطة بدون اسم'}</Text>
-                  </View>
-                  <View style={styles.dateRow}>
-                    <Text style={styles.dateText}>{new Date(plan.created_at).toLocaleDateString('ar-EG')}</Text>
-                    <Ionicons name="calendar-outline" size={14} color="#9CA3AF" />
-                  </View>
-                </View>
-
-                <View style={[styles.iconBox, isCurrent && styles.iconBoxCurrent]}>
-                  <Ionicons name="document-text" size={24} color={isCurrent ? "#F97316" : "#6B7280"} />
-                </View>
+                <Text style={[styles.filterChipText, selectedFilter === 'all' && styles.filterChipTextActive]}>الكل</Text>
               </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+              <TouchableOpacity 
+                style={[styles.filterChip, selectedFilter === 'active' && styles.filterChipActive]} 
+                onPress={() => setSelectedFilter('active')}
+              >
+                <Text style={[styles.filterChipText, selectedFilter === 'active' && styles.filterChipTextActive]}>الحالية</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.filterChip, selectedFilter === 'archived' && styles.filterChipActive]} 
+                onPress={() => setSelectedFilter('archived')}
+              >
+                <Text style={[styles.filterChipText, selectedFilter === 'archived' && styles.filterChipTextActive]}>المؤرشفة</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+
+          {filteredPlans.length === 0 ? (
+            <ScrollView contentContainerStyle={styles.centerContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[AppColors.accent]} />}>
+              <Ionicons name="search-outline" size={60} color={AppColors.textMuted} />
+              <Text style={styles.emptyText}>لا توجد نتائج تطابق بحثك.</Text>
+            </ScrollView>
+          ) : (
+            <ScrollView 
+              contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
+              showsVerticalScrollIndicator={false}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[AppColors.accent, AppColors.primary]} tintColor={AppColors.primary} />}
+            >
+              {filteredPlans.map((plan) => {
+                const isCurrent = plan.status === 'active';
+                const taskCount = plan.plan_tasks?.[0]?.count || 0;
+
+                return (
+                  <TouchableOpacity 
+                    key={plan.id} style={[styles.planCard, isCurrent && styles.currentPlanCard]} activeOpacity={0.8}
+                    onPress={() => router.push({ pathname: '/(tabs)/plan-details', params: { planId: plan.id } })} 
+                  >
+                    <View style={styles.cardLeft}>
+                      <View style={[styles.taskCountBadge, isCurrent && styles.taskCountBadgeCurrent]}>
+                        <Text style={[styles.taskCountText, isCurrent && styles.taskCountTextCurrent]}>{taskCount} مهمة</Text>
+                      </View>
+                      <Ionicons name={chevronIcon as any} size={20} color={isCurrent ? AppColors.accent : AppColors.textMuted} />
+                    </View>
+
+                    <View style={styles.cardRight}>
+                      <View style={styles.titleRow}>
+                        {isCurrent && <View style={styles.activeTag}><Text style={styles.activeTagText}>الحالية</Text></View>}
+                        <Text style={[styles.planTitle, isCurrent && styles.planTitleCurrent]}>{plan.title || 'خطة بدون اسم'}</Text>
+                      </View>
+                      <View style={styles.dateRow}>
+                        <Text style={styles.dateText}>{new Date(plan.created_at).toLocaleDateString('ar-EG')}</Text>
+                        <Ionicons name="calendar-outline" size={14} color={AppColors.textMuted} />
+                      </View>
+                    </View>
+
+                    <View style={[styles.iconBox, isCurrent && styles.iconBoxCurrent]}>
+                      <Ionicons name="document-text" size={24} color={isCurrent ? AppColors.accent : AppColors.textSecondary} />
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
       )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9F6F0' },
-  header: { padding: 20, alignItems: 'flex-end', borderBottomWidth: 1, borderBottomColor: '#E5E7EB', backgroundColor: '#FFF' },
+  container: { flex: 1, backgroundColor: AppColors.background },
+  header: { padding: 20, alignItems: 'flex-end', borderBottomWidth: 1, borderBottomColor: AppColors.border, backgroundColor: AppColors.surface },
   titleRowMain: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 5 },
-  title: { fontSize: 24, fontWeight: '900', color: '#2A4B46', marginLeft: 8 },
-  subtitle: { fontSize: 14, color: '#6B7280', fontWeight: 'bold' },
+  title: { fontSize: 24, fontWeight: '900', color: AppColors.primary, marginLeft: 8, fontFamily: AppFontFamily.bold },
+  subtitle: { fontSize: 14, color: AppColors.textSecondary, fontWeight: 'bold', fontFamily: AppFontFamily.medium },
   centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyText: { marginTop: 15, color: '#9CA3AF', fontSize: 16, fontWeight: 'bold' },
+  emptyText: { marginTop: 15, color: AppColors.textMuted, fontSize: 16, fontWeight: 'bold', fontFamily: AppFontFamily.medium },
   scrollContent: { padding: 15, paddingBottom: 100 }, // Note: paddingBottom is overridden dynamically
-  planCard: { flexDirection: 'row', backgroundColor: '#FFF', padding: 20, borderRadius: 20, marginBottom: 15, alignItems: 'center', borderWidth: 1, borderColor: '#F3F4F6', elevation: 1 },
-  currentPlanCard: { borderColor: '#F97316', borderWidth: 1.5, elevation: 3 },
+  planCard: { flexDirection: 'row', backgroundColor: AppColors.surface, padding: 20, borderRadius: AppRadius.xl, marginBottom: 15, alignItems: 'center', borderWidth: 1, borderColor: AppColors.borderLight, elevation: 1 },
+  currentPlanCard: { borderColor: AppColors.accent, borderWidth: 1.5, elevation: 3 },
   cardRight: { flex: 1, alignItems: 'flex-end', paddingRight: 15 },
   titleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
-  planTitle: { fontSize: 16, fontWeight: 'bold', color: '#1F2937', marginLeft: 8 },
-  planTitleCurrent: { color: '#2A4B46' },
-  activeTag: { backgroundColor: '#F97316', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
-  activeTagText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
+  planTitle: { fontSize: 16, fontWeight: 'bold', color: AppColors.textPrimary, marginLeft: 8, fontFamily: AppFontFamily.bold },
+  planTitleCurrent: { color: AppColors.primary },
+  activeTag: { backgroundColor: AppColors.accent, paddingHorizontal: 6, paddingVertical: 2, borderRadius: AppRadius.xs },
+  activeTagText: { color: AppColors.surface, fontSize: 10, fontWeight: 'bold', fontFamily: AppFontFamily.medium },
   dateRow: { flexDirection: 'row', alignItems: 'center' },
-  dateText: { fontSize: 12, color: '#9CA3AF', fontWeight: 'bold', marginRight: 5 },
-  iconBox: { width: 50, height: 50, borderRadius: 15, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
-  iconBoxCurrent: { backgroundColor: '#FFF7ED' },
+  dateText: { fontSize: 12, color: AppColors.textMuted, fontWeight: 'bold', marginRight: 5, fontFamily: AppFontFamily.regular },
+  iconBox: { width: 50, height: 50, borderRadius: AppRadius.lg, backgroundColor: AppColors.borderLight, justifyContent: 'center', alignItems: 'center' },
+  iconBoxCurrent: { backgroundColor: AppColors.accentLight },
   cardLeft: { flexDirection: 'row', alignItems: 'center' },
-  taskCountBadge: { backgroundColor: '#F3F4F6', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginRight: 10 },
-  taskCountBadgeCurrent: { backgroundColor: '#FFF7ED' },
-  taskCountText: { fontSize: 12, fontWeight: 'bold', color: '#6B7280' },
-  taskCountTextCurrent: { color: '#F97316' },
+  taskCountBadge: { backgroundColor: AppColors.borderLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: AppRadius.sm, marginRight: 10 },
+  taskCountBadgeCurrent: { backgroundColor: AppColors.accentLight },
+  taskCountText: { fontSize: 12, fontWeight: 'bold', color: AppColors.textSecondary, fontFamily: AppFontFamily.medium },
+  taskCountTextCurrent: { color: AppColors.accent },
+  
+  // قسم البحث والفلاتر
+  searchFilterContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 15,
+    backgroundColor: AppColors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: AppColors.border,
+  },
+  searchBar: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    backgroundColor: AppColors.inputBg,
+    borderRadius: AppRadius.md,
+    paddingHorizontal: 12,
+    height: 44,
+    marginBottom: 12,
+  },
+  searchIcon: {
+    marginLeft: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: AppFontSize.md,
+    color: AppColors.textPrimary,
+    fontFamily: AppFontFamily.regular,
+    textAlign: 'right',
+    height: '100%',
+  },
+  filtersContainer: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: AppRadius.full,
+    backgroundColor: AppColors.borderLight,
+    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  filterChipActive: {
+    backgroundColor: AppColors.primary,
+    borderColor: AppColors.primary,
+  },
+  filterChipText: {
+    fontSize: AppFontSize.sm,
+    color: AppColors.textSecondary,
+    fontFamily: AppFontFamily.medium,
+  },
+  filterChipTextActive: {
+    color: AppColors.surface,
+    fontWeight: 'bold',
+  },
 });

@@ -87,7 +87,7 @@ export default function ProfileScreen() {
   const handleAvatarUpload = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) {
-      Alert.alert('تنبيه', 'يجب إعطاء صلاحية الوصول للصور لتتمكن من تغيير صورتك.');
+      showToast.info('يجب إعطاء صلاحية الوصول للصور لتتمكن من تغيير صورتك.');
       return;
     }
 
@@ -135,8 +135,14 @@ export default function ProfileScreen() {
 
   const handleChangePassword = async () => {
     if (!newPassword) return;
-    if (newPassword !== confirmPassword) return Alert.alert('تنبيه', 'كلمات المرور غير متطابقة');
-    if (newPassword.length < 6) return Alert.alert('تنبيه', 'كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+    if (newPassword !== confirmPassword) {
+      showToast.info('كلمات المرور غير متطابقة');
+      return;
+    }
+    if (newPassword.length < 6) {
+      showToast.info('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+      return;
+    }
 
     setLoading(true);
     try {

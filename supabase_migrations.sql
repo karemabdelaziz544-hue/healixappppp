@@ -47,3 +47,33 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
+-- 5. Create Inquiries Table for Threaded Tickets System
+CREATE TABLE IF NOT EXISTS public.inquiries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  category TEXT NOT NULL CHECK (category IN ('nutrition', 'meals', 'weight', 'symptoms', 'exercises', 'other')),
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'under_review', 'replied', 'closed')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- 6. Add inquiry_id to messages
+ALTER TABLE public.messages 
+ADD COLUMN IF NOT EXISTS inquiry_id UUID REFERENCES public.inquiries(id) ON DELETE CASCADE;
+
+-- 7. Ensure RLS is enabled on inquiries
+ALTER TABLE public.inquiries ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own inquiries"
+ON public.inquiries FOR SELECT
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own inquiries"
+ON public.inquiries FOR INSERT
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own inquiries"
+ON public.inquiries FOR UPDATE
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);

@@ -6,15 +6,15 @@ import { useChatComposer } from './useChatComposer';
 
 export type ChannelType = 'doctor' | 'admin';
 
-export function useChatSession(channelType: ChannelType, currentUserId: string | undefined) {
-  const pagination = useChatPagination(channelType, currentUserId);
+export function useChatSession(inquiryId: string, currentUserId: string | undefined) {
+  const pagination = useChatPagination(inquiryId, currentUserId);
   
-  useChatRealtime(channelType, currentUserId, pagination.receiverId, pagination.setMessages);
+  useChatRealtime(inquiryId, currentUserId, pagination.receiverId, pagination.setMessages);
   
   const attachments = useChatAttachments();
   
   const composer = useChatComposer(
-    channelType, 
+    inquiryId, 
     currentUserId, 
     pagination.receiverId, 
     attachments.attachment, 

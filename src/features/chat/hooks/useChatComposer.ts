@@ -9,7 +9,7 @@ import { OfflineQueue, generateUUID } from '../../../lib/offlineQueue';
 import NetInfo from '@react-native-community/netinfo';
 
 export function useChatComposer(
-  channelType: string, 
+  inquiryId: string, 
   currentUserId: string | undefined, 
   receiverId: string | null, 
   attachment: Attachment | null, 
@@ -151,7 +151,8 @@ export function useChatComposer(
         content: contentText,
         attachment_url: attachmentPath,
         attachment_type: (attachmentType || null) as import('../../../types').Message['attachment_type'],
-        recipient_type: channelType as 'doctor' | 'admin',
+        recipient_type: inquiryId === 'support' ? 'admin' : 'doctor',
+        inquiry_id: inquiryId === 'support' ? undefined : inquiryId,
         is_read: false,
         created_at: new Date().toISOString(),
       };
@@ -164,7 +165,8 @@ export function useChatComposer(
         attachmentUrl: attachmentPath,
         attachmentType,
         attachment: attachmentPayload,
-        recipientType: channelType
+        recipientType: inquiryId === 'support' ? 'admin' : 'doctor',
+        inquiryId: inquiryId === 'support' ? undefined : inquiryId
       });
 
       setNewMessage('');

@@ -7,16 +7,25 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { Message } from '../src/types';
-import { AppColors } from '../constants/AppTheme';
+import { AppColors, AppRadius, AppFontFamily } from '../constants/AppTheme';
 import { Strings } from '../constants/strings';
-import { useChatSession, ChannelType } from '../src/features/chat/hooks/useChatSession';
+import { useChatSession } from '../src/features/chat/hooks/useChatSession';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { MessageBubble } from './chat/MessageBubble';
+import { useRouter } from 'expo-router';
+
+const SUGGESTIONS = [
+  'أريد سؤال الكوتش عن تغذيتي اليومية 🍎',
+  'هل يمكن تعديل بعض تمارين خطتي؟ 🏋️‍♂️',
+  'أود استشارة الطبيب بشأن وعكة صحية خفيفة 🩺',
+  'استفسار بخصوص مواعيد الوجبات والمكملات 📋',
+];
 
 
 // 🌟 المكون المشترك للشات
 interface ChatViewProps {
-  channelType: ChannelType;
+  inquiryId: string;
+  status: 'open' | 'under_review' | 'replied' | 'closed';
   currentUserId: string | undefined;
   headerTitle: string;
   headerIcon: string;
@@ -28,7 +37,8 @@ interface ChatViewProps {
 }
 
 export default function ChatView({
-  channelType,
+  inquiryId,
+  status,
   currentUserId,
   headerTitle,
   headerIcon,
@@ -38,6 +48,7 @@ export default function ChatView({
   onBack,
   showNetworkStatus = true,
 }: ChatViewProps) {
+  const router = useRouter();
   const { isConnected } = useNetworkStatus();
   const {
     messages,
@@ -58,7 +69,7 @@ export default function ChatView({
     loadMoreMessages,
     hasMore,
     loadingMore,
-  } = useChatSession(channelType, currentUserId);
+  } = useChatSession(inquiryId, currentUserId);
 
   // 🔴 AUDIT FIX: Stable renderItem — no anonymous function re-creation
   const renderItem = useCallback(({ item: msg }: { item: Message }) => {
@@ -112,6 +123,19 @@ export default function ChatView({
                 <Ionicons name="chatbubbles-outline" size={48} color={AppColors.textMuted} />
                 <Text style={styles.emptyStateText}>{Strings.chat.noMessages}</Text>
                 <Text style={styles.emptyStateSubtext}>{Strings.chat.startChat}</Text>
+                
+                <View style={styles.suggestionsContainer}>
+                  {SUGGESTIONS.map((suggestion, index) => (
+                    <TouchableOpacity 
+                      key={index} 
+                      style={styles.suggestionChip} 
+                      onPress={() => setNewMessage(suggestion)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.suggestionText}>{suggestion}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
             }
           />
@@ -133,7 +157,19 @@ export default function ChatView({
             </View>
           ) : null}
 
-          <View style={styles.inputRow}>
+          {status === 'closed' ? (
+            <View style={styles.closedInquiryBar}>
+              <Ionicons name="checkmark-circle" size={20} color={AppColors.success} />
+              <Text style={styles.closedBarText}>تم حل هذا الاستفسار وإغلاقه بواسطة الكوتش ✓</Text>
+              <TouchableOpacity 
+                style={styles.reopenActionBtn} 
+                onPress={() => router.replace('/chat')}
+              >
+                <Text style={styles.reopenActionText}>لديك سؤال آخر؟ اسأل الكوتش</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.inputRow}>
             <TouchableOpacity style={styles.iconBtn} onPress={handleAttachmentClick} disabled={uploading || !!recording || !isConnected}>
               <Ionicons name="attach" size={28} color={AppColors.textSecondary} />
             </TouchableOpacity>
@@ -171,6 +207,7 @@ export default function ChatView({
               </TouchableOpacity>
             )}
           </View>
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -186,7 +223,7 @@ const styles = StyleSheet.create({
   headerAvatar: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
 
   messagesArea: { flex: 1 },
-  emptyStateContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 80, transform: [{ scaleY: -1 }] },
+  emptyStateContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 40, paddingHorizontal: 20, transform: [{ scaleY: -1 }] },
   emptyStateText: { fontSize: 16, color: AppColors.textPrimary, fontWeight: 'bold', marginTop: 10 },
   emptyStateSubtext: { fontSize: 14, color: AppColors.textMuted, marginTop: 5 },
 
@@ -207,4 +244,59 @@ const styles = StyleSheet.create({
   recordingPulse: { width: 10, height: 10, borderRadius: 5, backgroundColor: AppColors.danger },
   recordingTimerText: { fontSize: 18, fontWeight: '900', color: AppColors.danger, fontVariant: ['tabular-nums'] },
   recordingLabel: { fontSize: 13, fontWeight: 'bold', color: AppColors.textMuted },
+
+  // Suggestions styles
+  suggestionsContainer: {
+    marginTop: 20,
+    width: '100%',
+  },
+  suggestionChip: {
+    backgroundColor: AppColors.surface,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    borderRadius: AppRadius.md,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    marginBottom: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  suggestionText: {
+    color: AppColors.primary,
+    fontFamily: AppFontFamily.medium,
+    textAlign: 'center',
+  },
+  closedInquiryBar: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    backgroundColor: '#F3F4F6',
+    borderTopWidth: 1,
+    borderTopColor: AppColors.border,
+    gap: 8,
+  },
+  closedBarText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: AppColors.textSecondary,
+    textAlign: 'center',
+  },
+  reopenActionBtn: {
+    marginTop: 5,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: AppColors.primary,
+    borderRadius: 20,
+  },
+  reopenActionText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: 'bold',
+  }
 });

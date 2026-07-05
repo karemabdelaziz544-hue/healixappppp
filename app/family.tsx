@@ -7,6 +7,7 @@ import { executeQuery } from '../src/lib/apiClient';
 import { logger } from '../src/lib/logger';
 import { useFamily } from '../src/context/FamilyContext';
 import { useRouter } from 'expo-router';
+import { showToast } from '../components/AppToast';
 
 export default function FamilyScreen() {
   const router = useRouter();
@@ -24,8 +25,14 @@ export default function FamilyScreen() {
   });
 
   const handleAddMember = async () => {
-    if (!isSubscribed) return Alert.alert("تنبيه", "يجب تفعيل أو تجديد الاشتراك أولاً لتتمكن من إضافة أفراد.");
-    if (!formData.fullName || !formData.height || !formData.weight) return Alert.alert("تنبيه", "يرجى إكمال جميع البيانات");
+    if (!isSubscribed) {
+      showToast.info("يجب تفعيل أو تجديد الاشتراك أولاً لتتمكن من إضافة أفراد.");
+      return;
+    }
+    if (!formData.fullName || !formData.height || !formData.weight) {
+      showToast.info("يرجى إكمال جميع البيانات");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -44,7 +51,7 @@ export default function FamilyScreen() {
 
       if (error) throw error;
 
-      Alert.alert("نجاح", "تم إضافة الفرد بنجاح 🎉");
+      showToast.success("تم إضافة الفرد بنجاح 🎉");
       setShowForm(false);
       setFormData({ fullName: '', gender: 'male', height: '', weight: '', birthYear: '', relation: 'son' });
       Keyboard.dismiss();
@@ -52,7 +59,7 @@ export default function FamilyScreen() {
 
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : 'فشل إضافة الفرد';
-      Alert.alert("خطأ", msg);
+      showToast.error(msg);
       logger.error('[family] add member:', error);
     } finally {
       setLoading(false);
@@ -63,11 +70,11 @@ export default function FamilyScreen() {
     // 🛡️ تأمين: التأكد إن المستخدم الحالي هو المدير قبل السماح بالحذف
     const memberToDelete = familyMembers.find(m => m.id === id);
     if (!memberToDelete || !memberToDelete.manager_id) {
-      Alert.alert("خطأ", "لا يمكن حذف الحساب الرئيسي.");
+      showToast.error("لا يمكن حذف الحساب الرئيسي.");
       return;
     }
     if (currentProfile?.id !== memberToDelete.manager_id) {
-      Alert.alert("غير مسموح", "فقط صاحب الحساب الرئيسي يمكنه حذف أفراد العائلة.");
+      showToast.error("فقط صاحب الحساب الرئيسي يمكنه حذف أفراد العائلة.");
       return;
     }
 
@@ -81,7 +88,7 @@ export default function FamilyScreen() {
               { retries: 0 }
             );
             if (error) throw error;
-            Alert.alert("نجاح", "تم الحذف");
+            showToast.success("تم الحذف");
             refreshFamily();
             if (currentProfile?.id === id) {
               const mainUser = familyMembers.find(m => !m.manager_id);
@@ -90,7 +97,7 @@ export default function FamilyScreen() {
           } catch (error: unknown) {
             // 🔴 AUDIT FIX: Don't leak PostgreSQL error messages to users
             const msg = error instanceof Error ? error.message : 'فشل الحذف';
-            Alert.alert("خطأ", "فشل الحذف. يرجى المحاولة مرة أخرى.");
+            showToast.error("فشل الحذف. يرجى المحاولة مرة أخرى.");
             logger.error('[family] delete member:', msg);
           }
       }}
@@ -119,7 +126,7 @@ export default function FamilyScreen() {
                   const mainUser = familyMembers.find(m => !m.manager_id);
                   if (mainUser) {
                     switchProfile(mainUser.id);
-                    Alert.alert('تم', 'عدت إلى حسابك الرئيسي');
+                    showToast.success('عدت إلى حسابك الرئيسي');
                   }
                 }}
               >
@@ -219,11 +226,11 @@ export default function FamilyScreen() {
                         onPress={() => { 
                           if (isLocked) {
                             // منع التبديل وإظهار رسالة
-                            Alert.alert('حساب غير مفعل 🔒', 'هذا الحساب تم استثناؤه من الباقة أو أن الاشتراك العائلي منتهي. يرجى تجديد أو تعديل الباقة لتفعيله.');
+                            showToast.info('هذا الحساب غير مفعل. يرجى تجديد أو تعديل الباقة لتفعيله.');
                           } else {
                             // التبديل الطبيعي
                             switchProfile(member.id); 
-                            Alert.alert('نجاح', `تم التبديل لحساب ${member.full_name}`); 
+                            showToast.success(`تم التبديل لحساب ${member.full_name}`); 
                           }
                         }}
                       >
