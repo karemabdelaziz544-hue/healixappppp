@@ -48,8 +48,13 @@ export function useSubscriptionGuard() {
       return;
     }
 
+    // 🔴 FIX: If the database trigger incorrectly assigns 'expired' to a brand new user
+    // (no end date + not onboarded), treat them as a new lead.
+    const isActuallyNew = subscription_status === 'new' || 
+      (!subscription_end_date && !isOnboarded && subscription_status === 'expired');
+
     // 2. عميل جديد لم يدفع
-    if (subscription_status === 'new') {
+    if (isActuallyNew) {
       setUserLifecycleState('lead');
       setIsGuardLoading(false);
       initialized.current = true;

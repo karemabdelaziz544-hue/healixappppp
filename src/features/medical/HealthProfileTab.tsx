@@ -22,11 +22,11 @@ export default function HealthProfileTab({ userId, healthProfile, uploading, set
       {!isEditing ? (
         <View style={styles.profileCard}>
           <View style={styles.profileHeader}>
+            <Text style={styles.profileTitle}>البيانات الطبية الأساسية</Text>
             <TouchableOpacity style={styles.editBtnSmall} onPress={() => setIsEditing(true)}>
               <Ionicons name="pencil" size={16} color="#FFF" />
               <Text style={styles.editBtnText}>تعديل</Text>
             </TouchableOpacity>
-            <Text style={styles.profileTitle}>البيانات الطبية الأساسية</Text>
           </View>
           {!healthProfile ? (
             <View style={styles.emptyAlert}>
@@ -100,10 +100,10 @@ export default function HealthProfileTab({ userId, healthProfile, uploading, set
       ) : (
         <View style={styles.formContainer}>
           <View style={styles.formHeader}>
+            <Text style={styles.formTitle}>تحديث الملف الطبي</Text>
             <TouchableOpacity onPress={() => setIsEditing(false)}>
               <Ionicons name="close-circle" size={28} color="#EF4444" />
             </TouchableOpacity>
-            <Text style={styles.formTitle}>تحديث الملف الطبي</Text>
           </View>
 
           <Text style={styles.inputLabel}>هل تعاني من أمراض مزمنة؟</Text>

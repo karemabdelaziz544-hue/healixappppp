@@ -24,6 +24,7 @@ export interface Plan {
   user_id: string;
   title: string | null;
   status: 'active' | 'completed' | 'archived';
+  plan_type: 'nutrition' | 'workout';
   start_date: string | null;
   created_at: string;
   updated_at?: string;
@@ -34,10 +35,12 @@ export interface PlanTask {
   id: string;
   plan_id: string;
   day_name: string | null;
+  day_number?: number | null;
   content: string;
   task_type: 'workout' | 'nutrition' | string;
   is_completed: boolean;
   order_index: number;
+  metadata?: any;
   created_at?: string;
 }
 

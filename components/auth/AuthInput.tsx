@@ -8,20 +8,27 @@ interface AuthInputProps extends TextInputProps {
   isPassword?: boolean;
   hint?: string;
   headerRight?: React.ReactNode;
+  isLTR?: boolean;
 }
 
-export const AuthInput: React.FC<AuthInputProps> = ({ label, isPassword, hint, headerRight, ...props }) => {
+export const AuthInput: React.FC<AuthInputProps> = ({ label, isPassword, hint, headerRight, isLTR, ...props }) => {
   const [showPassword, setShowPassword] = useState(false);
 
   return (
     <View style={styles.inputGroup}>
       <View style={styles.header}>
-        {headerRight}
         <Text style={styles.label}>{label}</Text>
+        {headerRight}
       </View>
       
       {isPassword ? (
         <View style={styles.passwordContainer}>
+          <TextInput
+            {...props}
+            style={[styles.input, { flex: 1, height: '100%', textAlign: isLTR || isPassword ? 'left' : 'right' }, props.style]}
+            secureTextEntry={!showPassword}
+            accessibilityLabel={label}
+          />
           <TouchableOpacity 
             onPress={() => setShowPassword(!showPassword)} 
             style={styles.eyeIcon}
@@ -30,17 +37,11 @@ export const AuthInput: React.FC<AuthInputProps> = ({ label, isPassword, hint, h
           >
             <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color={AppColors.textMuted} />
           </TouchableOpacity>
-          <TextInput
-            {...props}
-            style={[styles.input, { flex: 1, height: '100%' }, props.style]}
-            secureTextEntry={!showPassword}
-            accessibilityLabel={label}
-          />
         </View>
       ) : (
         <TextInput
           {...props}
-          style={[styles.input, props.style]}
+          style={[styles.input, { textAlign: isLTR ? 'left' : 'right' }, props.style]}
           accessibilityLabel={label}
         />
       )}
@@ -52,19 +53,19 @@ export const AuthInput: React.FC<AuthInputProps> = ({ label, isPassword, hint, h
 
 const styles = StyleSheet.create({
   inputGroup: { marginBottom: AppSpacing.lg },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: AppSpacing.sm },
-  label: { fontSize: AppFontSize.sm, fontWeight: 'bold', color: AppColors.textSecondary, textAlign: 'right', flex: 1 },
+  header: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: AppSpacing.sm },
+  label: { fontSize: AppFontSize.sm, fontWeight: 'bold', color: AppColors.textSecondary, textAlign: 'right' },
   input: { 
     backgroundColor: AppColors.inputBg, 
     height: 55, 
     borderRadius: AppRadius.lg, 
     paddingHorizontal: AppSpacing.lg, 
-    textAlign: 'right', 
+    textAlign: 'right', // overridden by inline styles if isLTR is true
     fontSize: AppFontSize.md, 
     color: AppColors.textPrimary 
   },
   passwordContainer: { 
-    flexDirection: 'row', 
+    flexDirection: 'row-reverse', 
     alignItems: 'center', 
     backgroundColor: AppColors.inputBg, 
     height: 55, 

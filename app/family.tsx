@@ -9,6 +9,14 @@ import { useFamily } from '../src/context/FamilyContext';
 import { useRouter } from 'expo-router';
 import { showToast } from '../components/AppToast';
 
+const toEnglishDigits = (str: string): string => {
+  const arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+  const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+  return str
+    .replace(/[٠-٩]/g, (w) => arabicDigits.indexOf(w).toString())
+    .replace(/[۰-۹]/g, (w) => persianDigits.indexOf(w).toString());
+};
+
 export default function FamilyScreen() {
   const router = useRouter();
   const { familyMembers, currentProfile, switchProfile, refreshFamily } = useFamily();
@@ -36,22 +44,26 @@ export default function FamilyScreen() {
 
     setLoading(true);
     try {
+      const cleanBirthYear = toEnglishDigits(formData.birthYear || '');
+      const cleanHeight = toEnglishDigits(formData.height || '');
+      const cleanWeight = toEnglishDigits(formData.weight || '');
+
       // 🔴 CF-01 FIX: Wrapped with executeQuery for timeout/error classification
       const { error } = await executeQuery(
         supabase.rpc('create_sub_member', {
           member_name: formData.fullName,
           member_gender: formData.gender,
-          member_birth: formData.birthYear ? `${formData.birthYear}-01-01` : '2000-01-01',
+          member_birth: cleanBirthYear ? `${cleanBirthYear}-01-01` : '2000-01-01',
           member_relation: formData.relation,
-          member_height: Number(formData.height),
-          member_weight: Number(formData.weight)
+          member_height: Number(cleanHeight),
+          member_weight: Number(cleanWeight)
         }),
         { retries: 0 } // Not idempotent — creates a new profile
       );
 
       if (error) throw error;
 
-      showToast.success("تم إضافة الفرد بنجاح 🎉");
+      showToast.success("تم إضافة الفرد بنجاح");
       setShowForm(false);
       setFormData({ fullName: '', gender: 'male', height: '', weight: '', birthYear: '', relation: 'son' });
       Keyboard.dismiss();
@@ -107,7 +119,15 @@ export default function FamilyScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}><Ionicons name="arrow-back" size={24} color="#1F2937" /></TouchableOpacity>
+        <TouchableOpacity 
+          onPress={() => router.back()} 
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="رجوع للرئيسية"
+          hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+        >
+          <Ionicons name="arrow-forward" size={24} color="#1F2937" />
+        </TouchableOpacity>
         <View style={styles.headerTitleBox}>
           <Text style={styles.title}>إدارة العائلة <Ionicons name="people" size={24} color="#F97316" /></Text>
           <Text style={styles.subtitle}>أضف وبدل بين أفراد عائلتك بسهولة</Text>
@@ -129,18 +149,33 @@ export default function FamilyScreen() {
                     showToast.success('عدت إلى حسابك الرئيسي');
                   }
                 }}
+                accessibilityRole="button"
+                accessibilityLabel="العودة لحسابي الرئيسي"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Ionicons name="arrow-undo-outline" size={20} color="#FFF" />
                 <Text style={styles.addBtnText}>العودة لحسابي الرئيسي</Text>
               </TouchableOpacity>
             ) : (
               isSubscribed ? (
-                <TouchableOpacity style={[styles.addBtn, showForm && styles.cancelBtn]} onPress={() => setShowForm(!showForm)}>
+                <TouchableOpacity 
+                  style={[styles.addBtn, showForm && styles.cancelBtn]} 
+                  onPress={() => setShowForm(!showForm)}
+                  accessibilityRole="button"
+                  accessibilityLabel={showForm ? 'إلغاء الإضافة' : 'إضافة فرد جديد'}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
                   <Ionicons name={showForm ? "close" : "add"} size={20} color="#FFF" />
                   <Text style={styles.addBtnText}>{showForm ? 'إلغاء الإضافة' : 'إضافة فرد جديد'}</Text>
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity style={styles.lockedBtn} onPress={() => router.push('/subscriptions')}>
+                <TouchableOpacity 
+                  style={styles.lockedBtn} 
+                  onPress={() => router.push('/subscriptions')}
+                  accessibilityRole="button"
+                  accessibilityLabel="اشترك الآن لإمكانية الإضافة"
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
                   <Ionicons name="lock-closed" size={16} color="#EA580C" />
                   <Text style={styles.lockedBtnText}>اشترك للإضافة</Text>
                 </TouchableOpacity>
@@ -193,7 +228,13 @@ export default function FamilyScreen() {
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.submitBtn} onPress={handleAddMember} disabled={loading}>
+              <TouchableOpacity 
+                style={styles.submitBtn} 
+                onPress={handleAddMember} 
+                disabled={loading}
+                accessibilityRole="button"
+                accessibilityLabel="حفظ وإضافة فرد عائلة جديد"
+              >
                 {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.submitBtnText}>حفظ وإضافة</Text>}
               </TouchableOpacity>
             </View>
@@ -217,48 +258,6 @@ export default function FamilyScreen() {
                     isLocked && { opacity: 0.6, borderColor: '#FEE2E2', backgroundColor: '#FEF2F2' }
                   ]}
                 >
-                  
-                  {/* أزرار التحكم (حذف وتبديل) */}
-                  <View style={styles.cardActions}>
-                    {!isActiveProfile && (
-                      <TouchableOpacity 
-                        style={[styles.switchBtn, isLocked && { backgroundColor: '#FEE2E2' }]} 
-                        onPress={() => { 
-                          if (isLocked) {
-                            // منع التبديل وإظهار رسالة
-                            showToast.info('هذا الحساب غير مفعل. يرجى تجديد أو تعديل الباقة لتفعيله.');
-                          } else {
-                            // التبديل الطبيعي
-                            switchProfile(member.id); 
-                            showToast.success(`تم التبديل لحساب ${member.full_name}`); 
-                          }
-                        }}
-                      >
-                        <Text style={[styles.switchBtnText, isLocked && { color: '#EF4444' }]}>
-                          {isLocked ? 'مقفل 🔒' : 'تبديل'}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                    {!isMain && (
-                      <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteMember(member.id)}>
-                        <Ionicons name="trash" size={18} color="#EF4444" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-
-                  {/* بيانات الفرد */}
-                  <View style={styles.memberInfo}>
-                    <View style={styles.nameRow}>
-                      {isMain && <View style={styles.mainBadge}><Ionicons name="star" size={10} color="#FFF" /><Text style={styles.mainBadgeText}>رئيسي</Text></View>}
-                      <Text style={[styles.memberName, isActiveProfile && {color: '#FFF'}, isLocked && {color: '#991B1B', textDecorationLine: 'line-through'}]}>
-                        {member.full_name}
-                      </Text>
-                    </View>
-                    <Text style={[styles.memberDetails, isActiveProfile && {color: 'rgba(255,255,255,0.8)'}, isLocked && {color: '#EF4444'}]}>
-                      {isLocked ? 'الاشتراك منتهي/مستثنى' : `${member.gender === 'male' ? 'ذكر' : 'أنثى'} • ${member.weight || '-'} كجم`}
-                    </Text>
-                  </View>
-
                   {/* صورة الفرد (أو قفل) */}
                   <View style={[styles.avatarBox, isActiveProfile && {backgroundColor: 'colors.card'}, isLocked && {backgroundColor: '#FEE2E2'}]}>
                     <Ionicons 
@@ -266,6 +265,54 @@ export default function FamilyScreen() {
                       size={24} 
                       color={isActiveProfile ? "#2A4B46" : isLocked ? "#EF4444" : "#2A4B46"} 
                     />
+                  </View>
+
+                  {/* بيانات الفرد */}
+                  <View style={styles.memberInfo}>
+                    <View style={styles.nameRow}>
+                      <Text style={[styles.memberName, isActiveProfile && {color: '#FFF'}, isLocked && {color: '#991B1B', textDecorationLine: 'line-through'}]}>
+                        {member.full_name}
+                      </Text>
+                      {isMain && <View style={styles.mainBadge}><Ionicons name="star" size={10} color="#FFF" /><Text style={styles.mainBadgeText}>رئيسي</Text></View>}
+                    </View>
+                    <Text style={[styles.memberDetails, isActiveProfile && {color: 'rgba(255,255,255,0.8)'}, isLocked && {color: '#EF4444'}]}>
+                      {isLocked ? 'الاشتراك منتهي/مستثنى' : `${member.gender === 'male' ? 'ذكر' : 'أنثى'} • ${member.weight || '-'} كجم`}
+                    </Text>
+                  </View>
+
+                  {/* أزرار التحكم (حذف وتبديل) */}
+                  <View style={styles.cardActions}>
+                    {!isActiveProfile && (
+                      <TouchableOpacity 
+                        style={[styles.switchBtn, isLocked && { backgroundColor: '#FEE2E2' }]} 
+                        onPress={() => { 
+                          if (isLocked) {
+                            showToast.info('هذا الحساب غير مفعل. يرجى تجديد أو تعديل الباقة لتفعيله.');
+                          } else {
+                            switchProfile(member.id); 
+                            showToast.success(`تم التبديل لحساب ${member.full_name}`); 
+                          }
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`تبديل الحساب إلى ${member.full_name}`}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Text style={[styles.switchBtnText, isLocked && { color: '#EF4444' }]}>
+                          {isLocked ? 'مقفل' : 'تبديل'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    {!isMain && (
+                      <TouchableOpacity 
+                        style={styles.deleteBtn} 
+                        onPress={() => handleDeleteMember(member.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`حذف ${member.full_name}`}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Ionicons name="trash" size={18} color="#EF4444" />
+                      </TouchableOpacity>
+                    )}
                   </View>
 
                 </View>
@@ -281,11 +328,11 @@ export default function FamilyScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9F6F0' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', padding: 20, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB', gap: 15 },
   backBtn: { padding: 5 },
-  headerTitleBox: { alignItems: 'flex-end' },
-  title: { fontSize: 22, fontWeight: '900', color: '#1F2937' },
-  subtitle: { fontSize: 12, color: '#6B7280', fontWeight: 'bold' },
+  headerTitleBox: { alignItems: 'flex-start', flex: 1 },
+  title: { fontSize: 22, fontWeight: '900', color: '#1F2937', textAlign: 'left' },
+  subtitle: { fontSize: 12, color: '#6B7280', fontWeight: 'bold', textAlign: 'left' },
   scrollContent: { padding: 20 },
 
   actionHeader: { alignItems: 'flex-start', marginBottom: 20 },
@@ -296,12 +343,12 @@ const styles = StyleSheet.create({
   lockedBtnText: { color: '#EA580C', fontWeight: 'bold', fontSize: 13 },
 
   formCard: { backgroundColor: '#FFF', padding: 20, borderRadius: 25, marginBottom: 25, elevation: 3, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10 },
-  formTitle: { fontSize: 16, fontWeight: 'bold', color: '#1F2937', textAlign: 'right', marginBottom: 15, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', paddingBottom: 10 },
+  formTitle: { fontSize: 16, fontWeight: 'bold', color: '#1F2937', textAlign: 'left', marginBottom: 15, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', paddingBottom: 10 },
   inputGroup: { marginBottom: 15 },
-  row: { flexDirection: 'row-reverse', gap: 15 },
-  label: { fontSize: 12, fontWeight: 'bold', color: '#6B7280', textAlign: 'right', marginBottom: 5 },
-  input: { backgroundColor: '#F9FAFB', height: 45, borderRadius: 12, paddingHorizontal: 15, textAlign: 'right', fontSize: 14, borderWidth: 1, borderColor: '#F3F4F6' },
-  genderToggle: { flexDirection: 'row-reverse', backgroundColor: '#F9FAFB', height: 45, borderRadius: 12, padding: 4, borderWidth: 1, borderColor: '#F3F4F6' },
+  row: { flexDirection: 'row', gap: 15 },
+  label: { fontSize: 12, fontWeight: 'bold', color: '#6B7280', textAlign: 'left', marginBottom: 5 },
+  input: { backgroundColor: '#F9FAFB', height: 45, borderRadius: 12, paddingHorizontal: 15, textAlign: 'left', fontSize: 14, borderWidth: 1, borderColor: '#F3F4F6' },
+  genderToggle: { flexDirection: 'row', backgroundColor: '#F9FAFB', height: 45, borderRadius: 12, padding: 4, borderWidth: 1, borderColor: '#F3F4F6' },
   genderBtn: { flex: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 8 },
   genderBtnActive: { backgroundColor: '#FFF', elevation: 1 },
   genderText: { fontSize: 13, fontWeight: 'bold', color: '#9CA3AF' },
@@ -310,15 +357,15 @@ const styles = StyleSheet.create({
   submitBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 15 },
 
   membersList: { gap: 15 },
-  memberCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: '#E5E7EB', elevation: 1 },
+  memberCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: '#E5E7EB', elevation: 1, gap: 15 },
   activeMemberCard: { backgroundColor: '#2A4B46', borderColor: '#2A4B46', transform: [{scale: 1.02}], elevation: 5 },
-  avatarBox: { width: 50, height: 50, backgroundColor: '#E8F3F1', borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginLeft: 15 },
-  memberInfo: { flex: 1, alignItems: 'flex-end', paddingRight: 10 },
+  avatarBox: { width: 50, height: 50, backgroundColor: '#E8F3F1', borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
+  memberInfo: { flex: 1, alignItems: 'flex-start' },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 5 },
-  memberName: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
+  memberName: { fontSize: 18, fontWeight: 'bold', color: '#1F2937', textAlign: 'left' },
   mainBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F97316', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   mainBadgeText: { color: '#FFF', fontSize: 9, fontWeight: 'bold' },
-  memberDetails: { fontSize: 12, color: '#6B7280', fontWeight: 'bold' },
+  memberDetails: { fontSize: 12, color: '#6B7280', fontWeight: 'bold', textAlign: 'left' },
   cardActions: { flexDirection: 'row', gap: 10 },
   switchBtn: { backgroundColor: '#F3F4F6', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   switchBtnText: { fontSize: 12, fontWeight: 'bold', color: '#4B5563' },

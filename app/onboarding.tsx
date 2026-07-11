@@ -34,15 +34,15 @@ const slides = [
 ];
 
 const GOALS = [
-  { id: 'weight_loss', label: 'خسارة الوزن والدهون 📉', desc: 'تقليل السعرات وبناء عادات صحية مستدامة' },
-  { id: 'muscle_gain', label: 'بناء عضلات ولياقة بدنية 🏋️‍♂️', desc: 'زيادة الكتلة العضلية وتحسين القوة العامة' },
-  { id: 'health_monitoring', label: 'متابعة صحية وتغذية علاجية 🩺', desc: 'متابعة القياسات، التحاليل وتوصيات الأطباء' },
+  { id: 'weight_loss', label: 'خسارة الوزن والدهون', desc: 'تقليل السعرات وبناء عادات صحية مستدامة' },
+  { id: 'muscle_gain', label: 'بناء عضلات ولياقة بدنية', desc: 'زيادة الكتلة العضلية وتحسين القوة العامة' },
+  { id: 'health_monitoring', label: 'متابعة صحية وتغذية علاجية', desc: 'متابعة القياسات، التحاليل وتوصيات الأطباء' },
 ];
 
 const COMMITMENTS = [
-  { id: 'simple', label: 'بسيط (تغيير عادات تدريجي) 🟢', desc: 'خطوات بسيطة يومية للمبتدئين' },
-  { id: 'moderate', label: 'متوسط (التزام متوازن) 🟡', desc: 'توازن بين الدايت وتدريبات تناسب يومك' },
-  { id: 'high', label: 'عالٍ (تحول كامل وبسرعة) 🔴', desc: 'برنامج دقيق وصارم لأقوى النتائج' },
+  { id: 'simple', label: 'بسيط (تغيير عادات تدريجي)', desc: 'خطوات بسيطة يومية للمبتدئين' },
+  { id: 'moderate', label: 'متوسط (التزام متوازن)', desc: 'توازن بين الدايت وتدريبات تناسب يومك' },
+  { id: 'high', label: 'عالٍ (تحول كامل وبسرعة)', desc: 'برنامج دقيق وصارم لأقوى النتائج' },
 ];
 
 export default function OnboardingScreen() {
@@ -179,8 +179,8 @@ export default function OnboardingScreen() {
         </View>
 
         <TouchableOpacity style={styles.btn} onPress={handleNext}>
-          <Text style={styles.btnText}>{currentIndex === slides.length - 1 ? 'ابدأ خطتك المبدئية 🚀' : 'التالي'}</Text>
-          <Ionicons name={arrowIcon} size={20} color="#FFF" style={{ marginLeft: 10 }} />
+          <Text style={styles.btnText}>{currentIndex === slides.length - 1 ? 'ابدأ خطتك المبدئية' : 'التالي'}</Text>
+          <Ionicons name={arrowIcon} size={20} color="#FFF" style={{ marginRight: 10 }} />
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -190,7 +190,7 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: AppColors.background },
   header: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: AppSpacing.xl,
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   optionLabelActive: { color: AppColors.primary },
   optionDesc: { fontSize: 12, color: AppColors.textSecondary, textAlign: 'right', fontFamily: 'Tajawal-Regular' },
   footer: { padding: AppSpacing.xxxl },
-  pagination: { flexDirection: 'row', justifyContent: 'center', marginBottom: AppSpacing.xxxl },
+  pagination: { flexDirection: 'row-reverse', justifyContent: 'center', marginBottom: AppSpacing.xxxl },
   dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: AppColors.border, marginHorizontal: 5 },
   activeDot: { width: 25, backgroundColor: AppColors.primary },
   btn: {

@@ -27,29 +27,29 @@ export function useChatPagination(inquiryId: string, currentUserId: string | und
       let targetReceiverId: string | null = null;
       let targetLastSeen: string | null = null;
 
-      // 🌟 Fetch coach as the receiver
-      const { data: userProfile, error: profileErr } = await executeQuery<{ assigned_coach_id: string }>(
-        supabase.from('profiles').select('assigned_coach_id').eq('id', currentUserId).single()
-      );
-      
-      if (!profileErr && userProfile?.assigned_coach_id) {
-         const { data: coachData } = await executeQuery<{ id: string; updated_at: string }>(
-           supabase.from('profiles').select('id, updated_at').eq('id', userProfile.assigned_coach_id).single()
-         );
-         if (coachData) {
-           targetReceiverId = coachData.id;
-           targetLastSeen = coachData.updated_at;
-         }
-      }
-
-      if (!targetReceiverId) {
-        // Fallback to an admin if no coach assigned
+      if (inquiryId === 'support') {
+        // Fetch an admin as the receiver for customer support chat
         const { data: adminData, error: adminErr } = await executeQuery<{ id: string; updated_at: string }>(
           supabase.from('profiles').select('id, updated_at').eq('role', 'admin').limit(1).single()
         );
         if (!adminErr && adminData) {
           targetReceiverId = adminData.id;
           targetLastSeen = adminData.updated_at;
+        }
+      } else {
+        // Fetch assigned doctor as the receiver for medical inquiries
+        const { data: userProfile, error: profileErr } = await executeQuery<{ assigned_doctor_id: string }>(
+          supabase.from('profiles').select('assigned_doctor_id').eq('id', currentUserId).single()
+        );
+        
+        if (!profileErr && userProfile?.assigned_doctor_id) {
+           const { data: doctorData } = await executeQuery<{ id: string; updated_at: string }>(
+             supabase.from('profiles').select('id, updated_at').eq('id', userProfile.assigned_doctor_id).single()
+           );
+           if (doctorData) {
+              targetReceiverId = doctorData.id;
+              targetLastSeen = doctorData.updated_at;
+           }
         }
       }
 

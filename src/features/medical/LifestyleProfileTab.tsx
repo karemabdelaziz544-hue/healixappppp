@@ -22,11 +22,11 @@ export default function LifestyleProfileTab({ userId, lifestyleProfile, uploadin
       {!isEditing ? (
         <View style={styles.profileCard}>
           <View style={styles.profileHeader}>
+            <Text style={styles.profileTitle}>العادات اليومية ونمط الحياة</Text>
             <TouchableOpacity style={[styles.editBtnSmall, { backgroundColor: '#F97316' }]} onPress={() => setIsEditing(true)}>
               <Ionicons name="pencil" size={16} color="#FFF" />
               <Text style={styles.editBtnText}>تحديث</Text>
             </TouchableOpacity>
-            <Text style={styles.profileTitle}>العادات اليومية ونمط الحياة</Text>
           </View>
           {!lifestyleProfile ? (
             <View style={styles.emptyAlert}>
@@ -86,10 +86,10 @@ export default function LifestyleProfileTab({ userId, lifestyleProfile, uploadin
       ) : (
         <View style={styles.formContainer}>
           <View style={styles.formHeader}>
+            <Text style={styles.formTitle}>تحديث نمط الحياة</Text>
             <TouchableOpacity onPress={() => setIsEditing(false)}>
               <Ionicons name="close-circle" size={28} color="#EF4444" />
             </TouchableOpacity>
-            <Text style={styles.formTitle}>تحديث نمط الحياة</Text>
           </View>
 
           <Text style={styles.inputLabel}>الهدف الأساسي</Text>

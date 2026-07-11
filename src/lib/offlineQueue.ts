@@ -83,6 +83,12 @@ export const OfflineQueue = {
    */
   async sync(): Promise<void> {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        logger.log('[OfflineQueue] No authenticated session found. Skipping sync.');
+        return;
+      }
+
       const queue = await this.getQueue();
       if (queue.length === 0) return;
 
@@ -114,20 +120,26 @@ export const OfflineQueue = {
   async processMutation(mutation: OfflineMutation): Promise<boolean> {
     if (mutation.type === 'task_toggle') {
       const { taskId, isCompleted, logDate } = mutation.payload;
-      const { error } = await executeQuery(
-        supabase.from('daily_task_logs').upsert({
+      // Use raw Supabase call — bypasses executeQuery's 15s timeout which causes
+      // false failures on slow Expo Go / debug connections.
+      const { error } = await supabase.from('daily_task_logs').upsert(
+        {
           user_id: mutation.userId,
           task_id: taskId,
           log_date: logDate,
-          is_completed: isCompleted
-        }, { onConflict: 'user_id,task_id,log_date' }),
-        { retries: 2, isIdempotent: true }
+          is_completed: isCompleted,
+        },
+        { onConflict: 'user_id,task_id,log_date' }
       );
-      return !error;
+      if (error) {
+        logger.error('[OfflineQueue] task_toggle upsert failed:', JSON.stringify(error));
+        return false;
+      }
+      return true;
     }
 
     if (mutation.type === 'chat_send') {
-      const { messageId, receiverId, content, attachment, recipientType } = mutation.payload;
+      const { messageId, receiverId, content, attachment, recipientType, inquiryId } = mutation.payload;
       let attachmentPath = mutation.payload.attachmentUrl || null;
       let attachmentType = mutation.payload.attachmentType || null;
 
@@ -169,6 +181,7 @@ export const OfflineQueue = {
           attachment_url: attachmentPath,
           attachment_type: attachmentType,
           recipient_type: recipientType,
+          inquiry_id: inquiryId || null,
           is_read: false,
           created_at: new Date(mutation.timestamp).toISOString()
         }),

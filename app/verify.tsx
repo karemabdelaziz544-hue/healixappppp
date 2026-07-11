@@ -46,7 +46,7 @@ export default function VerifyScreen() {
             // على جدول auth.users لضمان الحماية وتفادي تعديل الصلاحيات أو الاشتراك من طرف العميل (Client-Side).
 
 
-            showToast.success('تم تفعيل حسابك بنجاح 🎉');
+            showToast.success('تم تفعيل حسابك بنجاح');
             // ✅ BUG-07: تأخير بسيط لإعطاء FamilyContext وقت للتحميل
             await new Promise(resolve => setTimeout(resolve, 800));
             router.replace('/(tabs)');
@@ -74,7 +74,7 @@ export default function VerifyScreen() {
                 email: email,
             });
             if (error) throw error;
-            showToast.success('تم إعادة إرسال الكود إلى بريدك ✅');
+            showToast.success('تم إعادة إرسال الكود إلى بريدك');
             // Start 60-second cooldown
             setResendCooldown(60);
             cooldownRef.current = setInterval(() => {

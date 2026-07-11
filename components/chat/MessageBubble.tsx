@@ -217,16 +217,16 @@ export const MessageBubble = React.memo(function MessageBubble({ msg, isMe }: Me
 // Styles (shared between InlineAttachment and MessageBubble)
 // ────────────────────────────────────────────────────
 export const bubbleStyles = StyleSheet.create({
-  messageWrapper: { marginBottom: 15, flexDirection: 'row' },
-  myMessageWrapper: { justifyContent: 'flex-start' },
-  theirMessageWrapper: { justifyContent: 'flex-end' },
+  messageWrapper: { marginBottom: 15, flexDirection: 'row-reverse' },
+  myMessageWrapper: { justifyContent: 'flex-end' },
+  theirMessageWrapper: { justifyContent: 'flex-start' },
   messageBubble: { maxWidth: '80%', padding: 15, borderRadius: 20 },
-  myBubble: { backgroundColor: AppColors.primary, borderBottomLeftRadius: 5 },
-  theirBubble: { backgroundColor: AppColors.surface, borderBottomRightRadius: 5, borderWidth: 1, borderColor: AppColors.border },
-  messageText: { fontSize: 15, lineHeight: 22 },
+  myBubble: { backgroundColor: AppColors.primary, borderBottomRightRadius: 5 },
+  theirBubble: { backgroundColor: AppColors.surface, borderBottomLeftRadius: 5, borderWidth: 1, borderColor: AppColors.border },
+  messageText: { fontSize: 15, lineHeight: 22, textAlign: 'right' },
   myMessageText: { color: '#FFF' },
   theirMessageText: { color: AppColors.textPrimary },
-  messageFooter: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', marginTop: 5 },
+  messageFooter: { flexDirection: 'row-reverse', alignItems: 'center', alignSelf: 'flex-start', marginTop: 5 },
   messageTime: { fontSize: 10, fontWeight: 'bold' },
 
   inlineImage: { width: 220, height: 220, borderRadius: 15, marginTop: 10, backgroundColor: 'rgba(0,0,0,0.1)' },

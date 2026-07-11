@@ -56,16 +56,16 @@ export default function NewInquiryScreen() {
         return;
       }
 
-      // 1. Fetch coach ID
+      // 1. Fetch doctor ID
       const { data: profile } = await supabase
         .from('profiles')
-        .select('assigned_coach_id')
+        .select('assigned_doctor_id')
         .eq('id', currentUserId)
         .single();
       
-      const coachId = profile?.assigned_coach_id;
-      if (!coachId) {
-        showToast.error('لم يتم تعيين كوتش لحسابك بعد');
+      const doctorId = profile?.assigned_doctor_id;
+      if (!doctorId) {
+        showToast.error('لم يتم تعيين طبيب لحسابك بعد');
         setLoading(false);
         return;
       }
@@ -116,7 +116,7 @@ export default function NewInquiryScreen() {
         .insert({
           id: messageId,
           sender_id: currentUserId,
-          receiver_id: coachId,
+          receiver_id: doctorId,
           content: finalContent,
           attachment_url: attachmentPath,
           attachment_type: attachmentType,
@@ -148,7 +148,7 @@ export default function NewInquiryScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={24} color={AppColors.textPrimary} />
+            <Ionicons name="arrow-forward" size={24} color={AppColors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>استفسار جديد</Text>
           <View style={{ width: 40 }} />
@@ -183,7 +183,7 @@ export default function NewInquiryScreen() {
               placeholder="مثال: أريد تغيير وجبة الفطور"
               value={title}
               onChangeText={setTitle}
-              textAlign="right"
+              textAlign="left"
             />
           </View>
 
@@ -196,7 +196,7 @@ export default function NewInquiryScreen() {
                 value={weight}
                 onChangeText={setWeight}
                 keyboardType="numeric"
-                textAlign="right"
+                textAlign="left"
               />
             </View>
           )}
@@ -209,7 +209,7 @@ export default function NewInquiryScreen() {
               value={content}
               onChangeText={setContent}
               multiline
-              textAlign="right"
+              textAlign="left"
               textAlignVertical="top"
             />
           </View>
@@ -283,14 +283,14 @@ const styles = StyleSheet.create({
     color: AppColors.textPrimary,
     marginBottom: 12,
     fontFamily: AppFontFamily.bold,
-    textAlign: 'right',
+    textAlign: 'left',
   },
   categoriesContainer: {
     paddingBottom: 20,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
   },
   categoryChip: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: AppColors.surface,
     paddingHorizontal: 16,
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
     color: AppColors.textPrimary,
     marginBottom: 8,
     fontFamily: AppFontFamily.medium,
-    textAlign: 'right',
+    textAlign: 'left',
   },
   input: {
     backgroundColor: AppColors.surface,
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: AppColors.textPrimary,
     fontFamily: AppFontFamily.medium,
-    textAlign: 'right',
+    textAlign: 'left',
   },
   footer: {
     padding: 16,

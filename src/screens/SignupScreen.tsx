@@ -1,5 +1,7 @@
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
+import * as WebBrowser from 'expo-web-browser';
+import { Ionicons } from '@expo/vector-icons';
 import { Animated, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { handleError } from '../lib/errorHandler';
 import { supabase } from '../lib/supabase';
@@ -30,8 +32,8 @@ export default function SignupScreen() {
   }, []);
 
   const getPasswordStrength = (pass: string) => {
-    if (!pass) return { score: 0, label: 'أدخل كلمة المرور', color: AppColors.textMuted };
-    if (pass.length < 6) return { score: 1, label: 'ضعيفة جداً (يجب أن تكون 6 أحرف على الأقل) 🛑', color: AppColors.danger };
+    if (!pass) return { score: 0, label: 'أدخل كلمة المرور', icon: 'key-outline', color: AppColors.textMuted };
+    if (pass.length < 6) return { score: 1, label: 'ضعيفة جداً (يجب أن تكون 6 أحرف على الأقل)', icon: 'close-circle', color: AppColors.danger };
     
     let score = 2; // starts as medium
     const hasLetters = /[a-zA-Z]/.test(pass);
@@ -43,9 +45,9 @@ export default function SignupScreen() {
     }
     
     if (score === 3) {
-      return { score: 3, label: 'قوية جداً! 🔥', color: AppColors.success };
+      return { score: 3, label: 'قوية جداً!', icon: 'shield-checkmark', color: AppColors.success };
     }
-    return { score: 2, label: 'متوسطة (أضف أرقاماً ورموزاً) ⚠️', color: AppColors.warning };
+    return { score: 2, label: 'متوسطة (أضف أرقاماً ورموزاً)', icon: 'warning', color: AppColors.warning };
   };
 
   const passwordStrength = getPasswordStrength(password);
@@ -170,11 +172,11 @@ export default function SignupScreen() {
               {/* نموذج التسجيل - الخطوة الأولى */}
               <AuthInput label="الاسم بالكامل" placeholder="مثال: أحمد محمد" value={name} onChangeText={setName} />
               
-              <AuthInput label="البريد الإلكتروني" placeholder="name@example.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+              <AuthInput label="البريد الإلكتروني" placeholder="name@example.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" isLTR={true} />
 
               <View style={styles.row}>
                 <View style={{ flex: 1 }}>
-                  <AuthInput label="رقم الهاتف" placeholder="01xxxxxxxxx" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+                  <AuthInput label="رقم الهاتف" placeholder="01xxxxxxxxx" value={phone} onChangeText={setPhone} keyboardType="phone-pad" isLTR={true} />
                 </View>
 
                 <View style={{ flex: 1 }}>
@@ -218,9 +220,12 @@ export default function SignupScreen() {
                       ]} 
                     />
                   </View>
-                  <Text style={[styles.strengthText, { color: passwordStrength.color }]}>
-                    {passwordStrength.label}
-                  </Text>
+                  <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 4 }}>
+                    <Ionicons name={passwordStrength.icon as any} size={14} color={passwordStrength.color} />
+                    <Text style={[styles.strengthText, { color: passwordStrength.color }]}>
+                      {passwordStrength.label}
+                    </Text>
+                  </View>
                 </View>
               )}
 
@@ -237,6 +242,16 @@ export default function SignupScreen() {
             <Text style={styles.footerText}>لديك حساب بالفعل؟ </Text>
             <TouchableOpacity onPress={() => router.replace('/login')}>
               <Text style={styles.loginLink}>سجل دخولك</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.legalFooter}>
+            <TouchableOpacity onPress={() => WebBrowser.openBrowserAsync('https://healix.app/terms')}>
+              <Text style={styles.legalLink}>شروط الخدمة</Text>
+            </TouchableOpacity>
+            <Text style={styles.legalSeparator}> • </Text>
+            <TouchableOpacity onPress={() => WebBrowser.openBrowserAsync('https://healix.app/privacy')}>
+              <Text style={styles.legalLink}>سياسة الخصوصية</Text>
             </TouchableOpacity>
           </View>
 
@@ -267,8 +282,8 @@ const styles = StyleSheet.create({
 
   header: { alignItems: 'center', marginBottom: AppSpacing.xxxl },
   logo: { width: 70, height: 70, marginBottom: AppSpacing.lg, borderRadius: AppRadius.xl },
-  title: { fontSize: AppFontSize.title, fontWeight: '900', color: AppColors.primary, marginBottom: AppSpacing.xs },
-  subtitle: { fontSize: AppFontSize.md, color: AppColors.textSecondary, fontWeight: 'bold' },
+  title: { fontSize: AppFontSize.title, fontWeight: '900', color: AppColors.primary, marginBottom: AppSpacing.xs, textAlign: 'center' },
+  subtitle: { fontSize: AppFontSize.md, color: AppColors.textSecondary, fontWeight: 'bold', textAlign: 'center' },
 
   row: { flexDirection: 'row-reverse', gap: AppSpacing.lg, marginBottom: AppSpacing.lg },
   label: { fontSize: AppFontSize.sm, fontWeight: 'bold', color: AppColors.textSecondary, textAlign: 'right', marginBottom: AppSpacing.sm },
@@ -304,4 +319,7 @@ const styles = StyleSheet.create({
   // Back Button
   backStepBtn: { marginTop: 15, paddingVertical: 12, alignItems: 'center', width: '100%' },
   backStepBtnText: { color: AppColors.textSecondary, fontSize: 14, fontFamily: 'Tajawal-Bold' },
+  legalFooter: { flexDirection: 'row-reverse', justifyContent: 'center', alignItems: 'center', marginTop: AppSpacing.xl, gap: 5 },
+  legalLink: { color: AppColors.textSecondary, fontSize: AppFontSize.sm, textDecorationLine: 'underline', fontWeight: 'bold' },
+  legalSeparator: { color: AppColors.textMuted, fontSize: AppFontSize.sm },
 });

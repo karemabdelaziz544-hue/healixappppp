@@ -117,12 +117,28 @@ export function classifyError(err: unknown): AppError {
   }
 
   // Supabase PostgrestError shape: { code, message, details, hint }
-  if (typeof err === 'object' && err !== null && 'code' in err && 'message' in err) {
-    const pgErr = err as { code: string; message: string };
-    if (pgErr.code === 'PGRST301' || pgErr.code?.startsWith('42')) {
-      return { code: 'FORBIDDEN', message: pgErr.message, retryable: false };
+  if (typeof err === 'object' && err !== null && 'message' in err) {
+    const pgErr = err as { code?: string; message: unknown; details?: unknown; hint?: unknown };
+    // Safely stringify — Supabase sometimes nests objects in .message
+    const msg = typeof pgErr.message === 'string'
+      ? pgErr.message
+      : JSON.stringify(pgErr.message ?? pgErr);
+
+    if (pgErr.code === 'PGRST301' || String(pgErr.code).startsWith('42')) {
+      return { code: 'FORBIDDEN', message: msg, retryable: false };
     }
-    return { code: 'UNKNOWN', message: pgErr.message, retryable: false, original: err };
+    if (pgErr.code === 'PGRST116') {
+      return { code: 'NOT_FOUND', message: msg, retryable: false };
+    }
+    // Detect network/auth errors surfaced as Supabase error objects
+    const msgLower = msg.toLowerCase();
+    if (msgLower.includes('fetch') || msgLower.includes('network') || msgLower.includes('blob')) {
+      return { code: 'NETWORK', message: msg, retryable: true };
+    }
+    if (msgLower.includes('jwt') || msgLower.includes('auth') || msgLower.includes('401')) {
+      return { code: 'AUTH_EXPIRED', message: msg, retryable: false };
+    }
+    return { code: 'UNKNOWN', message: msg, retryable: false, original: err };
   }
 
   return {

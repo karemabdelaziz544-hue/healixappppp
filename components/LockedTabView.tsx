@@ -57,8 +57,8 @@ export default function LockedTabView({
             activeOpacity={0.85}
             onPress={onPress}
           >
-            <Ionicons name="arrow-back" size={18} color="#FFF" />
             <Text style={styles.actionBtnText}>{buttonText}</Text>
+            <Ionicons name="arrow-back" size={18} color="#FFF" />
           </TouchableOpacity>
         )}
       </View>

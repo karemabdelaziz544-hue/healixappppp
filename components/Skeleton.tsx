@@ -28,7 +28,7 @@ export default function Skeleton({ width = '100%', height = 20, borderRadius = 8
 
   const translateX = shimmerAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [-layoutWidth, layoutWidth],
+    outputRange: [layoutWidth, -layoutWidth],
   });
 
   return (

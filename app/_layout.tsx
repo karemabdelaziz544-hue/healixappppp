@@ -17,6 +17,17 @@ import {
   Tajawal_700Bold,
 } from '@expo-google-fonts/tajawal';
 
+import { I18nManager, DevSettings } from 'react-native';
+
+// Force RTL layout globally for Arabic interface
+if (!I18nManager.isRTL) {
+  I18nManager.allowRTL(true);
+  I18nManager.forceRTL(true);
+  if (__DEV__) {
+    DevSettings.reload();
+  }
+}
+
 // 🔴 AUDIT FIX (H2): Environment-aware Sentry configuration.
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 const isStaging = process.env.EXPO_PUBLIC_APP_VARIANT === 'staging';

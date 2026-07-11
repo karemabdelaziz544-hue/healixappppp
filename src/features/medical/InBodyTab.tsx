@@ -32,7 +32,7 @@ const HistoryCard = memo(({ record, onPress }: { record: InbodyRecord, onPress: 
         <Text style={[styles.historySummary, { color: '#4B5563', fontSize: 14 }]} numberOfLines={1}>
           {record.ai_summary ? record.ai_summary.split('\n')[0] : 'تم تسجيل قياس InBody'}
         </Text>
-        <View style={{ flexDirection: 'row-reverse', alignItems: 'center', marginTop: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
           <Ionicons name="scan-outline" size={16} color="#F97316" />
           <Text style={localStyles.clickForMoreText}>اضغط لمزيد من التفاصيل</Text>
         </View>
@@ -118,10 +118,10 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
       {showForm && (
         <View style={styles.formContainer}>
           <View style={styles.formHeader}>
+            <Text style={styles.formTitle}>تسجيل قياس جديد</Text>
             <TouchableOpacity onPress={resetForm}>
               <Ionicons name="close-circle" size={28} color="#EF4444" />
             </TouchableOpacity>
-            <Text style={styles.formTitle}>تسجيل قياس جديد</Text>
           </View>
           {aiReport ? (
             <View style={styles.aiSummaryBox}>
@@ -168,11 +168,11 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
 
               {/* Header */}
               <View style={localStyles.modalHeader}>
+                <View style={{ width: 28 }} />
+                <Text style={localStyles.modalTitle}>تفاصيل القياس</Text>
                 <TouchableOpacity onPress={() => setModalVisible(false)}>
                   <Ionicons name="close" size={28} color="#4B5563" />
                 </TouchableOpacity>
-                <Text style={localStyles.modalTitle}>تفاصيل القياس</Text>
-                <View style={{ width: 28 }} />
               </View>
 
               <ScrollView showsVerticalScrollIndicator={false}>
@@ -243,7 +243,7 @@ const localStyles = StyleSheet.create({
     elevation: 5,
   },
   modalHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 15,
@@ -264,7 +264,7 @@ const localStyles = StyleSheet.create({
     marginBottom: 20,
   },
   modalStatsRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 20,
   },
@@ -302,14 +302,14 @@ const localStyles = StyleSheet.create({
     fontSize: 16,
     color: '#9A3412',
     marginBottom: 10,
-    textAlign: 'right',
+    textAlign: 'left',
   },
   modalReportText: {
     fontFamily: AppFontFamily.medium,
     fontSize: 15,
     color: '#431407',
     lineHeight: 24,
-    textAlign: 'right',
+    textAlign: 'left',
   },
   noReportText: {
     fontFamily: AppFontFamily.regular,

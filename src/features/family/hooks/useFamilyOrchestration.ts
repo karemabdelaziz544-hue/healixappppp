@@ -60,16 +60,10 @@ export function useFamilyOrchestration(userId: string | undefined) {
 
           if (safeMember.manager_id && manager) {
             const managerStatus = manager.subscription_status;
-            const memberStatus = safeMember.subscription_status;
-            let inheritedStatus = memberStatus;
             
-            if (managerStatus === 'new') inheritedStatus = 'new';
-            else if (managerStatus === 'expired' || memberStatus === 'expired') inheritedStatus = 'expired';
-            else if (managerStatus === 'active') inheritedStatus = 'active';
-
             return {
               ...safeMember,
-              subscription_status: inheritedStatus,
+              subscription_status: managerStatus,
               subscription_end_date: manager.subscription_end_date,
             };
           }

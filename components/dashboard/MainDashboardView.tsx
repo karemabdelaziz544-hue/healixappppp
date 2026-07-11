@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, FlatList, LayoutAnimation, Platform, RefreshControl, StyleSheet, Text, TouchableOpacity, UIManager, View } from 'react-native';
+import { Animated, ScrollView, Image, LayoutAnimation, Platform, RefreshControl, StyleSheet, Text, TouchableOpacity, UIManager, View, Modal } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 
 // 🔴 AUDIT FIX: تفعيل LayoutAnimation على أندرويد
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -20,7 +21,13 @@ import type { Plan, PlanTask } from '../../src/types';
 import { AppCache } from '../../src/lib/cache';
 import { OfflineQueue } from '../../src/lib/offlineQueue';
 
-
+// timezone-safe date extraction in local time (e.g. Egypt date without UTC shifts)
+const getLocalDateString = (d = new Date()) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const getFormattedDate = () => {
   const date = new Date();
@@ -45,8 +52,191 @@ const getTaskMeta = (task: PlanTask) => {
   return { title: Strings.dashboard.tasks.system, icon: 'nutrition', color: NutritionalColors.fallback.main, bg: NutritionalColors.fallback.bg };
 };
 
+// Helper function to split meal description into a clean bullet list array
+const parseMealComponents = (content: string): string[] => {
+  if (!content) return [];
+  const lines = content.split(/\r?\n/);
+  const items: string[] = [];
+  lines.forEach(line => {
+    let cleaned = line.trim();
+    if (!cleaned) return;
+    // Remove bullets •, -, *, +, or numbers like 1., 2.
+    cleaned = cleaned.replace(/^([•\-\*\+]\s*|\d+[\.\)\-]\s*)/, '');
+    cleaned = cleaned.trim();
+    if (cleaned) {
+      items.push(cleaned);
+    }
+  });
+  if (items.length === 1 && content.includes(',')) {
+    return content.split(',').map(s => s.trim().replace(/^([•\-\*\+]\s*|\d+[\.\)\-]\s*)/, '').trim()).filter(Boolean);
+  }
+  return items;
+};
+
+const AccountSwitcherHeader = React.memo(({ 
+  currentProfile, 
+  familyMembers, 
+  switchProfile, 
+  userName 
+}: any) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const [displayProfile, setDisplayProfile] = useState(currentProfile);
+  const [displayUserName, setDisplayUserName] = useState(userName);
+
+  const dropdownOpacity = useRef(new Animated.Value(0)).current;
+  const dropdownScale = useRef(new Animated.Value(0.9)).current;
+  const [avatarUrls, setAvatarUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const fetchAvatars = async () => {
+      const urls: Record<string, string> = {};
+      const profilesToFetch = [...(familyMembers || [])];
+      if (currentProfile && !profilesToFetch.find(m => m.id === currentProfile.id)) {
+        profilesToFetch.push(currentProfile);
+      }
+
+      for (const p of profilesToFetch) {
+        if (p.avatar_url) {
+          if (p.avatar_url.startsWith('http')) {
+            urls[p.id] = p.avatar_url;
+          } else {
+            const { data } = await supabase.storage.from('avatars').createSignedUrl(p.avatar_url, 3600);
+            if (data?.signedUrl) urls[p.id] = data.signedUrl;
+          }
+        }
+      }
+      setAvatarUrls(urls);
+    };
+
+    fetchAvatars();
+  }, [familyMembers, currentProfile]);
+
+  // Crossfade transition when profile changes
+  useEffect(() => {
+    if (currentProfile?.id !== displayProfile?.id) {
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }).start(() => {
+        setDisplayProfile(currentProfile);
+        setDisplayUserName(currentProfile?.full_name?.split(' ')[0] || Strings.dashboard.defaultName);
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }).start();
+      });
+    } else {
+      setDisplayProfile(currentProfile);
+      setDisplayUserName(currentProfile?.full_name?.split(' ')[0] || Strings.dashboard.defaultName);
+      fadeAnim.setValue(1);
+    }
+  }, [currentProfile?.id]);
+
+  const hasSubAccounts = familyMembers && familyMembers.length > 1;
+
+  const openDropdown = () => {
+    if (!hasSubAccounts) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsOpen(true);
+    Animated.parallel([
+      Animated.timing(dropdownOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.spring(dropdownScale, { toValue: 1, tension: 80, friction: 8, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const closeDropdown = () => {
+    Animated.parallel([
+      Animated.timing(dropdownOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
+      Animated.spring(dropdownScale, { toValue: 0.9, tension: 80, friction: 8, useNativeDriver: true }),
+    ]).start(() => setIsOpen(false));
+  };
+
+  const handleSwitch = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    closeDropdown();
+    if (id !== currentProfile?.id) {
+      switchProfile(id);
+    }
+  };
+
+  return (
+    <View style={{ zIndex: 100 }}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.iconCircle}>
+          <NotificationBell />
+        </TouchableOpacity>
+
+        <Animated.View style={[styles.headerTextWrap, { opacity: fadeAnim }]}>
+          <Text style={styles.greeting}>صباح الخير، {displayUserName}</Text>
+          <Text style={styles.subGreeting}>لنكمل رحلتك الغذائية اليوم.</Text>
+        </Animated.View>
+
+        <TouchableOpacity 
+          activeOpacity={hasSubAccounts ? 0.7 : 1}
+          onPress={openDropdown}
+          style={[styles.avatarButton, !hasSubAccounts && { opacity: 0.6 }]}
+        >
+          <Animated.View style={[styles.avatarPlaceholder, { opacity: fadeAnim }]}>
+            {displayProfile?.id && avatarUrls[displayProfile.id] ? (
+              <Image source={{ uri: avatarUrls[displayProfile.id] }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarInitial}>{displayUserName?.charAt(0)}</Text>
+            )}
+          </Animated.View>
+          {hasSubAccounts && (
+            <View style={styles.dropdownBadge}>
+              <Ionicons name="chevron-down" size={10} color="#FFFFFF" />
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <Modal visible={isOpen} transparent animationType="none">
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={closeDropdown}>
+          <Animated.View style={[
+            styles.dropdownMenu,
+            { opacity: dropdownOpacity, transform: [{ scale: dropdownScale }] }
+          ]}>
+            <Text style={styles.dropdownTitle}>تبديل الحساب</Text>
+            {familyMembers?.map((member: any) => {
+              const isActive = member.id === currentProfile?.id;
+              const isMain = !member.manager_id;
+              const roleText = isMain ? "الحساب الرئيسي" : "حساب تابع";
+              return (
+                <TouchableOpacity 
+                  key={member.id} 
+                  style={[styles.dropdownItem, isActive && styles.dropdownItemActive]}
+                  onPress={() => handleSwitch(member.id)}
+                >
+                  <View style={styles.dropdownAvatarWrap}>
+                    {avatarUrls[member.id] ? (
+                       <Image source={{ uri: avatarUrls[member.id] }} style={styles.dropdownAvatar} />
+                    ) : (
+                       <View style={styles.dropdownAvatarPlaceholder}>
+                         <Text style={styles.dropdownAvatarInitial}>{member.full_name?.charAt(0)}</Text>
+                       </View>
+                    )}
+                  </View>
+                  <View style={styles.dropdownItemContent}>
+                    <Text style={styles.dropdownItemName}>{member.full_name}</Text>
+                    <Text style={styles.dropdownItemRole}>{roleText}</Text>
+                  </View>
+                  {isActive && <View style={styles.activeProfileBadge} />}
+                </TouchableOpacity>
+              );
+            })}
+          </Animated.View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+});
+
 export default function MainDashboardView() {
-  const { currentProfile } = useFamily();
+  const { currentProfile, familyMembers, switchProfile } = useFamily();
   const userId = currentProfile?.id;
   const insets = useSafeAreaInsets();
 
@@ -64,8 +254,7 @@ export default function MainDashboardView() {
     if (!userId) return;
     try {
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayStr = today.toISOString().split('T')[0];
+      const todayStr = getLocalDateString(today);
 
       // 🚀 Parallelize streak fetching — 🔴 CF-01 FIX: now through executeQuery
       // 🔴 SCHEMA FIX: column is `date` (not `log_date`) and `completed_tasks` (jsonb[]) instead of `all_tasks_completed`
@@ -83,25 +272,14 @@ export default function MainDashboardView() {
         supabase.from('plans')
           .select('id, user_id, title, status, start_date, created_at')
           .eq('user_id', userId)
+          .neq('plan_type', 'workout')
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
         { isIdempotent: true }
       );
 
-      // ✅ BUG-01: لو مفيش خطة + ده حساب فرعي → جرب خطة المدير
-      if (!activePlan && currentProfile?.manager_id) {
-        const { data: managerPlan } = await executeQuery<Plan | null>(
-          supabase.from('plans')
-            .select('id, user_id, title, status, start_date, created_at')
-            .eq('user_id', currentProfile.manager_id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle(),
-          { isIdempotent: true }
-        );
-        activePlan = managerPlan;
-      }
+
 
       let finalTasks: PlanTask[] = [];
 
@@ -109,7 +287,9 @@ export default function MainDashboardView() {
         setPlan(activePlan as Plan);
         
         // 🚀 Parallelize Tasks & Logs fetching
-        const [tasksRes, logsRes] = await Promise.all([
+        // daily_task_logs uses raw Supabase (no timeout wrapper) — executeQuery's 15s timeout
+        // causes false empty results on slow Expo Go / debug network connections.
+        const [tasksRes, logsRaw] = await Promise.all([
           executeQuery<PlanTask[]>(
             supabase.from('plan_tasks')
               .select('id, plan_id, day_name, content, task_type, is_completed, order_index')
@@ -117,17 +297,14 @@ export default function MainDashboardView() {
               .order('order_index', { ascending: true }),
             { isIdempotent: true }
           ),
-          executeQuery<{ task_id: string; is_completed: boolean }[]>(
-            supabase.from('daily_task_logs')
-              .select('task_id, is_completed')
-              .eq('user_id', userId)
-              .eq('log_date', todayStr),
-            { isIdempotent: true }
-          ),
+          supabase.from('daily_task_logs')
+            .select('task_id, is_completed')
+            .eq('user_id', userId)
+            .eq('log_date', todayStr),
         ]);
 
-        const allTasks = tasksRes.data;
-        const logData = logsRes.data;
+        const allTasks = (tasksRes.data || []).filter(t => t.task_type !== 'workout');
+        const logData = logsRaw.data;
 
         if (allTasks && allTasks.length > 0) {
           const startDate = new Date(activePlan.start_date || activePlan.created_at);
@@ -201,7 +378,7 @@ export default function MainDashboardView() {
     } finally {
       setLoading(false);
     }
-  }, [userId, currentProfile?.manager_id]);
+  }, [userId]);
 
   // Load cached dashboard data
   const loadCachedData = useCallback(async () => {
@@ -231,34 +408,59 @@ export default function MainDashboardView() {
     });
   }, [fetchDashboardData, loadCachedData]);
 
+  // ✅ Synchronize screen when focused
+  useFocusEffect(
+    useCallback(() => {
+      if (userId) {
+        fetchDashboardData();
+      }
+    }, [userId, fetchDashboardData])
+  );
+
   const onRefresh = useCallback(async () => {
-    setRefreshing(true); await fetchDashboardData(); setRefreshing(false);
-  }, [fetchDashboardData]);
+    setRefreshing(true);
+    // Clear stale cache so old is_completed values don't flash during fetch
+    await AppCache.invalidate(`dashboard_${userId}`);
+    await fetchDashboardData();
+    setRefreshing(false);
+  }, [fetchDashboardData, userId]);
 
   const pendingTaskIds = useRef(new Set<string>());
 
   const toggleTask = useCallback(async (taskId: string, currentStatus: boolean) => {
     if (pendingTaskIds.current.has(taskId)) return;
     pendingTaskIds.current.add(taskId);
-    
+
+    const newStatus = !currentStatus;
+    const todayStr = getLocalDateString();
+
+    // Trigger LayoutAnimation for smooth UI transitions
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+
+    // Optimistic UI update
+    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, is_completed: newStatus } : t);
+    setTasks(updatedTasks);
+
+    await Haptics.impactAsync(newStatus ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
+
     try {
-      const newStatus = !currentStatus;
-      const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, is_completed: newStatus } : t);
-      setTasks(updatedTasks);
-      // Update cache
-      await AppCache.set(`dashboard_${userId}`, {
-        plan,
-        tasks: updatedTasks,
-        streak
-      });
-      await Haptics.impactAsync(newStatus ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
-      
-      const todayStr = new Date().toISOString().split('T')[0];
+      // Write to daily_task_logs via OfflineQueue (uses executeQuery internally)
       await OfflineQueue.addMutation('task_toggle', userId!, {
         taskId,
         isCompleted: newStatus,
         logDate: todayStr
       });
+
+      // Only persist cache AFTER the mutation is queued/synced so cache matches DB
+      await AppCache.set(`dashboard_${userId}`, {
+        plan,
+        tasks: updatedTasks,
+        streak
+      });
+    } catch (err) {
+      // Revert optimistic update on failure
+      logger.error('[toggleTask] Failed:', err);
+      setTasks(tasks);
     } finally {
       pendingTaskIds.current.delete(taskId);
     }
@@ -276,119 +478,6 @@ export default function MainDashboardView() {
     }).start();
   }, [progress]);
 
-  // 🔴 AUDIT FIX: renderItem مع useCallback لتحسين أداء القائمة
-  const renderTaskItem = useCallback(({ item: task }: { item: PlanTask }) => {
-    const meta = getTaskMeta(task);
-    return (
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={() => toggleTask(task.id, task.is_completed)}
-        style={[styles.taskRowCard, task.is_completed && styles.taskRowCardCompleted]}
-      >
-        {/* 1. الأيقونة على اليمين (في الـ RTL) */}
-        <View style={[styles.taskIconBox, { backgroundColor: task.is_completed ? '#F3F4F6' : meta.bg }]}>
-          <Ionicons name={meta.icon as any} size={26} color={task.is_completed ? '#9CA3AF' : meta.color} />
-        </View>
-
-        {/* 2. المحتوى في المنتصف */}
-        <View style={styles.taskContentWrap}>
-          <Text style={[styles.taskTypeTitle, task.is_completed && { color: '#9CA3AF' }]}>
-            {meta.title}
-          </Text>
-          <Text style={[styles.taskDesc, task.is_completed && styles.textCompleted]} numberOfLines={2}>
-            {task.content}
-          </Text>
-        </View>
-
-        {/* 3. دائرة التحقق على اليسار */}
-        <View style={styles.taskCheckWrap}>
-          {task.is_completed ? (
-            <Ionicons name="checkmark-circle" size={32} color={AppColors.success} />
-          ) : (
-            <Ionicons name="ellipse-outline" size={32} color="#D1D5DB" />
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  }, [toggleTask]);
-
-  const keyExtractor = useCallback((item: PlanTask) => item.id, []);
-
-  // 🔴 AUDIT FIX: ListHeaderComponent — العناصر الثابتة فوق القائمة
-  const ListHeader = useCallback(() => (
-    <>
-      {/* 🔥 Header */}
-      <View style={styles.header}>
-        <View style={styles.avatarPlaceholder}>
-          <Ionicons name="person" size={24} color="#FFF" />
-        </View>
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.greeting}>{Strings.dashboard.greeting(userName)}</Text>
-          <Text style={styles.subGreeting}>{getFormattedDate()}</Text>
-        </View>
-        <TouchableOpacity style={styles.iconCircle}>
-          <NotificationBell />
-        </TouchableOpacity>
-      </View>
-
-      {/* 🔥 Premium Hero Progress Card */}
-      <View style={styles.heroCard}>
-        <View style={styles.heroHeader}>
-          <View>
-            <Text style={styles.heroTitle}>{Strings.dashboard.todayPlan}</Text>
-            <Text style={styles.heroSubtitle}>{plan?.title || Strings.dashboard.activePlan}</Text>
-          </View>
-          <View style={styles.streakBadge}>
-            <Ionicons name="flame" size={16} color={AppColors.accent} />
-            <Text style={styles.streakBadgeText}>{Strings.dashboard.daysStreak(streak)}</Text>
-          </View>
-        </View>
-
-        <View style={styles.progressWrap}>
-          <View style={styles.progressHeader}>
-            <Text style={styles.progressPercent}>{progress}%</Text>
-            <Text style={styles.progressLabel}>{Strings.dashboard.taskCount(completedCount, tasks.length)}</Text>
-          </View>
-          <View style={styles.progressBarBg}>
-            <Animated.View
-              style={[
-                styles.progressBarFill,
-                {
-                  width: progressAnim.interpolate({
-                    inputRange: [0, 100],
-                    outputRange: ['0%', '100%'],
-                    extrapolate: 'clamp',
-                  }),
-                },
-              ]}
-            />
-          </View>
-        </View>
-
-        {progress === 100 && tasks.length > 0 && (
-          <View style={styles.celebrationBanner}>
-            <Ionicons name="checkmark-circle" size={18} color="#FFF" />
-            <Text style={styles.celebrationText}>{Strings.dashboard.allComplete}</Text>
-          </View>
-        )}
-        <View style={styles.heroDecoration} />
-      </View>
-
-      <Text style={styles.sectionTitle}>{Strings.dashboard.dailyMap}</Text>
-    </>
-  ), [userName, plan, streak, progress, completedCount, tasks.length, progressAnim]);
-
-  // 🔴 AUDIT FIX: ListEmptyComponent — حالة فارغة بنفس ارتفاع القائمة لمنع القفز البصري
-  const ListEmpty = useCallback(() => (
-    <View style={styles.emptyState}>
-      <View style={styles.emptyStateIconWrap}>
-        <Ionicons name="cafe-outline" size={50} color={AppColors.primary} />
-      </View>
-      <Text style={styles.emptyTitle}>{Strings.dashboard.restDay}</Text>
-      <Text style={styles.emptySub}>{randomQuote}</Text>
-    </View>
-  ), [randomQuote]);
-
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -402,26 +491,197 @@ export default function MainDashboardView() {
     );
   }
 
+  // Purely sequential meal extraction directly from backend tasks data
+  const uncompletedTasks = tasks.filter(t => !t.is_completed);
+  const currentMealTask = uncompletedTasks.length > 0 ? uncompletedTasks[0] : null;
+  const nextMealTask = uncompletedTasks.length > 1 ? uncompletedTasks[1] : null;
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* ✅ UX-06: بانر يُشير للحساب الفرعي النشط */}
+      {/* sub-account banner */}
       {currentProfile?.manager_id && (
         <View style={styles.subAccountBanner}>
           <Ionicons name="swap-horizontal" size={16} color="#FFF" />
           <Text style={styles.subAccountBannerText}>{Strings.dashboard.subAccountViewing(currentProfile.full_name)}</Text>
         </View>
       )}
-      {/* 🔴 AUDIT FIX: FlatList بدل ScrollView + .map() — يدعم إعادة تدوير العناصر */}
-      <FlatList
-        data={tasks}
-        renderItem={renderTaskItem}
-        keyExtractor={keyExtractor}
-        ListHeaderComponent={ListHeader}
-        ListEmptyComponent={ListEmpty}
+
+      <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[AppColors.primary]} />}
-      />
+      >
+        {/* 1. Header with Account Switcher */}
+        <AccountSwitcherHeader 
+          currentProfile={currentProfile}
+          familyMembers={familyMembers}
+          switchProfile={switchProfile}
+          userName={userName}
+        />
+
+        {tasks.length > 0 ? (
+          <>
+            {/* 2. Daily Progress Card */}
+            <View style={styles.progressCard}>
+              <View style={styles.progressHeader}>
+                <View style={styles.progressHeaderLeft}>
+                  <Text style={styles.progressTitle}>رحلة اليوم</Text>
+                  <Text style={styles.progressSubtitle}>
+                    {completedCount} من {tasks.length} وجبات مكتملة
+                  </Text>
+                </View>
+                <Text style={styles.progressPercent}>{progress}%</Text>
+              </View>
+              <View style={styles.progressBarBg}>
+                <Animated.View
+                  style={[
+                    styles.progressBarFill,
+                    {
+                      width: progressAnim.interpolate({
+                        inputRange: [0, 100],
+                        outputRange: ['0%', '100%'],
+                        extrapolate: 'clamp',
+                      }),
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+
+            {/* 3. Current Meal Card / Celebration Card */}
+            {currentMealTask ? (
+              <View style={styles.currentMealCard}>
+                <View style={styles.currentMealHeader}>
+                  <Ionicons name="restaurant" size={16} color="#FD761C" style={{ marginLeft: 6 }} />
+                  <Text style={styles.currentMealSubtitle}>الوجبة الحالية</Text>
+                </View>
+
+                <Text style={styles.currentMealTitle}>
+                  {getTaskMeta(currentMealTask).title}
+                </Text>
+
+                {/* Max-height scrollable bullet list of components (Simple bullets, no checkboxes) */}
+                <View style={styles.mealScrollWrapper}>
+                  <ScrollView nestedScrollEnabled={true} showsVerticalScrollIndicator={false}>
+                    {parseMealComponents(currentMealTask.content).map((component, idx) => (
+                      <View key={idx} style={styles.bulletRow}>
+                        <View style={styles.bulletDot} />
+                        <Text style={styles.bulletText}>{component}</Text>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                {/* Fixed CTA button */}
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => toggleTask(currentMealTask.id, currentMealTask.is_completed)}
+                  style={styles.ctaButton}
+                >
+                  <Ionicons name="checkmark-circle" size={20} color="#FFF" style={{ marginLeft: 8 }} />
+                  <Text style={styles.ctaButtonText}>تم تناول الوجبة</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              // 4. Celebration Card when all meals completed
+              <View style={styles.celebrationCard}>
+                <Ionicons name="trophy-outline" size={48} color="#10B981" style={{ marginBottom: 12 }} />
+                <Text style={styles.celebrationTitle}>أحسنت!</Text>
+                <Text style={styles.celebrationSubtitle}>لقد أنهيت جميع وجبات اليوم.</Text>
+                <View style={styles.celebrationDivider} />
+                <Text style={styles.celebrationMotivational}>{randomQuote}</Text>
+              </View>
+            )}
+
+            {/* 5. Next Meal / Streak Grid */}
+            <View style={styles.gridRow}>
+              {/* Next Meal Card */}
+              <View style={[styles.gridCard, styles.nextMealCard]}>
+                <Text style={styles.gridLabel}>التالي</Text>
+                <Text style={styles.gridValue} numberOfLines={1}>
+                  {nextMealTask ? getTaskMeta(nextMealTask).title : 'لا يوجد وجبات متبقية'}
+                </Text>
+              </View>
+
+              {/* Streak Card */}
+              <View style={styles.gridCard}>
+                <View style={styles.streakHeader}>
+                  <Ionicons name="flame" size={18} color="#FD761C" style={{ marginLeft: 4 }} />
+                  <Text style={styles.gridLabel}>الالتزام</Text>
+                </View>
+                <Text style={styles.gridValue}>
+                  {streak} أيام متتالية
+                </Text>
+              </View>
+            </View>
+
+            {/* 6. Today's Journey Grouped Card */}
+            <View style={styles.journeyWrapper}>
+              <Text style={styles.journeySectionTitle}>خريطة اليوم</Text>
+              <View style={styles.journeyGroupCard}>
+                {tasks.map((task, idx) => {
+                  const meta = getTaskMeta(task);
+                  const isCurrent = currentMealTask?.id === task.id;
+
+                  return (
+                    <View key={task.id}>
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => toggleTask(task.id, task.is_completed)}
+                        style={styles.journeyRow}
+                      >
+                        {/* 1. Active Orange Bar indicator on the rightmost edge of the row */}
+                        {isCurrent && <View style={styles.activeSideBar} />}
+
+                        {/* 2. Meal Name (aligned to the right) */}
+                        <View style={styles.journeyContentWrap}>
+                          <Text
+                            style={[
+                              styles.journeyMealName,
+                              task.is_completed && styles.journeyMealNameCompleted,
+                              isCurrent && styles.journeyMealNameActive
+                            ]}
+                          >
+                            {meta.title}
+                          </Text>
+                        </View>
+
+                        {/* 3. Badge "الوجبة الحالية" */}
+                        {isCurrent && (
+                          <View style={styles.activeBadge}>
+                            <Text style={styles.activeBadgeText}>الوجبة الحالية</Text>
+                          </View>
+                        )}
+
+                        {/* 4. Checkbox Circle on the far left */}
+                        <View style={styles.journeyCheckWrap}>
+                          {task.is_completed ? (
+                            <Ionicons name="checkmark-circle" size={24} color={AppColors.success} />
+                          ) : (
+                            <Ionicons name="ellipse-outline" size={24} color="#D1D5DB" />
+                          )}
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Divider */}
+                      {idx < tasks.length - 1 && <View style={styles.journeyDivider} />}
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          </>
+        ) : (
+          // Empty State
+          <View style={styles.emptyState}>
+            <View style={styles.emptyStateIconWrap}>
+              <Ionicons name="cafe-outline" size={50} color="#12362E" />
+            </View>
+            <Text style={styles.emptyTitle}>{Strings.dashboard.restDay}</Text>
+            <Text style={styles.emptySub}>{randomQuote}</Text>
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -430,71 +690,507 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: AppColors.background },
   scrollContent: { paddingHorizontal: 24, paddingTop: 10 },
 
-  // Header
-  header: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
-  avatarPlaceholder: { width: 50, height: 50, borderRadius: 25, backgroundColor: AppColors.primary, justifyContent: 'center', alignItems: 'center' },
-  headerTextWrap: { flex: 1, alignItems: 'center' },
-  greeting: { fontSize: 22, fontWeight: '900', color: AppColors.textPrimary },
-  subGreeting: { fontSize: 14, color: AppColors.textSecondary, marginTop: 2, fontWeight: '600' },
-  iconCircle: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#F3F4F6' },
-
-  // Hero Card (Dark Green + Orange Accents)
-  heroCard: { backgroundColor: AppColors.primary, borderRadius: 30, padding: 25, marginBottom: 35, position: 'relative', overflow: 'hidden', elevation: 4, shadowColor: AppColors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 15 },
-  heroHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'flex-start', zIndex: 2 },
-  heroTitle: { fontSize: 24, fontWeight: '900', color: '#FFF', textAlign: 'right' },
-  heroSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 4, textAlign: 'right', fontWeight: 'bold' },
-  streakBadge: { flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: 'rgba(249, 115, 22, 0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  streakBadgeText: { color: AppColors.accent, fontSize: 13, fontWeight: 'bold', marginRight: 6 },
-
-  progressWrap: { marginTop: 35, zIndex: 2 },
-  progressHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 },
-  progressPercent: { color: '#FFF', fontSize: 36, fontWeight: '900' },
-  progressLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: 'bold' },
-  progressBarBg: { height: 10, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, overflow: 'hidden' },
-  progressBarFill: { height: '100%', backgroundColor: AppColors.accent, borderRadius: 10 },
-
-  celebrationBanner: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 12, marginTop: 20, zIndex: 2 },
-  celebrationText: { color: '#FFF', fontWeight: 'bold', fontSize: 14, marginRight: 8 },
-  heroDecoration: { position: 'absolute', left: -40, top: -40, width: 160, height: 160, borderRadius: 80, backgroundColor: 'rgba(255,255,255,0.05)', zIndex: 1 },
-
-  sectionTitle: { fontSize: 22, fontWeight: '900', color: AppColors.textPrimary, textAlign: 'right', marginBottom: 20 },
-
-  // 🔥 Horizontal Tasks List (كروت عريضة)
-  tasksList: { paddingBottom: 10 },
-  taskRowCard: {
-    flexDirection: 'row-reverse', // أيقونة يمين، تفاصيل في النص، صح على الشمال
-    backgroundColor: '#FFF',
-    borderRadius: 24,
-    padding: 18,
-    marginBottom: 16,
+  // Header Styles
+  header: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'transparent',
+    marginBottom: 24,
+    paddingTop: 8,
+  },
+  avatarButton: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#2A4D44',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  avatarInitial: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  dropdownBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#F26E11',
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: AppColors.background,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+    paddingTop: Platform.OS === 'ios' ? 100 : 70,
+    paddingHorizontal: 24,
+  },
+  dropdownMenu: {
+    width: 260,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  dropdownTitle: {
+    fontSize: 14,
+    color: '#717975',
+    fontWeight: '600',
+    textAlign: 'left', // Aligns physically to the right in RTL mode
+    marginBottom: 12,
+    paddingRight: 8,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 12,
+    borderRadius: 16,
+    marginBottom: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  dropdownItemActive: {
+    backgroundColor: '#F9F8F3',
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+  },
+  dropdownItemContent: {
+    flex: 1,
+  },
+  dropdownItemName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#121C2A',
+    textAlign: 'left', // Aligns physically to the right in RTL mode
+  },
+  dropdownItemRole: {
+    fontSize: 12,
+    color: '#717975',
+    textAlign: 'left', // Aligns physically to the right in RTL mode
+    marginTop: 2,
+  },
+  dropdownAvatarWrap: {
+    position: 'relative',
+    width: 44,
+    height: 44,
+  },
+  dropdownAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  dropdownAvatarPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#2A4D44',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dropdownAvatarInitial: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  activeProfileBadge: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#10B981',
+  },
+  headerTextWrap: {
+    flex: 1,
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+  },
+  greeting: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#121C2A',
+    textAlign: 'left', // Aligns physically to the right in RTL mode
+  },
+  subGreeting: {
+    fontSize: 13,
+    color: '#717975',
+    marginTop: 2,
+    textAlign: 'left', // Aligns physically to the right in RTL mode
+  },
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+
+  // Progress Card Styles
+  progressCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
     elevation: 2,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5
   },
-  taskRowCardCompleted: {
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  progressHeaderLeft: {
+    alignItems: 'flex-start',
+  },
+  progressTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#717975',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  progressSubtitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#121C2A',
+    marginTop: 4,
+  },
+  progressPercent: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FD761C',
+  },
+  progressBarBg: {
+    height: 8,
+    backgroundColor: '#EFF4FF',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#FD761C',
+    borderRadius: 4,
+  },
+
+  // Current Meal Card Styles (Dark Green Palette)
+  currentMealCard: {
+    backgroundColor: '#2A4D44',
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 4,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  currentMealHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  currentMealSubtitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#97BDB1',
+  },
+  currentMealTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'left', // Aligns physically to the right in RTL mode
+    marginBottom: 16,
+  },
+  mealScrollWrapper: {
+    maxHeight: 140,
+    marginBottom: 24,
+  },
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingRight: 4,
+  },
+  bulletDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FD761C',
+    marginHorizontal: 10,
+  },
+  bulletText: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.9)',
+    textAlign: 'left', // Aligns physically to the right in RTL mode
+    flex: 1,
+  },
+  ctaButton: {
+    height: 54,
+    borderRadius: 20,
+    backgroundColor: '#FD761C',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  ctaButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  // Celebration Card Styles
+  celebrationCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 28,
+    marginBottom: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
+    borderWidth: 1.5,
+    borderColor: '#D1FAE5',
+  },
+  celebrationTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#10B981',
+    marginBottom: 6,
+  },
+  celebrationSubtitle: {
+    fontSize: 15,
+    color: '#4B5563',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  celebrationDivider: {
+    width: 60,
+    height: 2,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 16,
+  },
+  celebrationMotivational: {
+    fontSize: 13,
+    color: '#717975',
+    textAlign: 'center',
+    lineHeight: 18,
+    fontStyle: 'italic',
+  },
+
+  // Next Meal / Streak Grid Styles
+  gridRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+    gap: 16,
+  },
+  gridCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
+    alignItems: 'flex-start',
+  },
+  nextMealCard: {
+    borderRightWidth: 4,
+    borderRightColor: '#FD761C',
+  },
+  streakHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  gridLabel: {
+    fontSize: 12,
+    color: '#717975',
+    fontWeight: '600',
+  },
+  gridValue: {
+    fontSize: 16,
+    color: '#121C2A',
+    fontWeight: '700',
+    marginTop: 6,
+  },
+
+  // Today's Journey Card Styles
+  journeyWrapper: {
+    marginBottom: 24,
+  },
+  journeySectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#121C2A',
+    textAlign: 'left', // Aligns physically to the right in RTL mode
+    marginBottom: 12,
+    paddingRight: 4,
+  },
+  journeyGroupCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
+    overflow: 'hidden',
+  },
+  journeyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    position: 'relative',
+  },
+  journeyRowActive: {
     backgroundColor: '#F9FAFB',
-    borderColor: '#F3F4F6',
-    elevation: 0,
-    shadowOpacity: 0
   },
-  taskIconBox: { width: 56, height: 56, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginLeft: 15 },
+  activeSideBar: {
+    position: 'absolute',
+    right: 0,
+    top: '25%',
+    bottom: '25%',
+    width: 4,
+    backgroundColor: '#FD761C',
+    borderTopLeftRadius: 4,
+    borderBottomLeftRadius: 4,
+  },
+  journeyContentWrap: {
+    flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  journeyMealName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#121C2A',
+    textAlign: 'left', // Aligns physically to the right in RTL mode
+  },
+  journeyMealNameCompleted: {
+    textDecorationLine: 'line-through',
+    color: '#9CA3AF',
+    opacity: 0.6,
+  },
+  journeyMealNameActive: {
+    fontWeight: '700',
+    color: '#12362E',
+  },
+  activeBadge: {
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FFE0C2',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginLeft: 12,
+  },
+  activeBadgeText: {
+    color: '#FD761C',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  journeyCheckWrap: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  journeyDivider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: 16,
+  },
 
-  taskContentWrap: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
-  taskTypeTitle: { fontSize: 14, fontWeight: '900', color: '#4B5563', marginBottom: 4 },
-  taskDesc: { fontSize: 16, fontWeight: '800', color: AppColors.textPrimary, textAlign: 'right', lineHeight: 24 },
-  textCompleted: { textDecorationLine: 'line-through', color: '#9CA3AF' },
+  // Empty State Styles
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 40,
+    borderRadius: 24,
+    marginTop: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  emptyStateIconWrap: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#E8F3F1',
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#121C2A',
+  },
+  emptySub: {
+    fontSize: 14,
+    color: '#717975',
+    marginTop: 8,
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 
-  taskCheckWrap: { marginRight: 0, marginLeft: 15, justifyContent: 'center', alignItems: 'center' },
-
-  // Empty State
-  emptyState: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF', padding: 40, borderRadius: 35, marginTop: 10, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10 },
-  emptyStateIconWrap: { width: 90, height: 90, backgroundColor: AppColors.primaryLight, borderRadius: 45, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-  emptyTitle: { fontSize: 22, fontWeight: '900', color: AppColors.textPrimary },
-  emptySub: { fontSize: 15, color: AppColors.textSecondary, marginTop: 8, fontWeight: '600', textAlign: 'center', lineHeight: 22 },
-
-  // ✅ UX-06: Sub-account banner
-  subAccountBanner: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: AppColors.accent, paddingVertical: 8, paddingHorizontal: 15 },
-  subAccountBannerText: { color: '#FFF', fontSize: 13, fontWeight: '900' },
+  // sub-account banner
+  subAccountBanner: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FD761C',
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+  },
+  subAccountBannerText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
 });
+

@@ -65,10 +65,10 @@ export default function PaywallView() {
           <View style={styles.featuresList}>
             {features.map((feature, index) => (
               <View key={index} style={styles.featureItem}>
-                <Text style={styles.featureLabel}>{feature.label}</Text>
                 <View style={[styles.featureIconBox, { backgroundColor: `${feature.color}15` }]}>
                   <Ionicons name={feature.icon as any} size={18} color={feature.color} />
                 </View>
+                <Text style={styles.featureLabel}>{feature.label}</Text>
               </View>
             ))}
           </View>
@@ -77,10 +77,10 @@ export default function PaywallView() {
 
           {/* معلومة إضافية */}
           <View style={styles.extraInfoRow}>
+            <Ionicons name="people-outline" size={16} color={AppColors.textSecondary} />
             <Text style={styles.extraInfoText}>
               + {SubscriptionConfig.formatPrice(SubscriptionConfig.PER_MEMBER)} لكل فرد إضافي من العائلة
             </Text>
-            <Ionicons name="people-outline" size={16} color={AppColors.textSecondary} />
           </View>
         </View>
 
@@ -88,11 +88,11 @@ export default function PaywallView() {
         <TouchableOpacity
           style={styles.subscribeBtn}
           activeOpacity={0.85}
-          onPress={() => router.push('/subscriptions')}
+          onPress={() => router.push('/subscription-management')}
         >
-          <Ionicons name="arrow-back" size={20} color="#FFF" />
-          <Text style={styles.subscribeBtnText}>ابدأ الاشتراك الآن</Text>
           <Ionicons name="rocket" size={20} color="#FFF" />
+          <Text style={styles.subscribeBtnText}>ابدأ الاشتراك الآن</Text>
+          <Ionicons name="arrow-back" size={20} color="#FFF" />
         </TouchableOpacity>
 
         {/* ملاحظة أسفلية */}
@@ -223,9 +223,9 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   featureItem: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
     gap: 12,
   },
   featureLabel: {
@@ -243,9 +243,9 @@ const styles = StyleSheet.create({
 
   // Extra Info
   extraInfoRow: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
     gap: 6,
   },
   extraInfoText: {
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
 
   // Subscribe Button
   subscribeBtn: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: AppColors.primary,

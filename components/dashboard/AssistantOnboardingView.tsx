@@ -156,7 +156,7 @@ export default function AssistantOnboardingView() {
       [
         { text: "لا", style: "cancel" },
         {
-          text: "نعم، تم ✅",
+          text: "نعم، تم",
           onPress: () => {
             setManuallyCompleted(prev => ({ ...prev, [stepId]: true }));
           },
@@ -203,7 +203,7 @@ export default function AssistantOnboardingView() {
             <Ionicons name="rocket" size={36} color={AppColors.primary} />
           </View>
           <Text style={styles.heroTitle}>
-            مرحباً {userName}! 🎉
+            مرحباً {userName}!
           </Text>
           <Text style={styles.heroSubtitle}>
             تم تفعيل اشتراكك بنجاح! أكمل الخطوات التالية عشان الكوتش يقدر يصمملك خطتك الشخصية.
@@ -256,7 +256,7 @@ export default function AssistantOnboardingView() {
                     {step.title}
                   </Text>
                   <Text style={[styles.stepSubtitle, isDone && styles.stepSubtitleDone]}>
-                    {isDone ? 'تم إكمال هذه الخطوة ✅' : step.subtitle}
+                    {isDone ? 'تم إكمال هذه الخطوة' : step.subtitle}
                   </Text>
                 </View>
 

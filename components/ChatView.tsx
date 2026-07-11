@@ -85,19 +85,11 @@ export default function ChatView({
         <View style={styles.chatHeader}>
           {showBackButton && onBack && (
             <TouchableOpacity onPress={onBack} style={styles.backBtn} accessibilityLabel={Strings.common.back} accessibilityRole="button">
-              <Ionicons name="arrow-back" size={24} color={AppColors.textPrimary} />
+              <Ionicons name="arrow-forward" size={24} color={AppColors.textPrimary} />
             </TouchableOpacity>
           )}
           <View style={styles.headerTitleBox}>
             <Text style={styles.chatHeaderTitle}>{headerTitle}</Text>
-            {lastSeen && (
-              <Text style={{ fontSize: 11, color: AppColors.textMuted, marginTop: 2, fontWeight: 'bold' }}>
-                {Strings.chat.lastSeen} {new Date(lastSeen).toLocaleDateString('ar-EG')} {new Date(lastSeen).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-            )}
-          </View>
-          <View style={[styles.headerAvatar, { backgroundColor: headerIconBg }]}>
-            <Ionicons name={headerIcon as keyof typeof Ionicons.glyphMap} size={20} color={headerIconColor} />
           </View>
         </View>
 
@@ -218,9 +210,8 @@ const styles = StyleSheet.create({
   chatContainer: { flex: 1, backgroundColor: AppColors.inputBg },
   chatHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: AppColors.surface, padding: 15, borderBottomWidth: 1, borderBottomColor: AppColors.border, elevation: 2 },
   backBtn: { padding: 5 },
-  headerTitleBox: { alignItems: 'flex-end', flex: 1, paddingRight: 15 },
-  chatHeaderTitle: { fontSize: 18, fontWeight: 'bold', color: AppColors.textPrimary },
-  headerAvatar: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  headerTitleBox: { alignItems: 'flex-start', flex: 1, paddingRight: 15 },
+  chatHeaderTitle: { fontSize: 18, fontWeight: 'bold', color: AppColors.textPrimary, textAlign: 'left' },
 
   messagesArea: { flex: 1 },
   emptyStateContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 40, paddingHorizontal: 20, transform: [{ scaleY: -1 }] },
@@ -228,9 +219,9 @@ const styles = StyleSheet.create({
   emptyStateSubtext: { fontSize: 14, color: AppColors.textMuted, marginTop: 5 },
 
   inputArea: { backgroundColor: AppColors.surface, borderTopWidth: 1, borderTopColor: AppColors.border, flexDirection: 'column' },
-  previewBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10, backgroundColor: AppColors.inputBg, margin: 10, borderRadius: 10 },
+  previewBox: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', padding: 10, backgroundColor: AppColors.inputBg, margin: 10, borderRadius: 10 },
   previewText: { fontSize: 12, color: AppColors.textPrimary, flex: 1, textAlign: 'right', marginRight: 10 },
-  inputRow: { flexDirection: 'row', alignItems: 'center', padding: 10, paddingHorizontal: 15 },
+  inputRow: { flexDirection: 'row-reverse', alignItems: 'center', padding: 10, paddingHorizontal: 15 },
   iconBtn: { padding: 5 },
   textInput: { flex: 1, backgroundColor: AppColors.inputBg, minHeight: 45, maxHeight: 100, borderRadius: 25, paddingHorizontal: 15, paddingTop: 12, textAlign: 'right', fontSize: 15, marginHorizontal: 10 },
   sendBtn: { width: 45, height: 45, backgroundColor: AppColors.primary, borderRadius: 25, justifyContent: 'center', alignItems: 'center' },

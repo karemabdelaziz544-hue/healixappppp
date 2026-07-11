@@ -1,313 +1,149 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, RefreshControl } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Pressable, RefreshControl, Animated } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../src/lib/supabase';
-import { executeQuery } from '../src/lib/apiClient';
-import { logger } from '../src/lib/logger';
 import { useFamily } from '../src/context/FamilyContext';
 import { useRouter } from 'expo-router';
-import * as DocumentPicker from 'expo-document-picker';
-import * as ImagePicker from 'expo-image-picker';
 import Skeleton from '../components/Skeleton';
-import type { PaymentRequest } from '../src/types';
 import { SubscriptionConfig } from '../constants/subscriptionConfig';
-import { showToast } from '../components/AppToast';
+import { useSubscriptionData } from '../src/features/subscriptions/hooks/useSubscriptionData';
 
-// 🔴 CF-02 FIX: File validation constants
-const MAX_RECEIPT_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_RECEIPT_TYPES = ['image/jpeg', 'image/png', 'image/heic', 'image/webp', 'application/pdf'];
+// ─── Design System Colors ───
+const C = {
+  primary: '#12362e',
+  primaryContainer: '#2A4D44',
+  brandOrange: '#F26E11',
+  success: '#10B981',
+  error: '#ba1a1a',
+  warningBg: '#FEF3C7',
+  warningText: '#92400E',
+  background: '#F9F8F3',
+  cardSurface: '#FFFFFF',
+  onSurface: '#121c2a',
+  onSurfaceVariant: '#414846',
+  outline: '#717975',
+  outlineVariant: '#c1c8c4',
+  surfaceContainerLow: '#eff4ff',
+  onPrimaryContainer: '#97bdb1',
+  inversePrimary: '#a9cec2',
+};
 
-/** Typed receipt file — replaces the previous `any` */
-interface ReceiptFile {
-  uri: string;
-  name: string;
-  mimeType: string;
-  size?: number;
-}
-
+const CARD_SHADOW = {
+  shadowColor: '#1F2937',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.04,
+  shadowRadius: 20,
+  elevation: 3,
+};
 
 export default function SubscriptionsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   
   const { currentProfile, familyMembers } = useFamily();
   const userId = currentProfile?.id;
-
-  const insets = useSafeAreaInsets();
-  const [activeTab, setActiveTab] = useState<'current' | 'history'>('current');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  
-  const [history, setHistory] = useState<PaymentRequest[]>([]);
-  const [pendingRequest, setPendingRequest] = useState<PaymentRequest | null>(null);
-
   const subMembers = familyMembers.filter(m => m.manager_id === userId);
   const subAccountsCount = subMembers.length;
 
-  const [showRenewForm, setShowRenewForm] = useState(false);
-  const [step, setStep] = useState(1);
-  const [newSubCount, setNewSubCount] = useState(0);
-  const [selectedMembersToKeep, setSelectedMembersToKeep] = useState<string[]>([]);
-  const [receiptFile, setReceiptFile] = useState<ReceiptFile | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const {
+    loading,
+    refreshing,
+    history,
+    pendingRequest,
+    onRefresh,
+    totalPrice,
+  } = useSubscriptionData(userId, subAccountsCount, subMembers);
 
-  useEffect(() => {
-    if (userId) {
-      setNewSubCount(subAccountsCount);
-      fetchData();
-    }
-  }, [userId, subAccountsCount]);
-
-  // 🔴 CF-01 FIX: All Supabase calls now go through executeQuery
-  const fetchData = async () => {
-    try {
-      const selectCols = 'id, user_id, amount, plan_type, status, receipt_url, renewal_metadata, created_at';
-
-      const [pendingRes, histRes] = await Promise.all([
-        executeQuery<PaymentRequest | null>(
-          supabase.from('payment_requests').select(selectCols).eq('user_id', userId).eq('status', 'pending').maybeSingle(),
-          { isIdempotent: true }
-        ),
-        executeQuery<PaymentRequest[]>(
-          supabase.from('payment_requests').select(selectCols).eq('user_id', userId).order('created_at', { ascending: false }),
-          { isIdempotent: true }
-        ),
-      ]);
-
-      setPendingRequest(pendingRes.data);
-      setHistory(histRes.data || []);
-
-      if (pendingRes.error) logger.error('[subscriptions] fetch pending:', pendingRes.error.message);
-      if (histRes.error) logger.error('[subscriptions] fetch history:', histRes.error.message);
-    } catch (error) {
-      logger.error("Error fetching sub data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchData();
-    setRefreshing(false);
-  };
-
-  const isActive = currentProfile?.subscription_status === 'active' && 
-                   currentProfile?.subscription_end_date && 
-                   new Date(currentProfile.subscription_end_date) > new Date();
+  const isActive = !!(currentProfile?.subscription_status === 'active' && 
+                      currentProfile?.subscription_end_date && 
+                      new Date(currentProfile.subscription_end_date) > new Date());
                    
+  const isActuallyNew = currentProfile?.subscription_status === 'new' || 
+                        (!currentProfile?.subscription_end_date && 
+                         !currentProfile?.is_onboarded && 
+                         currentProfile?.subscription_status === 'expired');
+
   const isSubAccount = !!currentProfile?.manager_id;
-  const totalPrice = SubscriptionConfig.calculateTotal(newSubCount);
 
-  const handleNextStep = () => {
-    if (step === 1) {
-      if (newSubCount < subAccountsCount) {
-        setSelectedMembersToKeep([]);
-        setStep(2);
-      } else {
-        setSelectedMembersToKeep(subMembers.map(m => m.id));
-        setStep(3);
-      }
-    } else if (step === 2) {
-      if (selectedMembersToKeep.length !== newSubCount) {
-        return Alert.alert("تنبيه", `يرجى اختيار ${newSubCount} أفراد للإبقاء عليهم.`);
-      }
-      setStep(3);
-    }
+  // Determine shown count and cost based on pending request or current active subscription
+  const displayedSubAccountsCount = pendingRequest && pendingRequest.renewal_metadata && typeof (pendingRequest.renewal_metadata as any).sub_count === 'number'
+    ? (pendingRequest.renewal_metadata as any).sub_count
+    : subAccountsCount;
+
+  const displayedTotalPrice = pendingRequest
+    ? pendingRequest.amount
+    : SubscriptionConfig.calculateTotal(subAccountsCount);
+
+  // Invoice Bottom Sheet state
+  const [invoiceModalVisible, setInvoiceModalVisible] = React.useState(false);
+
+  // Calculate remaining days
+  const getRemainingDays = () => {
+    if (!currentProfile?.subscription_end_date) return 0;
+    const end = new Date(currentProfile.subscription_end_date);
+    const today = new Date();
+    const diff = end.getTime() - today.getTime();
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
   };
 
-  const toggleMemberSelection = (id: string) => {
-    setSelectedMembersToKeep(prev => {
-      if (prev.includes(id)) {
-        return prev.filter(mId => mId !== id);
-      } else {
-        if (prev.length < newSubCount) {
-          return [...prev, id];
-        } else {
-          Alert.alert("تنبيه", `أقصى عدد مسموح به في باقتك الجديدة هو ${newSubCount} أفراد`);
-          return prev;
-        }
-      }
-    });
+  const remainingDays = getRemainingDays();
+  const progressPercent = Math.min(100, Math.max(0, (remainingDays / 30) * 100));
+
+  const formatDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return 'غير محدد';
+    return new Date(dateStr).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' });
   };
 
-  // 👇 اختيار صورة من الجاليري
-  const handlePickReceiptImage = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.8,
-      });
-      if (!result.canceled && result.assets.length > 0) {
-        const file = result.assets[0];
-        const uriParts = file.uri.split('.');
-        const fileExt = uriParts[uriParts.length - 1] || 'jpg';
-        const mimeType = file.mimeType || `image/${fileExt}`;
-
-        // 🔴 CF-02 FIX: MIME type validation
-        if (!ALLOWED_RECEIPT_TYPES.includes(mimeType)) {
-          return showToast.error('نوع الملف غير مدعوم. يُسمح فقط بـ JPEG, PNG, HEIC, PDF');
-        }
-        // 🔴 CF-02 FIX: File size validation (if available from picker)
-        if (file.fileSize && file.fileSize > MAX_RECEIPT_SIZE) {
-          return showToast.error('حجم الملف يتجاوز 10 ميغابايت');
-        }
-
-        setReceiptFile({
-          uri: file.uri,
-          name: `receipt_${Date.now()}.${fileExt}`,
-          mimeType,
-          size: file.fileSize ?? undefined,
-        });
-      }
-    } catch (err) {
-      Alert.alert('خطأ', 'لا يمكن الوصول للاستوديو');
-    }
+  const formatDateShort = (dateStr: string | null | undefined) => {
+    if (!dateStr) return '—';
+    return new Date(dateStr).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' });
   };
 
-  // 👇 اختيار ملف (PDF)
-  const handlePickReceiptFile = async () => {
-    const result = await DocumentPicker.getDocumentAsync({ 
-      type: ['image/*', 'application/pdf'],
-      copyToCacheDirectory: true,
-    });
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      const asset = result.assets[0];
-      const mimeType = asset.mimeType || 'application/octet-stream';
-
-      // 🔴 CF-02 FIX: MIME type validation
-      if (!ALLOWED_RECEIPT_TYPES.includes(mimeType)) {
-        return showToast.error('نوع الملف غير مدعوم. يُسمح فقط بـ JPEG, PNG, HEIC, PDF');
-      }
-      // 🔴 CF-02 FIX: File size validation
-      if (asset.size && asset.size > MAX_RECEIPT_SIZE) {
-        return showToast.error('حجم الملف يتجاوز 10 ميغابايت');
-      }
-
-      setReceiptFile({
-        uri: asset.uri,
-        name: asset.name,
-        mimeType,
-        size: asset.size ?? undefined,
-      });
-    }
-  };
-
-  // 👇 قائمة اختيار: صورة أم ملف
-  const handlePickReceipt = () => {
-    Alert.alert(
-      "إرفاق إيصال الدفع",
-      "اختر طريقة الرفع",
-      [
-        { text: "صورة من الاستوديو 🖼️", onPress: handlePickReceiptImage },
-        { text: "ملف PDF 📄", onPress: handlePickReceiptFile },
-        { text: "إلغاء", style: "cancel" },
-      ]
-    );
-  };
-
-  const handleSubmitRequest = async () => {
-    if (!receiptFile) return Alert.alert("تنبيه", "يرجى إرفاق صورة الإيصال أولاً");
-    setUploading(true);
-    try {
-      const fileExt = receiptFile.name.split('.').pop() || 'jpg';
-      const fileName = `payment_${userId}_${Date.now()}.${fileExt}`;
-      
-      const response = await fetch(receiptFile.uri);
-      const blob = await response.blob();
-
-      // 🔴 CF-02 FIX: File size validation at upload time (blob.size is reliable)
-      if (blob.size > MAX_RECEIPT_SIZE) {
-        setUploading(false);
-        return showToast.error('حجم الملف يتجاوز 10 ميغابايت');
-      }
-      // 🔴 CF-02 FIX: MIME type double-check on blob
-      if (blob.type && !ALLOWED_RECEIPT_TYPES.includes(blob.type)) {
-        setUploading(false);
-        return showToast.error('نوع الملف غير مدعوم');
-      }
-
-      // 🔴 CF-01 FIX: Storage upload through executeQuery for timeout/error classification
-      const { error: uploadError } = await executeQuery(
-        supabase.storage.from('receipts').upload(fileName, blob),
-        { retries: 1, timeoutMs: 30000 }
-      );
-      if (uploadError) throw uploadError;
-
-      // 🔴 CF-01 FIX: DB insert through executeQuery
-      const { error: dbError } = await executeQuery(
-        supabase.from('payment_requests').insert([{
-          user_id: userId,
-          amount: totalPrice,
-          plan_type: 'helix_integrated',
-          status: 'pending',
-          receipt_url: fileName,
-          renewal_metadata: { 
-            sub_count: newSubCount,
-            keep_member_ids: selectedMembersToKeep,
-            action_type: newSubCount < subAccountsCount ? 'downgrade' : 'upgrade'
-          }
-        }]),
-        { retries: 0 } // Don't retry payment inserts — not idempotent
-      );
-
-      if (dbError) throw dbError;
-
-      showToast.success('تم إرسال طلبك بنجاح!', 'سيتم مراجعته وتفعيل الباقة قريباً');
-      setShowRenewForm(false);
-      setStep(1);
-      fetchData(); 
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : 'حدث خطأ أثناء إرسال الطلب';
-      showToast.error(msg);
-      logger.error('[subscriptions] submit error:', error);
-    } finally {
-      setUploading(false);
-    }
-  };
-
+  // ─── Loading State ───
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Skeleton width={30} height={30} borderRadius={15} />
-          <View style={[styles.headerTitleBox, { alignItems: 'flex-start' }]}>
-            <Skeleton width={120} height={20} borderRadius={8} style={{ marginBottom: 5 }} />
-            <Skeleton width={150} height={15} borderRadius={5} />
-          </View>
+          <Skeleton width={140} height={22} borderRadius={8} />
+          <Skeleton width={36} height={36} borderRadius={18} />
         </View>
         <View style={{ padding: 20 }}>
-          <Skeleton width="100%" height={150} borderRadius={25} style={{ marginBottom: 20 }} />
-          <Skeleton width="100%" height={100} borderRadius={20} />
+          <Skeleton width="100%" height={60} borderRadius={16} style={{ marginBottom: 16 }} />
+          <Skeleton width="100%" height={200} borderRadius={24} style={{ marginBottom: 16 }} />
+          <Skeleton width="100%" height={100} borderRadius={24} style={{ marginBottom: 16 }} />
+          <Skeleton width="100%" height={100} borderRadius={24} />
         </View>
       </SafeAreaView>
     );
   }
 
-  // ==========================================
-  // 🚨 شاشة التحذير للحسابات الفرعية المستثناة 🚨
-  // ==========================================
+  // ─── Sub Account Warning Screen ───
   if (isSubAccount && !isActive) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={28} color="#1F2937" /></TouchableOpacity>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
+            <Ionicons name="arrow-forward" size={24} color={C.primary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>اشتراكي</Text>
+          <View style={styles.crownBadge}>
+            <Ionicons name="star" size={18} color="#D4AF37" />
+          </View>
         </View>
         <View style={styles.alertContainer}>
           <View style={styles.alertIconBox}>
-            <Ionicons name="warning" size={50} color="#EF4444" />
+            <Ionicons name="warning" size={48} color={C.error} />
           </View>
-          <Text style={styles.alertTitle}>تنبيه بخصوص اشتراكك ⚠️</Text>
+          <Text style={styles.alertTitle}>تنبيه بخصوص اشتراكك</Text>
           <Text style={styles.alertText}>
-            نحيطك علماً بأنه <Text style={{fontWeight: 'bold', color: '#EF4444'}}>تم استثناء هذا الحساب</Text> من الاشتراك العائلي الجديد، أو أن الباقة قد انتهت صلاحيتها حالياً.
+            نحيطك علماً بأنه <Text style={{fontWeight: 'bold', color: C.error}}>تم استثناء هذا الحساب</Text> من الاشتراك العائلي الجديد، أو أن الباقة قد انتهت صلاحيتها حالياً.
           </Text>
-          
           <View style={styles.alertStepsBox}>
             <Text style={styles.alertStepsTitle}>ماذا تفعل الآن؟</Text>
-            <Text style={styles.alertStep}>• تواصل مع مدير الحساب الأساسي</Text>
-            <Text style={styles.alertStep}>• أو تحدث مع خدمة عملائنا للمساعدة</Text>
+            <Text style={styles.alertStep}>• تواصل مع مدير الحساب الأساسي لتجديد الباقة</Text>
+            <Text style={styles.alertStep}>• أو تحدث مع خدمة عملائنا لمساعدتك فوريًا</Text>
           </View>
-
           <TouchableOpacity style={styles.alertBtn} onPress={() => router.replace('/chat')}>
             <Text style={styles.alertBtnText}>تحدث مع خدمة العملاء</Text>
             <Ionicons name="chatbubbles" size={20} color="#FFF" />
@@ -317,336 +153,438 @@ export default function SubscriptionsScreen() {
     );
   }
 
+  // ─── Main Overview Screen ───
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}><Ionicons name="arrow-back" size={24} color="#1F2937" /></TouchableOpacity>
-        <View style={styles.headerTitleBox}>
-          <Text style={styles.title}>إدارة الاشتراك</Text>
-          <Text style={styles.subtitle}>تحكم في باقة عائلة هيليكس</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
+          <Ionicons name="arrow-forward" size={24} color={C.primary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>اشتراكي</Text>
+        <View style={styles.crownBadge}>
+          <Ionicons name="star" size={18} color="#D4AF37" />
         </View>
       </View>
 
-      <View style={styles.tabSwitcher}>
-        <TouchableOpacity style={[styles.tabBtn, activeTab === 'history' && styles.tabBtnActive]} onPress={() => setActiveTab('history')}>
-          <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>السجل المالي</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.tabBtn, activeTab === 'current' && styles.tabBtnActive]} onPress={() => setActiveTab('current')}>
-          <Text style={[styles.tabText, activeTab === 'current' && styles.tabTextActive]}>باقتي</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView 
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 20) }]} 
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2A4B46" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}
       >
-        
-        {/* ======================= شاشة باقتي (Current) ======================= */}
-        {activeTab === 'current' && (
-          <View>
-            {!showRenewForm ? (
-              <>
-                <View style={[styles.vipCard, isActive ? styles.vipCardActive : styles.vipCardExpired]}>
-                  <View style={styles.vipHeader}>
-                    <View style={styles.vipIconBox}>
-                      <Ionicons name={isActive ? "shield-checkmark" : "warning"} size={32} color={isActive ? "#4ADE80" : "#EF4444"} />
-                    </View>
-                    <View style={styles.vipTextBox}>
-                      <Text style={[styles.vipTitle, isActive ? {color: '#FFF'} : {color: '#1F2937'}]}>هيليكس المتكاملة</Text>
-                      <Text style={isActive ? styles.vipStatusActive : styles.vipStatusExpired}>
-                        {isActive ? '● اشتراكك نشط وفعال' : '● الاشتراك منتهي'}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.vipDivider} />
-                  <View style={styles.vipFooter}>
-                    <View style={styles.vipFooterItem}>
-                      <Text style={styles.vipFooterLabel}>ينتهي في</Text>
-                      <Text style={[styles.vipFooterValue, isActive ? {color: '#FFF'} : {color: '#1F2937'}]}>
-                        {currentProfile?.subscription_end_date ? new Date(currentProfile.subscription_end_date).toLocaleDateString('ar-EG') : 'غير محدد'}
-                      </Text>
-                    </View>
-                    <View style={styles.vipFooterItem}>
-                      <Text style={styles.vipFooterLabel}>أفراد العائلة</Text>
-                      <Text style={[styles.vipFooterValue, isActive ? {color: '#FFF'} : {color: '#1F2937'}]}>{subAccountsCount + 1} فرد</Text>
-                    </View>
-                  </View>
-                </View>
+        {/* ─── Quick Status Card ─── */}
+        <View style={styles.quickStatusCard}>
+          <View style={styles.quickStatusLeft}>
+            <Text style={styles.quickStatusPlan}>{SubscriptionConfig.PLAN_NAME}</Text>
+            <View style={[styles.statusBadge, isActive ? styles.statusBadgeActive : styles.statusBadgeExpired]}>
+              <View style={[styles.statusDot, isActive ? styles.statusDotActive : styles.statusDotExpired]} />
+              <Text style={[styles.statusBadgeText, isActive ? styles.statusBadgeTextActive : styles.statusBadgeTextExpired]}>
+                {isActive ? 'فعّال' : (isActuallyNew ? 'جديد' : 'منتهي')}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.quickStatusRight}>
+            <View style={styles.quickStatusItem}>
+              <Text style={styles.quickStatusLabel}>متبقي</Text>
+              <Text style={styles.quickStatusValue}>{isActive ? `${remainingDays} يوم` : '—'}</Text>
+            </View>
+            <View style={styles.quickStatusDivider} />
+            <View style={styles.quickStatusItem}>
+              <Text style={styles.quickStatusLabel}>التجديد</Text>
+              <Text style={styles.quickStatusValue}>{formatDateShort(currentProfile?.subscription_end_date)}</Text>
+            </View>
+          </View>
+        </View>
 
-                {pendingRequest ? (
-                  <View style={styles.pendingBox}>
-                    <Ionicons name="time" size={40} color="#D97706" style={{ marginBottom: 10 }} />
-                    <Text style={styles.pendingText}>طلبك قيد المراجعة حالياً.. سيتم تفعيل الباقة فور التأكد من التحويل.</Text>
-                  </View>
-                ) : isActive ? (
-                  <View style={styles.activeBenefitsBox}>
-                    <Ionicons name="checkmark-circle" size={40} color="#10B981" style={{ marginBottom: 10 }} />
-                    <Text style={styles.activeBenefitsTitle}>كل شيء على ما يرام!</Text>
-                    <Text style={styles.activeBenefitsText}>
-                      أنت وعائلتك تتمتعون بجميع ميزات "هيليكس". استمروا في تحقيق أهدافكم الصحية.
-                    </Text>
-                  </View>
-                ) : isSubAccount ? (
-                  <View style={styles.activeBenefitsBox}>
-                    <Ionicons name="information-circle" size={40} color="#3B82F6" style={{ marginBottom: 10 }} />
-                    <Text style={styles.activeBenefitsTitle}>تجديد الاشتراك</Text>
-                    <Text style={styles.activeBenefitsText}>
-                      اشتراكك مرتبط بعائلة. الرجاء التواصل مع مدير العائلة لتجديد الاشتراك لك ولجميع أفراد العائلة.
-                    </Text>
+        {/* ─── Hero Premium Plan Card ─── */}
+        <View style={[styles.heroCard, isActive ? styles.heroCardActive : styles.heroCardExpired]}>
+          {/* Decorative circle */}
+          <View style={styles.heroDecorativeCircle} />
+          
+          <View style={styles.heroTopRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroPlanName}>{SubscriptionConfig.PLAN_NAME}</Text>
+              <View style={[styles.heroBadge, isActive ? styles.heroBadgeActive : styles.heroBadgeExpired]}>
+                <View style={[styles.heroBadgeDot, isActive && { backgroundColor: '#4ADE80' }]} />
+                <Text style={styles.heroBadgeText}>{isActive ? 'اشتراك فعّال' : (isActuallyNew ? 'غير مفعل' : 'منتهي الصلاحية')}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Dates */}
+          <View style={styles.heroDatesRow}>
+            <View style={styles.heroDateItem}>
+              <Text style={styles.heroDateLabel}>تاريخ البداية</Text>
+              <Text style={styles.heroDateValue}>
+                {currentProfile?.subscription_end_date 
+                  ? formatDateShort(new Date(new Date(currentProfile.subscription_end_date).getTime() - 30 * 24 * 60 * 60 * 1000).toISOString())
+                  : '—'}
+              </Text>
+            </View>
+            <View style={styles.heroDateItem}>
+              <Text style={styles.heroDateLabel}>تاريخ الانتهاء</Text>
+              <Text style={styles.heroDateValue}>{formatDateShort(currentProfile?.subscription_end_date)}</Text>
+            </View>
+          </View>
+
+          {/* Progress bar */}
+          {isActive && (
+            <View style={styles.heroProgressSection}>
+              <View style={styles.heroProgressTextRow}>
+                <Text style={styles.heroProgressDays}>{remainingDays} يوم متبقي</Text>
+                <Text style={styles.heroProgressExpiry}>انقضاء: {formatDateShort(currentProfile?.subscription_end_date)}</Text>
+              </View>
+              <View style={styles.heroProgressBarBg}>
+                <View style={[styles.heroProgressBarFill, { width: `${progressPercent}%` }]} />
+              </View>
+            </View>
+          )}
+
+          {/* Plan cost */}
+          <View style={styles.heroCostSection}>
+            <Text style={styles.heroCostLabel}>قيمة الاشتراك</Text>
+            <Text style={styles.heroCostValue}>
+              {SubscriptionConfig.formatPrice(displayedTotalPrice)}
+              <Text style={styles.heroCostPeriod}> / شهرياً</Text>
+            </Text>
+          </View>
+        </View>
+
+        {/* ─── Pending Payment Card ─── */}
+        {pendingRequest && (
+          <View style={styles.pendingCard}>
+            <View style={styles.pendingIconRow}>
+              <View style={styles.pendingIconCircle}>
+                <Ionicons name="time" size={28} color={C.warningText} />
+              </View>
+            </View>
+            <Text style={styles.pendingTitle}>طلبك الحالي تحت المراجعة</Text>
+            <Text style={styles.pendingDate}>تم الإرسال: {formatDate(pendingRequest.created_at)}</Text>
+            <View style={styles.pendingWarningBox}>
+              <Ionicons name="alert-circle" size={16} color={C.warningText} />
+              <Text style={styles.pendingWarningText}>لا يمكن إرسال طلب جديد حتى يتم مراجعة الطلب الحالي</Text>
+            </View>
+            <TouchableOpacity style={styles.pendingDetailsBtn} onPress={() => setInvoiceModalVisible(true)}>
+              <Text style={styles.pendingDetailsBtnText}>عرض التفاصيل</Text>
+              <Ionicons name="chevron-forward" size={18} color={C.primaryContainer} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ─── Quick Actions Bento ─── */}
+        <View style={styles.bentoGrid}>
+          {/* Manage Subscription — hidden if pending */}
+          {!pendingRequest && (
+          <TouchableOpacity 
+              style={[styles.bentoCard, isActive && styles.bentoCardDisabled,
+                !isActive && isActuallyNew && { borderWidth: 1.5, borderColor: C.success }]} 
+              onPress={() => !isActive && router.push('/subscription-management')}
+              disabled={isActive}
+              activeOpacity={0.7}
+            >
+              <View style={styles.bentoTopRow}>
+                <View style={[styles.bentoIconBox, 
+                  isActive && { backgroundColor: C.outlineVariant + '33' },
+                  !isActive && isActuallyNew && { backgroundColor: '#ECFDF5' }
+                ]}>
+                  <Ionicons 
+                    name={isActive ? "lock-closed-outline" : (isActuallyNew ? "rocket-outline" : "settings-outline")} 
+                    size={24} 
+                    color={isActive ? C.outline : (isActuallyNew ? C.success : C.primary)} 
+                  />
+                </View>
+                {isActive ? (
+                  <View style={styles.lockBadge}>
+                    <Text style={styles.lockBadgeText}>مغلق</Text>
                   </View>
                 ) : (
-                  <View style={styles.actionGrid}>
-                    <TouchableOpacity style={styles.actionCard} onPress={() => { setShowRenewForm(true); setStep(1); }}>
-                      <View style={styles.actionIconBox}><Ionicons name="refresh" size={28} color="#F97316" /></View>
-                      <Text style={styles.actionCardTitle}>إدارة وتجديد الاشتراك</Text>
-                      <Text style={styles.actionCardSub}>تعديل أفراد العائلة وإرفاق الإيصال</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={isActuallyNew ? C.success : C.outlineVariant} />
                 )}
-              </>
-            ) : (
-              /* ======================= فورم التجديد المتعدد الخطوات ======================= */
-              <View style={styles.renewForm}>
-                <View style={styles.renewHeader}>
-                  <TouchableOpacity onPress={() => setShowRenewForm(false)}><Ionicons name="close-circle" size={28} color="#EF4444" /></TouchableOpacity>
-                  <Text style={styles.renewTitle}>إعداد الباقة والدفع</Text>
-                </View>
-
-                {/* الخطوة 1: تحديد العدد */}
-                {step === 1 && (
-                  <View style={styles.stepContainer}>
-                    <View style={styles.stepIcon}><Ionicons name="people" size={40} color="#2A4B46" /></View>
-                    <Text style={styles.counterLabel}>عدد الأفراد المضافين (بخلافك)</Text>
-                    <View style={styles.counterControls}>
-                      <TouchableOpacity onPress={() => setNewSubCount(Math.max(0, newSubCount - 1))} style={styles.counterBtn}><Text style={styles.counterBtnText}>-</Text></TouchableOpacity>
-                      <Text style={styles.counterValue}>{newSubCount}</Text>
-                      <TouchableOpacity onPress={() => setNewSubCount(newSubCount + 1)} style={styles.counterBtn}><Text style={styles.counterBtnText}>+</Text></TouchableOpacity>
-                    </View>
-                    <View style={styles.priceBox}>
-                      <Text style={styles.priceLabel}>التكلفة الإجمالية الجديدة</Text>
-                      <Text style={styles.priceValue}>{totalPrice} EGP</Text>
-                    </View>
-                  </View>
-                )}
-
-                {/* الخطوة 2: اختيار الأفراد المستبعدين */}
-                {step === 2 && (
-                  <View style={styles.stepContainer}>
-                    <View style={styles.alertSoftBox}>
-                      <Ionicons name="alert-circle" size={20} color="#D97706" />
-                      <Text style={styles.alertSoftText}>
-                        لقد اخترت {newSubCount} أفراد. يرجى الضغط على الأسماء التي تريد "تفعيلها" في الباقة الجديدة.
-                      </Text>
-                    </View>
-                    
-                    <View style={styles.selectionList}>
-                      {subMembers.map(member => {
-                        const isSelected = selectedMembersToKeep.includes(member.id);
-                        return (
-                          <TouchableOpacity 
-                            key={member.id} 
-                            style={[styles.memberSelectCard, isSelected && styles.memberSelectCardActive]}
-                            onPress={() => toggleMemberSelection(member.id)}
-                            activeOpacity={0.8}
-                          >
-                            <View style={styles.memberSelectLeft}>
-                              <Text style={[styles.memberSelectName, isSelected && {color: '#2A4B46'}]}>{member.full_name}</Text>
-                              {isSelected ? (
-                                <Text style={styles.memberBadgeActive}>مُختار للتجديد</Text>
-                              ) : (
-                                <Text style={styles.memberBadgeInactive}>سيتم إيقافه</Text>
-                              )}
-                            </View>
-                            <View style={[styles.checkbox, isSelected && styles.checkboxActive]}>
-                              {isSelected && <Ionicons name="checkmark" size={16} color="#FFF" />}
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </View>
-                )}
-
-                {/* الخطوة 3: الدفع والرفع */}
-                {step === 3 && (
-                  <View style={styles.stepContainer}>
-                    <View style={styles.priceBoxFinal}>
-                      <Text style={styles.priceLabel}>المبلغ المطلوب تحويله لـ فودافون كاش</Text>
-                      <Text style={styles.priceValue}>{totalPrice} EGP</Text>
-                    </View>
-
-                    <TouchableOpacity style={styles.uploadBtn} onPress={handlePickReceipt}>
-                      <Ionicons name={receiptFile ? "checkmark-circle" : "cloud-upload"} size={40} color={receiptFile ? "#10B981" : "#9CA3AF"} />
-                      <Text style={[styles.uploadText, receiptFile && {color: '#10B981'}]}>
-                        {receiptFile ? receiptFile.name : 'اضغط لإرفاق صورة أو إيصال التحويل'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                {/* أزرار التنقل */}
-                <View style={styles.formFooter}>
-                  {step > 1 && (
-                    <TouchableOpacity style={styles.backStepBtn} onPress={() => setStep(step - 1)}>
-                      <Text style={styles.backStepText}>رجوع</Text>
-                    </TouchableOpacity>
-                  )}
-                  
-                  <TouchableOpacity 
-                    style={[styles.submitBtn, (step === 3 && !receiptFile) && {opacity: 0.5}]} 
-                    onPress={step < 3 ? handleNextStep : handleSubmitRequest} 
-                    disabled={(step === 3 && !receiptFile) || uploading}
-                  >
-                    {uploading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.submitBtnText}>{step === 3 ? 'تأكيد الطلب وإرسال' : 'التالي'}</Text>}
-                  </TouchableOpacity>
-                </View>
-
               </View>
-            )}
-          </View>
-        )}
-
-        {/* ======================= شاشة السجل المالي (History) ======================= */}
-        {activeTab === 'history' && (
-          <View style={styles.historyList}>
-            {history.length === 0 ? (
-              <View style={styles.emptyHistory}>
-                <Ionicons name="receipt-outline" size={60} color="#D1D5DB" />
-                <Text style={styles.emptyHistoryText}>لا توجد معاملات مالية مسجلة</Text>
+              <View style={styles.bentoTextBox}>
+                <Text style={[styles.bentoTitle, isActive && { color: C.outline }, !isActive && isActuallyNew && { color: C.success }]}>
+                  {isActuallyNew ? 'تفعيل الباقة' : 'إدارة الاشتراك'}
+                </Text>
+                <Text style={styles.bentoDesc}>
+                  {isActive 
+                    ? 'التعديل والتجديد متاح عند انتهاء الاشتراك فقط' 
+                    : (isActuallyNew ? 'اختر عدد الأفراد وابدأ رحلتك مع هيليكس' : 'إضافة أو حذف الحسابات وتجديد الباقة')}
+                </Text>
               </View>
-            ) : (
-              history.map((item) => (
-                <View key={item.id} style={styles.historyCard}>
-                  <View style={styles.historyLeft}>
-                    <Text style={styles.historyAmount}>{item.amount} EGP</Text>
-                    <View style={[styles.statusBadge, item.status === 'approved' ? styles.badgeApproved : item.status === 'rejected' ? styles.badgeRejected : styles.badgePending]}>
-                      <Text style={[styles.badgeText, item.status === 'approved' ? styles.badgeTextApproved : item.status === 'rejected' ? styles.badgeTextRejected : styles.badgeTextPending]}>
-                        {item.status === 'approved' ? 'مقبول' : item.status === 'rejected' ? 'مرفوض' : 'قيد المراجعة'}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.historyRight}>
-                    <Text style={styles.historyPlanName}>{item.plan_type === 'helix_integrated' ? 'الباقة المتكاملة' : 'تجديد اشتراك'}</Text>
-                    <Text style={styles.historyDate}>{new Date(item.created_at).toLocaleDateString('ar-EG')}</Text>
-                  </View>
-                </View>
-              ))
-            )}
-          </View>
-        )}
+            </TouchableOpacity>
+          )}
 
+          {/* Financial History — always visible */}
+          <TouchableOpacity 
+            style={styles.bentoCard} 
+            onPress={() => router.push('/financial-history')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.bentoTopRow}>
+              <View style={styles.bentoIconBox}>
+                <Ionicons name="receipt-outline" size={24} color={C.primary} />
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={C.outlineVariant} />
+            </View>
+            <View style={styles.bentoTextBox}>
+              <Text style={styles.bentoTitle}>السجل المالي</Text>
+              <Text style={styles.bentoDesc}>عرض جميع المدفوعات والفواتير السابقة</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* ─── Subscription Details Card ─── */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>تفاصيل الاشتراك</Text>
+        </View>
+        <View style={styles.detailsCard}>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>اسم الباقة</Text>
+            <Text style={styles.detailValue}>{SubscriptionConfig.PLAN_NAME}</Text>
+          </View>
+          <View style={styles.detailDivider} />
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>سعر الباقة الأساسية</Text>
+            <Text style={styles.detailValue}>{SubscriptionConfig.formatPrice(SubscriptionConfig.BASE_PRICE)}</Text>
+          </View>
+          <View style={styles.detailDivider} />
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>الحسابات الإضافية</Text>
+            <Text style={styles.detailValue}>{displayedSubAccountsCount} أفراد</Text>
+          </View>
+          <View style={styles.detailDivider} />
+          <View style={styles.detailRowTotal}>
+            <Text style={styles.detailTotalLabel}>إجمالي الاشتراك الشهري</Text>
+            <View>
+              <Text style={styles.detailTotalValue}>
+                {SubscriptionConfig.formatPrice(displayedTotalPrice)}
+              </Text>
+              <Text style={styles.detailTotalSub}>التجديد القادم: {formatDateShort(currentProfile?.subscription_end_date)}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ─── Included Features ─── */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>ميزات الباقة</Text>
+        </View>
+        <View style={styles.featuresCard}>
+          {[
+            { title: 'متابعة طبية مباشرة', desc: 'متابعة مستمرة ويومية من الطبيب والكوتش المخصص لك.' },
+            { title: 'أنظمة غذائية تفصيلية', desc: 'وجبات محسوبة السعرات والمكونات متطابقة مع أهدافك الصحية.' },
+            { title: 'خطط تمارين رياضية', desc: 'تمارين فيديو وصور متحركة للبيت أو الجيم تناسب لياقتك.' },
+            { title: 'الملف الطبي الذكي', desc: 'تتبع المؤشرات الحيوية كالفحوصات والأمراض والحساسية.' },
+          ].map((feature, idx) => (
+            <View key={idx} style={[styles.featureItem, idx < 3 && { marginBottom: 16 }]}>
+              <View style={styles.featureCheckCircle}>
+                <Ionicons name="checkmark" size={14} color="#FFF" />
+              </View>
+              <View style={styles.featureTextBox}>
+                <Text style={styles.featureTitle}>{feature.title}</Text>
+                <Text style={styles.featureDesc}>{feature.desc}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
       </ScrollView>
+
+      {/* ─── Pending Invoice Bottom Sheet Modal ─── */}
+      {pendingRequest && (
+        <Modal
+          visible={invoiceModalVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setInvoiceModalVisible(false)}
+        >
+          <Pressable style={styles.modalOverlay} onPress={() => setInvoiceModalVisible(false)}>
+            <Pressable style={styles.modalSheet} onPress={() => {}}>
+              <View style={styles.modalDragHandle} />
+              <Text style={styles.modalTitle}>تفاصيل الطلب</Text>
+              
+              <View style={styles.modalRow}>
+                <Text style={styles.modalLabel}>رقم الطلب</Text>
+                <Text style={styles.modalValue}>REQ-{pendingRequest.id.slice(0, 8).toUpperCase()}</Text>
+              </View>
+              <View style={styles.modalDivider} />
+              <View style={styles.modalRow}>
+                <Text style={styles.modalLabel}>الخطة</Text>
+                <Text style={styles.modalValue}>{SubscriptionConfig.PLAN_NAME}</Text>
+              </View>
+              <View style={styles.modalDivider} />
+              <View style={styles.modalRow}>
+                <Text style={styles.modalLabel}>المبلغ</Text>
+                <Text style={styles.modalValue}>{SubscriptionConfig.formatPrice(pendingRequest.amount)}</Text>
+              </View>
+              <View style={styles.modalDivider} />
+              <View style={styles.modalRow}>
+                <Text style={styles.modalLabel}>تاريخ الإرسال</Text>
+                <Text style={styles.modalValue}>{formatDate(pendingRequest.created_at)}</Text>
+              </View>
+              <View style={styles.modalDivider} />
+              <View style={styles.modalRow}>
+                <Text style={styles.modalLabel}>الحالة</Text>
+                <View style={styles.pendingStatusBadge}>
+                  <Text style={styles.pendingStatusText}>قيد المراجعة</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setInvoiceModalVisible(false)}>
+                <Text style={styles.modalCloseBtnText}>إغلاق</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
 
+// ─── Styles ───
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9F6F0' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  container: { flex: 1, backgroundColor: C.background },
   scrollContent: { padding: 20 },
-  
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  backBtn: { padding: 5 },
-  headerTitleBox: { alignItems: 'flex-end' },
-  title: { fontSize: 22, fontWeight: '900', color: '#1F2937' },
-  subtitle: { fontSize: 12, color: '#6B7280', fontWeight: 'bold' },
 
-  tabSwitcher: { flexDirection: 'row', backgroundColor: '#E5E7EB', margin: 20, borderRadius: 15, padding: 4 },
-  tabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12 },
-  tabBtnActive: { backgroundColor: '#FFF', elevation: 2 },
-  tabText: { fontSize: 14, fontWeight: 'bold', color: '#6B7280' },
-  tabTextActive: { color: '#2A4B46' },
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: C.background,
+  },
+  headerBackBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.cardSurface, justifyContent: 'center', alignItems: 'center', ...CARD_SHADOW },
+  headerTitle: { fontSize: 20, fontWeight: '700', color: C.primary },
+  crownBadge: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.primaryContainer, justifyContent: 'center', alignItems: 'center' },
 
-  vipCard: { padding: 25, borderRadius: 30, marginBottom: 20, elevation: 5 },
-  vipCardActive: { backgroundColor: '#2A4B46' },
-  vipCardExpired: { backgroundColor: '#FFF', borderWidth: 2, borderColor: '#FEE2E2' },
-  vipHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: 15, marginBottom: 20 },
-  vipIconBox: { width: 55, height: 55, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
-  vipTextBox: { flex: 1, alignItems: 'flex-end' },
-  vipTitle: { fontSize: 20, fontWeight: '900' },
-  vipStatusActive: { color: '#4ADE80', fontWeight: 'bold', marginTop: 4, fontSize: 12 },
-  vipStatusExpired: { color: '#EF4444', fontWeight: 'bold', marginTop: 4, fontSize: 12 },
-  vipDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.1)', marginBottom: 20 },
-  vipFooter: { flexDirection: 'row-reverse', justifyContent: 'space-between' },
-  vipFooterItem: { alignItems: 'flex-end' },
-  vipFooterLabel: { color: '#9CA3AF', fontSize: 11, fontWeight: 'bold', marginBottom: 4 },
-  vipFooterValue: { fontSize: 16, fontWeight: '900' },
+  // Quick Status Card
+  quickStatusCard: {
+    backgroundColor: C.cardSurface,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    ...CARD_SHADOW,
+  },
+  quickStatusLeft: { alignItems: 'flex-start', gap: 6 },
+  quickStatusPlan: { fontSize: 16, fontWeight: '700', color: C.primary },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99, gap: 5 },
+  statusBadgeActive: { backgroundColor: '#ECFDF5' },
+  statusBadgeExpired: { backgroundColor: '#FEF2F2' },
+  statusDot: { width: 7, height: 7, borderRadius: 4 },
+  statusDotActive: { backgroundColor: C.success },
+  statusDotExpired: { backgroundColor: C.error },
+  statusBadgeText: { fontSize: 11, fontWeight: '700' },
+  statusBadgeTextActive: { color: '#065F46' },
+  statusBadgeTextExpired: { color: '#991B1B' },
+  quickStatusRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  quickStatusItem: { alignItems: 'center' },
+  quickStatusLabel: { fontSize: 10, fontWeight: '600', color: C.outline, marginBottom: 2 },
+  quickStatusValue: { fontSize: 13, fontWeight: '800', color: C.primary },
+  quickStatusDivider: { width: 1, height: 28, backgroundColor: C.outlineVariant },
 
-  activeBenefitsBox: { backgroundColor: '#ECFDF5', padding: 30, borderRadius: 25, alignItems: 'center', borderWidth: 1, borderColor: '#D1FAE5' },
-  activeBenefitsTitle: { color: '#065F46', fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
-  activeBenefitsText: { color: '#047857', textAlign: 'center', lineHeight: 22, fontWeight: 'bold' },
+  // Hero Card
+  heroCard: { borderRadius: 24, padding: 24, marginBottom: 16, overflow: 'hidden', position: 'relative', ...CARD_SHADOW },
+  heroCardActive: { backgroundColor: C.primaryContainer },
+  heroCardExpired: { backgroundColor: C.primaryContainer },
+  heroDecorativeCircle: { position: 'absolute', top: -50, right: -50, width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(255,255,255,0.04)' },
+  heroTopRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 20 },
+  heroPlanName: { fontSize: 22, fontWeight: '800', color: '#FFF', textAlign: 'left', marginBottom: 8 },
+  heroBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 99, gap: 6 },
+  heroBadgeActive: { backgroundColor: 'rgba(111, 251, 190, 0.2)' },
+  heroBadgeExpired: { backgroundColor: 'rgba(186, 26, 26, 0.15)' },
+  heroBadgeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#EF4444' },
+  heroBadgeText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
+  heroDatesRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
+  heroDateItem: { alignItems: 'flex-start' },
+  heroDateLabel: { fontSize: 10, fontWeight: '600', color: C.onPrimaryContainer, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 },
+  heroDateValue: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+  heroProgressSection: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 16, marginBottom: 16 },
+  heroProgressTextRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  heroProgressDays: { fontSize: 12, fontWeight: '800', color: '#FFF' },
+  heroProgressExpiry: { fontSize: 11, fontWeight: '600', color: C.inversePrimary },
+  heroProgressBarBg: { height: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden' },
+  heroProgressBarFill: { height: '100%', backgroundColor: C.brandOrange, borderRadius: 4 },
+  heroCostSection: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 16 },
+  heroCostLabel: { fontSize: 10, fontWeight: '600', color: C.onPrimaryContainer, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  heroCostValue: { fontSize: 24, fontWeight: '800', color: '#FFF' },
+  heroCostPeriod: { fontSize: 14, fontWeight: '500', color: C.onPrimaryContainer },
 
-  pendingBox: { backgroundColor: '#FEF3C7', padding: 30, borderRadius: 25, alignItems: 'center', borderWidth: 1, borderColor: '#FDE68A' },
-  pendingText: { color: '#B45309', fontWeight: 'bold', textAlign: 'center', lineHeight: 22 },
+  // Pending Card
+  pendingCard: { backgroundColor: C.warningBg, borderRadius: 24, padding: 24, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: '#FDE68A' },
+  pendingIconRow: { marginBottom: 12 },
+  pendingIconCircle: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#FDE68A', justifyContent: 'center', alignItems: 'center' },
+  pendingTitle: { fontSize: 16, fontWeight: '800', color: C.warningText, marginBottom: 4 },
+  pendingDate: { fontSize: 12, fontWeight: '600', color: '#B45309', marginBottom: 12 },
+  pendingWarningBox: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(146, 64, 14, 0.08)', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, marginBottom: 16, width: '100%' },
+  pendingWarningText: { flex: 1, fontSize: 11, fontWeight: '700', color: C.warningText, textAlign: 'left', lineHeight: 16 },
+  pendingDetailsBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.cardSurface, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12 },
+  pendingDetailsBtnText: { fontSize: 13, fontWeight: '700', color: C.primaryContainer },
 
-  actionGrid: { marginTop: 10 },
-  actionCard: { backgroundColor: '#FFF', padding: 30, borderRadius: 25, alignItems: 'center', borderWidth: 2, borderColor: '#FFEDD5', borderStyle: 'dashed' },
-  actionIconBox: { width: 60, height: 60, backgroundColor: '#FFF7ED', borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
-  actionCardTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937', marginBottom: 5 },
-  actionCardSub: { fontSize: 13, color: '#6B7280', textAlign: 'center' },
+  // Bento Grid
+  bentoGrid: { gap: 12, marginBottom: 16 },
+  bentoCard: {
+    backgroundColor: C.cardSurface,
+    borderRadius: 24,
+    padding: 20,
+    ...CARD_SHADOW,
+  },
+  bentoCardDisabled: { opacity: 0.65 },
+  lockBadge: { backgroundColor: '#F3F4F6', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  lockBadgeText: { fontSize: 10, fontWeight: '700', color: C.outline },
+  bentoTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+  bentoIconBox: { width: 48, height: 48, borderRadius: 14, backgroundColor: C.surfaceContainerLow, justifyContent: 'center', alignItems: 'center' },
+  bentoTextBox: { alignItems: 'flex-start' },
+  bentoTitle: { fontSize: 17, fontWeight: '700', color: C.primary, marginBottom: 4 },
+  bentoDesc: { fontSize: 12, fontWeight: '500', color: C.onSurfaceVariant, textAlign: 'left' },
 
-  renewForm: { backgroundColor: '#FFF', padding: 25, borderRadius: 30, elevation: 5 },
-  renewHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', paddingBottom: 15 },
-  renewTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
-  
-  stepContainer: { alignItems: 'center' },
-  stepIcon: { width: 80, height: 80, backgroundColor: '#E8F3F1', borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-  counterLabel: { fontSize: 15, fontWeight: 'bold', color: '#4B5563', marginBottom: 15 },
-  counterControls: { flexDirection: 'row', alignItems: 'center', gap: 20, marginBottom: 25 },
-  counterBtn: { width: 50, height: 50, backgroundColor: '#F3F4F6', borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
-  counterBtnText: { fontSize: 26, fontWeight: 'bold', color: '#1F2937' },
-  counterValue: { fontSize: 40, fontWeight: '900', color: '#2A4B46', width: 50, textAlign: 'center' },
+  // Section Header
+  sectionHeader: { marginBottom: 10 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: C.primary, textAlign: 'left', marginLeft: 4 },
 
-  priceBox: { backgroundColor: '#F9FAFB', width: '100%', padding: 20, borderRadius: 20, alignItems: 'center' },
-  priceBoxFinal: { backgroundColor: '#FFF7ED', width: '100%', padding: 25, borderRadius: 20, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: '#FFEDD5' },
-  priceLabel: { fontSize: 12, color: '#6B7280', fontWeight: 'bold', marginBottom: 5 },
-  priceValue: { fontSize: 32, fontWeight: '900', color: '#EA580C' },
+  // Details Card
+  detailsCard: { backgroundColor: C.cardSurface, borderRadius: 24, padding: 20, marginBottom: 16, ...CARD_SHADOW },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
+  detailLabel: { fontSize: 14, fontWeight: '500', color: C.onSurfaceVariant },
+  detailValue: { fontSize: 15, fontWeight: '700', color: C.primary },
+  detailDivider: { height: 1, backgroundColor: C.surfaceContainerLow },
+  detailRowTotal: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16 },
+  detailTotalLabel: { fontSize: 15, fontWeight: '700', color: C.primary },
+  detailTotalValue: { fontSize: 22, fontWeight: '800', color: C.primary },
+  detailTotalSub: { fontSize: 11, fontWeight: '600', color: C.onSurfaceVariant, marginTop: 2 },
 
-  alertSoftBox: { flexDirection: 'row-reverse', backgroundColor: '#FEF3C7', padding: 15, borderRadius: 15, gap: 10, marginBottom: 20 },
-  alertSoftText: { flex: 1, fontSize: 12, color: '#92400E', fontWeight: 'bold', textAlign: 'right', lineHeight: 18 },
-  
-  selectionList: { width: '100%', gap: 10 },
-  memberSelectCard: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', padding: 15, borderRadius: 15, borderWidth: 2, borderColor: '#F3F4F6' },
-  memberSelectCardActive: { borderColor: '#2A4B46', backgroundColor: '#E8F3F1' },
-  memberSelectLeft: { alignItems: 'flex-end' },
-  memberSelectName: { fontSize: 16, fontWeight: 'bold', color: '#6B7280', marginBottom: 4 },
-  memberBadgeActive: { fontSize: 10, color: '#FFF', backgroundColor: '#2A4B46', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 5, fontWeight: 'bold' },
-  memberBadgeInactive: { fontSize: 10, color: '#9CA3AF', fontWeight: 'bold' },
-  checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#D1D5DB', justifyContent: 'center', alignItems: 'center' },
-  checkboxActive: { backgroundColor: '#2A4B46', borderColor: '#2A4B46' },
+  // Features Card
+  featuresCard: { backgroundColor: C.cardSurface, borderRadius: 24, padding: 20, marginBottom: 16, ...CARD_SHADOW },
+  featureItem: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  featureCheckCircle: { width: 22, height: 22, borderRadius: 11, backgroundColor: C.primaryContainer, justifyContent: 'center', alignItems: 'center', marginTop: 2 },
+  featureTextBox: { flex: 1, alignItems: 'flex-start' },
+  featureTitle: { fontSize: 14, fontWeight: '700', color: C.primary, marginBottom: 2 },
+  featureDesc: { fontSize: 12, fontWeight: '500', color: C.onSurfaceVariant, textAlign: 'left', lineHeight: 18 },
 
-  uploadBtn: { borderStyle: 'dashed', borderWidth: 2, borderColor: '#D1D5DB', padding: 30, borderRadius: 20, alignItems: 'center', width: '100%' },
-  uploadText: { marginTop: 15, fontSize: 15, fontWeight: 'bold', color: '#6B7280' },
+  // Alert Screen (Sub Account)
+  alertContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  alertIconBox: { width: 80, height: 80, backgroundColor: '#FEF2F2', borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+  alertTitle: { fontSize: 20, fontWeight: '800', color: C.primary, marginBottom: 8, textAlign: 'center' },
+  alertText: { textAlign: 'center', color: C.outline, lineHeight: 22, fontSize: 13, marginBottom: 24 },
+  alertStepsBox: { backgroundColor: '#EFF0EB', padding: 16, borderRadius: 16, width: '100%', marginBottom: 24 },
+  alertStepsTitle: { fontSize: 13, fontWeight: '800', color: C.primary, marginBottom: 8, textAlign: 'left' },
+  alertStep: { fontSize: 12, color: C.outline, textAlign: 'left', marginBottom: 4, fontWeight: '700' },
+  alertBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.primary, width: '100%', padding: 16, borderRadius: 16 },
+  alertBtnText: { color: '#FFF', fontSize: 14, fontWeight: '800' },
 
-  formFooter: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 25, paddingTop: 15, borderTopWidth: 1, borderTopColor: '#F3F4F6' },
-  backStepBtn: { padding: 15, justifyContent: 'center' },
-  backStepText: { color: '#6B7280', fontWeight: 'bold', fontSize: 15 },
-  submitBtn: { backgroundColor: '#F97316', paddingHorizontal: 30, paddingVertical: 15, borderRadius: 15, alignItems: 'center', flex: 1, marginLeft: 10 },
-  submitBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-
-  historyList: { gap: 15 },
-  emptyHistory: { alignItems: 'center', padding: 50 },
-  emptyHistoryText: { marginTop: 15, color: '#9CA3AF', fontWeight: 'bold' },
-  historyCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFF', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: '#F3F4F6' },
-  historyLeft: { alignItems: 'flex-start' },
-  historyAmount: { fontSize: 18, fontWeight: '900', color: '#1F2937', marginBottom: 5 },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  badgeText: { fontSize: 10, fontWeight: 'bold', textAlign: 'center' },
-  badgeApproved: { backgroundColor: '#DCFCE7' }, badgeTextApproved: { color: '#166534' },
-  badgeRejected: { backgroundColor: '#FEE2E2' }, badgeTextRejected: { color: '#991B1B' },
-  badgePending: { backgroundColor: '#FEF3C7' }, badgeTextPending: { color: '#92400E' },
-  historyRight: { alignItems: 'flex-end' },
-  historyPlanName: { fontSize: 15, fontWeight: 'bold', color: '#1F2937', marginBottom: 5 },
-  historyDate: { fontSize: 12, color: '#9CA3AF', fontWeight: 'bold' },
-
-  alertContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 30 },
-  alertIconBox: { width: 100, height: 100, backgroundColor: '#FEE2E2', borderRadius: 30, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-  alertTitle: { fontSize: 24, fontWeight: '900', color: '#1F2937', marginBottom: 10, textAlign: 'center' },
-  alertText: { textAlign: 'center', color: '#6B7280', lineHeight: 26, fontSize: 15, marginBottom: 30 },
-  alertStepsBox: { backgroundColor: '#F3F4F6', padding: 20, borderRadius: 20, width: '100%', marginBottom: 30 },
-  alertStepsTitle: { fontSize: 14, fontWeight: 'bold', color: '#4B5563', marginBottom: 10, textAlign: 'right' },
-  alertStep: { fontSize: 14, color: '#6B7280', textAlign: 'right', marginBottom: 5, fontWeight: 'bold' },
-  alertBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#1F2937', width: '100%', padding: 18, borderRadius: 15 },
-  alertBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' }
-});
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: C.cardSurface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
+  modalDragHandle: { width: 40, height: 4, backgroundColor: C.outlineVariant, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: C.primary, textAlign: 'left', marginBottom: 20 },
+  modalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 },
+  modalLabel: { fontSize: 13, fontWeight: '500', color: C.onSurfaceVariant },
+  modalValue: { fontSize: 14, fontWeight: '700', color: C.primary },
+  modalDivider: { height: 1, backgroundColor: C.surfaceContainerLow },
+  pendingStatusBadge: { backgroundColor: C.warningBg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  pendingStatusText: { fontSize: 11, fontWeight: '700', color: C.warningText },
+  modalCloseBtn: { marginTop: 24, backgroundColor: C.surfaceContainerLow, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
+  modalCloseBtnText: { fontSize: 14, fontWeight: '700', color: C.primary },
+}) as any;

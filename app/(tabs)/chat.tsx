@@ -133,15 +133,15 @@ export default function InquiriesDashboardScreen() {
         </View>
 
         <View style={styles.cardBody}>
+          <View style={styles.iconBox}>
+            <Ionicons name={meta.icon as any} size={24} color={AppColors.primary} />
+          </View>
           <View style={styles.cardInfo}>
             <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
             <View style={styles.categoryRow}>
               <Ionicons name={meta.icon as any} size={14} color={AppColors.textSecondary} />
               <Text style={styles.categoryText}>{meta.label}</Text>
             </View>
-          </View>
-          <View style={styles.iconBox}>
-            <Ionicons name={meta.icon as any} size={24} color={AppColors.primary} />
           </View>
         </View>
       </TouchableOpacity>
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
     fontFamily: AppFontFamily.bold,
   },
   tabsRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     padding: 15,
     backgroundColor: AppColors.surface,
     gap: 10,
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
   },
   cardHeader: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
@@ -282,8 +282,9 @@ const styles = StyleSheet.create({
     fontFamily: AppFontFamily.regular,
   },
   cardBody: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 15,
   },
   iconBox: {
     width: 50,
@@ -292,24 +293,24 @@ const styles = StyleSheet.create({
     backgroundColor: AppColors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 15,
   },
   cardInfo: {
+    flexDirection: 'column',
     flex: 1,
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: AppColors.textPrimary,
     fontFamily: AppFontFamily.bold,
+    textAlign: 'left',
     marginBottom: 4,
-    textAlign: 'right',
   },
   categoryRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
   },
   categoryText: {
     fontSize: 13,
@@ -345,7 +346,7 @@ const styles = StyleSheet.create({
     backgroundColor: AppColors.primary,
     borderRadius: AppRadius.full,
     paddingVertical: 15,
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 4,

@@ -15,16 +15,16 @@ interface DocumentsTabProps extends MedicalTabProps {
 // 🌟 Memoize DocumentCard for performance
 const DocumentCard = memo(({ doc, onView }: { doc: ClientDocument, onView: (url: string) => void }) => (
   <View style={styles.docCard}>
-    <TouchableOpacity style={styles.viewDocBtn} onPress={() => onView(doc.file_url)}>
-      <Text style={styles.viewDocBtnText}>عرض</Text>
-    </TouchableOpacity>
+    <View style={styles.docIconBox}>
+      <Ionicons name="document-text" size={24} color="#3B82F6" />
+    </View>
     <View style={styles.docInfo}>
       <Text style={styles.docName} numberOfLines={1}>{doc.file_name}</Text>
       <Text style={styles.docDate}>{new Date(doc.created_at).toLocaleDateString('ar-EG')}</Text>
     </View>
-    <View style={styles.docIconBox}>
-      <Ionicons name="document-text" size={24} color="#3B82F6" />
-    </View>
+    <TouchableOpacity style={styles.viewDocBtn} onPress={() => onView(doc.file_url)}>
+      <Text style={styles.viewDocBtnText}>عرض</Text>
+    </TouchableOpacity>
   </View>
 ));
 
@@ -62,7 +62,7 @@ export default function DocumentsTab({ userId, docs, uploading, setUploading, on
             placeholderTextColor={AppColors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            textAlign="right"
+            textAlign="left"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
@@ -89,7 +89,7 @@ export default function DocumentsTab({ userId, docs, uploading, setUploading, on
 
 const localStyles = StyleSheet.create({
   searchBar: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: AppColors.inputBg,
     borderRadius: AppRadius.md,
@@ -105,7 +105,7 @@ const localStyles = StyleSheet.create({
     fontSize: AppFontSize.md,
     color: AppColors.textPrimary,
     fontFamily: AppFontFamily.regular,
-    textAlign: 'right',
+    textAlign: 'left',
     height: '100%',
   },
 });

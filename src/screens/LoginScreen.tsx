@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
+import * as WebBrowser from 'expo-web-browser';
 import { Animated, Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { showToast } from '../../components/AppToast';
 import { AppColors, AppRadius, AppSpacing, AppFontSize } from '../../constants/AppTheme';
@@ -84,6 +85,7 @@ export default function LoginScreen() {
           keyboardType="email-address"
           autoCapitalize="none"
           hint="اكتب إيميلك أولاً لاستخدام خاصية نسيت كلمة المرور"
+          isLTR={true}
         />
 
         <AuthInput
@@ -105,6 +107,16 @@ export default function LoginScreen() {
           <Text style={styles.footerText}>ليس لديك حساب؟ </Text>
           <TouchableOpacity onPress={() => router.replace('/signup')}>
             <Text style={styles.signupLink}>حساب جديد</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.legalFooter}>
+          <TouchableOpacity onPress={() => WebBrowser.openBrowserAsync('https://healix.app/terms')}>
+            <Text style={styles.legalLink}>شروط الخدمة</Text>
+          </TouchableOpacity>
+          <Text style={styles.legalSeparator}> • </Text>
+          <TouchableOpacity onPress={() => WebBrowser.openBrowserAsync('https://healix.app/privacy')}>
+            <Text style={styles.legalLink}>سياسة الخصوصية</Text>
           </TouchableOpacity>
         </View>
 
@@ -133,12 +145,15 @@ const styles = StyleSheet.create({
 
   header: { alignItems: 'center', marginBottom: AppSpacing.xxxl },
   logo: { width: 80, height: 80, marginBottom: AppSpacing.lg, borderRadius: AppRadius.xl },
-  title: { fontSize: AppFontSize.title, fontWeight: '900', color: AppColors.primary, marginBottom: AppSpacing.xs },
-  subtitle: { fontSize: AppFontSize.md, color: AppColors.textSecondary, fontWeight: 'bold' },
+  title: { fontSize: AppFontSize.title, fontWeight: '900', color: AppColors.primary, marginBottom: AppSpacing.xs, textAlign: 'center' },
+  subtitle: { fontSize: AppFontSize.md, color: AppColors.textSecondary, fontWeight: 'bold', textAlign: 'center' },
 
   forgotPasswordText: { fontSize: AppFontSize.sm, color: AppColors.accent, fontWeight: 'bold' },
 
   footer: { flexDirection: 'row-reverse', justifyContent: 'center', marginTop: AppSpacing.xxl },
   footerText: { color: AppColors.textSecondary, fontSize: AppFontSize.lg, fontWeight: 'bold' },
   signupLink: { color: AppColors.accent, fontSize: AppFontSize.lg, fontWeight: '900' },
+  legalFooter: { flexDirection: 'row-reverse', justifyContent: 'center', alignItems: 'center', marginTop: AppSpacing.xl, gap: 5 },
+  legalLink: { color: AppColors.textSecondary, fontSize: AppFontSize.sm, textDecorationLine: 'underline', fontWeight: 'bold' },
+  legalSeparator: { color: AppColors.textMuted, fontSize: AppFontSize.sm },
 });

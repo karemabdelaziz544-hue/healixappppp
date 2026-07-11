@@ -138,7 +138,7 @@ export default function NotificationsScreen() {
       
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color="#1F2937" />
+          <Ionicons name="chevron-forward" size={24} color="#1F2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>الإشعارات</Text>
         <View style={{ width: 40 }} />
@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '900', color: AppColors.textPrimary },
   listContent: { padding: 20 },
   listEmpty: { flexGrow: 1 },
-  notificationCard: { flexDirection: 'row-reverse', backgroundColor: AppColors.surface, padding: 15, borderRadius: 20, marginBottom: 15, elevation: 1, alignItems: 'center' },
+  notificationCard: { flexDirection: 'row', backgroundColor: AppColors.surface, padding: 15, borderRadius: 20, marginBottom: 15, elevation: 1, alignItems: 'center' },
   unreadCard: { backgroundColor: AppColors.successBg, borderColor: AppColors.successLight, borderWidth: 1 },
   iconBox: { width: 50, height: 50, backgroundColor: AppColors.inputBg, borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginLeft: 15 },
   textContent: { flex: 1, alignItems: 'flex-end' },
@@ -207,6 +207,6 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14, color: AppColors.border, fontWeight: 'bold', marginTop: 6 },
   sectionHeader: { fontSize: 16, fontWeight: '900', color: '#4B5563', textAlign: 'right', marginBottom: 10, marginTop: 5 },
   // Error banner styles
-  errorBanner: { flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: '#FEF2F2', borderRadius: 12, padding: 12, marginBottom: 12, gap: 8 },
+  errorBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF2F2', borderRadius: 12, padding: 12, marginBottom: 12, gap: 8 },
   errorText: { fontSize: 13, color: '#EF4444', fontWeight: '600', textAlign: 'right', flex: 1 },
 });

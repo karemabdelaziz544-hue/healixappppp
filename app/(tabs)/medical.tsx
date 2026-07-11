@@ -139,7 +139,7 @@ export default function MedicalRecordsScreen() {
         <View style={styles.scrollContent}>
           <Skeleton width="100%" height={120} borderRadius={20} style={{ marginBottom: 20 }} />
           <Skeleton width="100%" height={220} borderRadius={25} style={{ marginBottom: 20 }} />
-          <View style={{ flexDirection: 'row-reverse', gap: 15 }}>
+          <View style={{ flexDirection: 'row', gap: 15 }}>
             <Skeleton width="48%" height={100} borderRadius={20} />
             <Skeleton width="48%" height={100} borderRadius={20} />
           </View>
@@ -156,7 +156,7 @@ export default function MedicalRecordsScreen() {
         icon="pulse"
         iconColor="#F97316"
         iconBg="#FFF7ED"
-        title="المركز الطبي والقياسات 🩺"
+        title="المركز الطبي والقياسات"
         subtitle="اشترك الآن لتبدأ في تسجيل قياساتك الطبية، التحاليل، ونمط حياتك لمتابعة أدق مع طبيبك."
         buttonText="اشترك الآن"
         onPress={() => router.push('/subscriptions')}

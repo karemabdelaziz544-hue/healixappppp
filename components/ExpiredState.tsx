@@ -14,7 +14,7 @@ export default function ExpiredState() {
       <View style={styles.iconBox}>
         <Ionicons name="lock-closed" size={60} color={AppColors.danger} />
       </View>
-      <Text style={styles.title}>اشتراكك منتهي ⚠️</Text>
+      <Text style={styles.title}>اشتراكك منتهي</Text>
       <Text style={styles.subtitle}>
         عذراً، لا يمكنك الوصول لهذه الصفحة. يرجى تجديد اشتراكك لمتابعة رحلتك مع Healix.
       </Text>
