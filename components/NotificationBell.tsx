@@ -1,5 +1,6 @@
+import { Text } from '@/components/AppText';
 import React, { useEffect, useState } from 'react';
-import { TouchableOpacity, Text, View } from 'react-native';
+import { TouchableOpacity, View } from 'react-native';;
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { supabase } from '../src/lib/supabase'; 
@@ -43,7 +44,7 @@ export default function NotificationBell() {
     >
       <Ionicons name="notifications-outline" size={24} color="#1F2937" />
       {unreadCount > 0 && (
-        <View style={{ position: 'absolute', top: -2, left: -2, backgroundColor: '#EF4444', width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' }}>
+        <View style={{ position: 'absolute', top: -2, start: -2, backgroundColor: '#EF4444', width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' }}>
           <Text style={{ color: '#FFF', fontSize: 10, fontWeight: 'bold' }}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
         </View>
       )}

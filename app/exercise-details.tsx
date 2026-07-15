@@ -1,10 +1,14 @@
+import { Text } from '@/components/AppText';
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, Dimensions, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, Dimensions, Alert } from 'react-native';;
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { showToast } from '../components/AppToast';
 import { AppColors, AppFontFamily } from '../constants/AppTheme';
+import { AnimatedButton } from '../components/animations/AnimatedButton';
+import { FadeInView } from '../components/animations/FadeInView';
+import { SlideInView } from '../components/animations/SlideInView';
 
 const { width } = Dimensions.get('window');
 
@@ -67,25 +71,27 @@ export default function ExerciseDetailsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Hero Section / Video Thumbnail */}
-        <ImageBackground
-          source={{ uri: id === 'walking' ? 'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?q=80&w=600&auto=format&fit=crop' : 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=600&auto=format&fit=crop' }}
-          style={styles.heroSection}
-          imageStyle={styles.heroImage}
-        >
-          <View style={styles.heroOverlay}>
-            <TouchableOpacity style={styles.playButton} activeOpacity={0.8}>
-              <Ionicons name="play" size={36} color="#FFFFFF" style={{ marginLeft: 4 }} />
-            </TouchableOpacity>
-          </View>
-        </ImageBackground>
+        <FadeInView delay={100}>
+          <ImageBackground
+            source={{ uri: id === 'walking' ? 'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?q=80&w=600&auto=format&fit=crop' : 'https://images.unsplash.com/photo-1574680096145-d05b474e2155?q=80&w=600&auto=format&fit=crop' }}
+            style={styles.heroSection}
+            imageStyle={styles.heroImage}
+          >
+            <View style={styles.heroOverlay}>
+              <AnimatedButton style={styles.playButton}>
+                <Ionicons name="play" size={36} color="#FFFFFF" style={{ marginStart: 4 }} />
+              </AnimatedButton>
+            </View>
+          </ImageBackground>
+        </FadeInView>
 
         {/* Back Button */}
-        <TouchableOpacity 
+        <AnimatedButton 
           style={[styles.floatingBackButton, { top: insets.top + 10 }]} 
           onPress={() => router.back()}
         >
           <Ionicons name="arrow-forward" size={24} color={VITALITY_COLORS.primaryDark} />
-        </TouchableOpacity>
+        </AnimatedButton>
 
         {/* Category Tags */}
         <View style={styles.tagRow}>
@@ -101,7 +107,7 @@ export default function ExerciseDetailsScreen() {
         <Text style={styles.titleText}>{title}</Text>
 
         {/* Quick Stats Bento Grid */}
-        <View style={styles.statsGrid}>
+        <FadeInView delay={200} style={styles.statsGrid}>
           <View style={styles.statCard}>
             <Ionicons name="time" size={22} color={VITALITY_COLORS.accentOrange} />
             <Text style={styles.statValue}>{duration}</Text>
@@ -125,7 +131,7 @@ export default function ExerciseDetailsScreen() {
             <Text style={styles.statValue}>{sets.split(' ')[0]} جولات</Text>
             <Text style={styles.statLabel}>الهدف</Text>
           </View>
-        </View>
+        </FadeInView>
 
         {/* How to Perform */}
         <View style={styles.sectionContainer}>
@@ -206,22 +212,21 @@ export default function ExerciseDetailsScreen() {
       </ScrollView>
 
       {/* Sticky Bottom Action */}
-      <View style={[styles.bottomActionContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <TouchableOpacity 
+      <SlideInView direction="up" delay={300} style={[styles.bottomActionContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <AnimatedButton 
           style={[
             styles.completedButton,
             isCompleted && { backgroundColor: VITALITY_COLORS.successGreen }
           ]} 
           onPress={handleMarkCompleted}
           disabled={isCompleted}
-          activeOpacity={0.9}
         >
           <Ionicons name={isCompleted ? "checkmark-circle" : "checkmark-circle-outline"} size={22} color="#FFFFFF" />
           <Text style={styles.completedButtonText}>
             {isCompleted ? 'تم حفظ وإنجاز التمرين!' : 'تحديد التمرين كمنجز'}
           </Text>
-        </TouchableOpacity>
-      </View>
+        </AnimatedButton>
+      </SlideInView>
     </View>
   );
 }
@@ -265,7 +270,7 @@ const styles = StyleSheet.create({
   },
   floatingBackButton: {
     position: 'absolute',
-    right: 30,
+    end: 30,
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -353,14 +358,14 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: VITALITY_COLORS.border,
-    borderRightWidth: 4,
-    borderRightColor: VITALITY_COLORS.accentOrange,
+    borderEndWidth: 4,
+    borderEndColor: VITALITY_COLORS.accentOrange,
   },
   stepIndex: {
     fontSize: 18,
     fontWeight: 'bold',
     color: VITALITY_COLORS.accentOrange,
-    marginLeft: 12,
+    marginStart: 12,
   },
   stepText: {
     flex: 1,
@@ -419,7 +424,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   mistakeIcon: {
-    marginLeft: 12,
+    marginStart: 12,
   },
   mistakeInfo: {
     flex: 1,
@@ -469,8 +474,8 @@ const styles = StyleSheet.create({
   bottomActionContainer: {
     position: 'absolute',
     bottom: 0,
-    left: 0,
-    right: 0,
+    start: 0,
+    end: 0,
     backgroundColor: 'rgba(250, 249, 247, 0.9)',
     paddingHorizontal: 20,
     paddingTop: 12,

@@ -1,5 +1,6 @@
+import { Text } from '@/components/AppText';
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, RefreshControl } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Alert, RefreshControl } from 'react-native';;
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -433,7 +434,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 14,
+    marginStart: 14,
   },
   stepContent: {
     flex: 1,
@@ -459,7 +460,7 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
   },
   stepArrow: {
-    marginRight: 5,
+    marginEnd: 5,
   },
 
   // ✅ Mark Done Button

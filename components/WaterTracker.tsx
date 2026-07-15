@@ -1,5 +1,6 @@
+import { Text } from '@/components/AppText';
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';;
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../src/lib/supabase';
 import { executeQuery } from '../src/lib/apiClient';
@@ -195,7 +196,7 @@ export default function WaterTracker() {
                 
                 <View style={styles.textOverlay}>
                     <View style={styles.iconCountRow}>
-                        <Ionicons name="water" size={18} color={percentage > 60 ? HydrationColors.bgLight : HydrationColors.textDark} style={{marginLeft: 5}}/>
+                        <Ionicons name="water" size={18} color={percentage > 60 ? HydrationColors.bgLight : HydrationColors.textDark} style={{marginStart: 5}}/>
                         <Text style={[styles.glassCount, { color: percentage > 60 ? '#FFF' : HydrationColors.textDark }]}>{consumedGlasses}</Text>
                     </View>
                     <Text style={[styles.glassTarget, { color: percentage > 60 ? 'rgba(255,255,255,0.7)' : HydrationColors.waveLight }]}>{Strings.water.glassesOf(targetGlasses)}</Text>
@@ -233,8 +234,8 @@ const styles = StyleSheet.create({
   circleOuter: { width: CIRCLE_SIZE, height: CIRCLE_SIZE, borderRadius: CIRCLE_SIZE / 2, backgroundColor: HydrationColors.bgLight, overflow: 'hidden', borderWidth: 6, borderColor: '#FFF', justifyContent: 'center', alignItems: 'center', position: 'relative' },
   
   // أنيميشن الموجة المائية المزدوجة
-  waveFill: { position: 'absolute', left: -50, right: -50, height: CIRCLE_SIZE },
-  waveTop: { height: 25, backgroundColor: HydrationColors.waveLight, borderRadius: 25, transform: [{ scaleX: 1.5 }], borderTopLeftRadius: 50, borderTopRightRadius: 50 },
+  waveFill: { position: 'absolute', start: -50, end: -50, height: CIRCLE_SIZE },
+  waveTop: { height: 25, backgroundColor: HydrationColors.waveLight, borderRadius: 25, transform: [{ scaleX: 1.5 }], borderTopStartRadius: 50, borderTopEndRadius: 50 },
   waveBody: { flex: 1, backgroundColor: HydrationColors.waveDark },
   
   textOverlay: { zIndex: 20, alignItems: 'center' },
@@ -243,7 +244,7 @@ const styles = StyleSheet.create({
   glassTarget: { fontSize: 13, fontWeight: '900', marginTop: -5 },
   
   // طبقة التظليل الزجاجية
-  glassShine: { position: 'absolute', top: 15, left: 25, width: 30, height: CIRCLE_SIZE / 2.5, backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: 15, transform: [{ rotate: '-15deg' }], zIndex: 10 },
+  glassShine: { position: 'absolute', top: 15, start: 25, width: 30, height: CIRCLE_SIZE / 2.5, backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: 15, transform: [{ rotate: '-15deg' }], zIndex: 10 },
 
   // الأزرار الجديدة
   floatingAddBtn: { width: 70, height: 70, backgroundColor: HydrationColors.waveDark, borderRadius: 35, justifyContent: 'center', alignItems: 'center', elevation: 6, shadowColor: HydrationColors.waveDark, shadowOffset: {width: 0, height: 6}, shadowOpacity: 0.5, shadowRadius: 10 },

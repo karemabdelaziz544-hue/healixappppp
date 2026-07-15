@@ -1,9 +1,6 @@
-import React, { useCallback } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ActivityIndicator, KeyboardAvoidingView,
-  Platform, FlatList,
-} from 'react-native';
+import { Text, TextInput } from '@/components/AppText';
+import React, { useCallback, useState } from 'react';
+import { View, StyleSheet, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, FlatList, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { Message } from '../src/types';
@@ -14,15 +11,24 @@ import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { MessageBubble } from './chat/MessageBubble';
 import { useRouter } from 'expo-router';
 
-const SUGGESTIONS = [
-  'أريد سؤال الكوتش عن تغذيتي اليومية 🍎',
-  'هل يمكن تعديل بعض تمارين خطتي؟ 🏋️‍♂️',
-  'أود استشارة الطبيب بشأن وعكة صحية خفيفة 🩺',
-  'استفسار بخصوص مواعيد الوجبات والمكملات 📋',
-];
+const QUICK_ACTIONS = ['الاشتراك', 'الدفع', 'إضافة حساب فرعي', 'تحميل التقارير'];
 
+const getMessageDateLabel = (dateStr: string) => {
+  const date = new Date(dateStr);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
 
-// 🌟 المكون المشترك للشات
+  if (date.toDateString() === today.toDateString()) {
+    return 'اليوم';
+  } else if (date.toDateString() === yesterday.toDateString()) {
+    return 'أمس';
+  } else {
+    const monthsAr = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+    return `${date.getDate()} ${monthsAr[date.getMonth()]}`;
+  }
+};
+
 interface ChatViewProps {
   inquiryId: string;
   status: 'open' | 'under_review' | 'replied' | 'closed';
@@ -71,34 +77,60 @@ export default function ChatView({
     loadingMore,
   } = useChatSession(inquiryId, currentUserId);
 
-  // 🔴 AUDIT FIX: Stable renderItem — no anonymous function re-creation
-  const renderItem = useCallback(({ item: msg }: { item: Message }) => {
+  const renderItem = useCallback(({ item: msg, index }: { item: Message; index: number }) => {
     const isMe = msg.sender_id === currentUserId;
-    return <MessageBubble msg={msg} isMe={isMe} />;
-  }, [currentUserId]);
+    
+    // Determine if we need to show a date separator ( FlatList is inverted, so index + 1 is older )
+    const nextMsg = messages[index + 1];
+    const showDateSeparator = !nextMsg || new Date(msg.created_at).toDateString() !== new Date(nextMsg.created_at).toDateString();
+    
+    return (
+      <View style={{ width: '100%' }}>
+        {showDateSeparator ? (
+          <View style={styles.dateSeparatorContainer}>
+            <View style={styles.dateSeparatorBox}>
+              <Text style={styles.dateSeparatorText}>📌 {headerTitle} — {getMessageDateLabel(msg.created_at)}</Text>
+            </View>
+          </View>
+        ) : null}
+        <MessageBubble msg={msg} isMe={isMe} />
+      </View>
+    );
+  }, [currentUserId, messages, headerTitle]);
 
   const keyExtractor = useCallback((item: Message) => item.id, []);
 
   return (
     <SafeAreaView style={styles.chatContainer}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}>
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+      >
+        {/* Premium Header */}
         <View style={styles.chatHeader}>
-          {showBackButton && onBack && (
-            <TouchableOpacity onPress={onBack} style={styles.backBtn} accessibilityLabel={Strings.common.back} accessibilityRole="button">
-              <Ionicons name="arrow-forward" size={24} color={AppColors.textPrimary} />
-            </TouchableOpacity>
-          )}
-          <View style={styles.headerTitleBox}>
-            <Text style={styles.chatHeaderTitle}>{headerTitle}</Text>
+          <View style={styles.headerRight}>
+            {showBackButton && onBack && (
+              <TouchableOpacity onPress={onBack} style={styles.backBtn} accessibilityLabel={Strings.common.back}>
+                <Ionicons name="arrow-forward" size={24} color="#004532" />
+              </TouchableOpacity>
+            )}
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.chatHeaderTitle}>{headerTitle}</Text>
+              <Text style={styles.chatHeaderSubtitle}>نسعد بمساعدتك في أي وقت</Text>
+            </View>
           </View>
+          <TouchableOpacity style={styles.menuBtn}>
+            <Ionicons name="ellipsis-vertical" size={20} color="#3f4944" />
+          </TouchableOpacity>
         </View>
 
         {loading && messages.length === 0 ? (
-          <ActivityIndicator size="large" color={AppColors.primary} style={{ marginTop: 50 }} />
+          <ActivityIndicator size="large" color="#004532" style={{ marginTop: 50 }} />
         ) : (
           <FlatList
             style={styles.messagesArea}
-            contentContainerStyle={{ padding: 15 }}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16, paddingTop: 8 }}
             data={messages}
             keyExtractor={keyExtractor}
             renderItem={renderItem}
@@ -109,49 +141,61 @@ export default function ChatView({
             windowSize={15}
             maxToRenderPerBatch={10}
             updateCellsBatchingPeriod={50}
-            ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color={AppColors.primary} style={{ marginVertical: 10 }} /> : null}
+            ListFooterComponent={loadingMore ? <ActivityIndicator size="small" color="#004532" style={{ marginVertical: 10 }} /> : null}
             ListEmptyComponent={
               <View style={styles.emptyStateContainer}>
-                <Ionicons name="chatbubbles-outline" size={48} color={AppColors.textMuted} />
+                <Ionicons name="chatbubbles-outline" size={48} color="#9CA3AF" />
                 <Text style={styles.emptyStateText}>{Strings.chat.noMessages}</Text>
                 <Text style={styles.emptyStateSubtext}>{Strings.chat.startChat}</Text>
-                
-                <View style={styles.suggestionsContainer}>
-                  {SUGGESTIONS.map((suggestion, index) => (
-                    <TouchableOpacity 
-                      key={index} 
-                      style={styles.suggestionChip} 
-                      onPress={() => setNewMessage(suggestion)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.suggestionText}>{suggestion}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
               </View>
             }
           />
         )}
 
-        <View style={[styles.inputArea, !isKeyboardVisible && { paddingBottom: Platform.OS === 'ios' ? 90 : 80 }]}>
+        {/* Footer & Composer */}
+        <View style={[styles.footerContainer, !isKeyboardVisible && { paddingBottom: Platform.OS === 'ios' ? 24 : 12 }]}>
+          {/* Quick Actions ScrollView */}
+          {status !== 'closed' && (
+            <View style={styles.quickActionsContainer}>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                contentContainerStyle={styles.quickActionsScroll}
+              >
+                {QUICK_ACTIONS.map((action, index) => (
+                  <TouchableOpacity 
+                    key={index} 
+                    style={styles.quickActionChip} 
+                    onPress={() => setNewMessage(action)}
+                  >
+                    <Text style={styles.quickActionText}>{action}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Network offline bar */}
           {showNetworkStatus && !isConnected && (
             <View style={styles.offlineBar}>
               <Ionicons name="cloud-offline-outline" size={16} color="#FFF" />
               <Text style={styles.offlineBarText}>{Strings.chat.noInternetSend}</Text>
             </View>
           )}
+
+          {/* Attachment Preview */}
           {attachment ? (
             <View style={styles.previewBox}>
               <Text numberOfLines={1} style={styles.previewText}>{attachment.name}</Text>
               <TouchableOpacity onPress={() => setAttachment(null)}>
-                <Ionicons name="close-circle" size={20} color={AppColors.danger} />
+                <Ionicons name="close-circle" size={22} color={AppColors.danger} />
               </TouchableOpacity>
             </View>
           ) : null}
 
           {status === 'closed' ? (
             <View style={styles.closedInquiryBar}>
-              <Ionicons name="checkmark-circle" size={20} color={AppColors.success} />
+              <Ionicons name="checkmark-circle" size={22} color={AppColors.success} />
               <Text style={styles.closedBarText}>تم حل هذا الاستفسار وإغلاقه بواسطة الكوتش ✓</Text>
               <TouchableOpacity 
                 style={styles.reopenActionBtn} 
@@ -161,44 +205,58 @@ export default function ChatView({
               </TouchableOpacity>
             </View>
           ) : (
-            <View style={styles.inputRow}>
-            <TouchableOpacity style={styles.iconBtn} onPress={handleAttachmentClick} disabled={uploading || !!recording || !isConnected}>
-              <Ionicons name="attach" size={28} color={AppColors.textSecondary} />
-            </TouchableOpacity>
+            <View style={styles.composerWrapper}>
+              <View style={styles.composerContainer}>
+                <TouchableOpacity 
+                  style={styles.composerAddBtn} 
+                  onPress={handleAttachmentClick} 
+                  disabled={uploading || !!recording || !isConnected}
+                >
+                  <Ionicons name="add" size={24} color="#3f4944" />
+                </TouchableOpacity>
 
-            {recording ? (
-              <View style={styles.recordingBar}>
-                <View style={styles.recordingPulse} />
-                <Text style={styles.recordingTimerText}>
-                  {String(Math.floor(recordingDuration / 60)).padStart(2, '0')}:{String(recordingDuration % 60).padStart(2, '0')}
-                </Text>
-                <Text style={styles.recordingLabel}>{Strings.chat.recording}</Text>
+                {recording ? (
+                  <View style={styles.recordingBar}>
+                    <View style={styles.recordingPulse} />
+                    <Text style={styles.recordingTimerText}>
+                      {String(Math.floor(recordingDuration / 60)).padStart(2, '0')}:{String(recordingDuration % 60).padStart(2, '0')}
+                    </Text>
+                    <Text style={styles.recordingLabel}>{Strings.chat.recording}</Text>
+                  </View>
+                ) : (
+                  <TextInput 
+                    style={styles.composerInput} 
+                    placeholder="اكتب رسالتك هنا..." 
+                    value={newMessage} 
+                    onChangeText={setNewMessage} 
+                    multiline 
+                    editable={!uploading} 
+                  />
+                )}
+
+                {(newMessage.trim().length > 0 || attachment) ? (
+                  <TouchableOpacity
+                    style={[styles.composerSendBtn, !isConnected && { opacity: 0.4 }]}
+                    onPress={sendMessage}
+                    disabled={uploading || !isConnected}
+                  >
+                    {uploading ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <Ionicons name="send" size={18} color="#FFF" style={{ transform: [{ rotate: '180deg' }] }} />
+                    )}
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.composerMicBtn, recording ? styles.recordingBtnActive : null]}
+                    onPress={recording ? stopRecording : startRecording}
+                    disabled={!isConnected}
+                  >
+                    <Ionicons name={recording ? 'stop' : 'mic'} size={22} color={recording ? '#FFF' : '#3f4944'} />
+                  </TouchableOpacity>
+                )}
               </View>
-            ) : (
-              <TextInput style={styles.textInput} placeholder={Strings.chat.placeholder} value={newMessage} onChangeText={setNewMessage} multiline editable={!uploading} />
-            )}
-
-            {(newMessage.trim().length > 0 || attachment) ? (
-              <TouchableOpacity
-                style={[styles.sendBtn, !isConnected && { opacity: 0.4 }]}
-                onPress={sendMessage}
-                disabled={uploading || !isConnected}
-                accessibilityLabel={Strings.common.send}
-                accessibilityRole="button"
-              >
-                {uploading ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="send" size={20} color="#FFF" />}
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[styles.micBtn, recording ? styles.recordingBtn : null]}
-                onPress={recording ? stopRecording : startRecording}
-                accessibilityLabel={recording ? Strings.chat.stopRecording : Strings.chat.voiceRecord}
-                accessibilityRole="button"
-              >
-                <Ionicons name={recording ? 'stop' : 'mic'} size={24} color={recording ? '#FFF' : AppColors.textSecondary} />
-              </TouchableOpacity>
-            )}
-          </View>
+            </View>
           )}
         </View>
       </KeyboardAvoidingView>
@@ -207,74 +265,232 @@ export default function ChatView({
 }
 
 const styles = StyleSheet.create({
-  chatContainer: { flex: 1, backgroundColor: AppColors.inputBg },
-  chatHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: AppColors.surface, padding: 15, borderBottomWidth: 1, borderBottomColor: AppColors.border, elevation: 2 },
-  backBtn: { padding: 5 },
-  headerTitleBox: { alignItems: 'flex-start', flex: 1, paddingRight: 15 },
-  chatHeaderTitle: { fontSize: 18, fontWeight: 'bold', color: AppColors.textPrimary, textAlign: 'left' },
+  chatContainer: { flex: 1, backgroundColor: '#f7faf6' },
+  chatHeader: { 
+    flexDirection: 'row', // RTL standard
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    backgroundColor: '#f7faf6', 
+    paddingHorizontal: 16, 
+    paddingVertical: 12,
+  },
+  headerRight: {
+    flexDirection: 'row', // RTL standard
+    alignItems: 'center',
+    gap: 8,
+  },
+  backBtn: {
+    padding: 8,
+    borderRadius: 20,
+  },
+  headerTextContainer: {
+    alignItems: 'flex-start',
+  },
+  chatHeaderTitle: { 
+    fontSize: 24, 
+    fontFamily: AppFontFamily.bold, 
+    color: '#004532',
+    textAlign: 'left',
+  },
+  chatHeaderSubtitle: {
+    fontSize: 12,
+    fontFamily: AppFontFamily.regular,
+    color: '#3f4944',
+    marginTop: 2,
+  },
+  menuBtn: {
+    padding: 8,
+  },
 
   messagesArea: { flex: 1 },
-  emptyStateContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 40, paddingHorizontal: 20, transform: [{ scaleY: -1 }] },
-  emptyStateText: { fontSize: 16, color: AppColors.textPrimary, fontWeight: 'bold', marginTop: 10 },
-  emptyStateSubtext: { fontSize: 14, color: AppColors.textMuted, marginTop: 5 },
+  emptyStateContainer: { 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    marginTop: 64, 
+    paddingHorizontal: 20, 
+    transform: [{ scaleY: -1 }] 
+  },
+  emptyStateText: { 
+    fontSize: 16, 
+    color: '#181c1a', 
+    fontFamily: AppFontFamily.bold, 
+    marginTop: 12 
+  },
+  emptyStateSubtext: { 
+    fontSize: 14, 
+    color: '#3f4944', 
+    marginTop: 6 
+  },
 
-  inputArea: { backgroundColor: AppColors.surface, borderTopWidth: 1, borderTopColor: AppColors.border, flexDirection: 'column' },
-  previewBox: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', padding: 10, backgroundColor: AppColors.inputBg, margin: 10, borderRadius: 10 },
-  previewText: { fontSize: 12, color: AppColors.textPrimary, flex: 1, textAlign: 'right', marginRight: 10 },
-  inputRow: { flexDirection: 'row-reverse', alignItems: 'center', padding: 10, paddingHorizontal: 15 },
-  iconBtn: { padding: 5 },
-  textInput: { flex: 1, backgroundColor: AppColors.inputBg, minHeight: 45, maxHeight: 100, borderRadius: 25, paddingHorizontal: 15, paddingTop: 12, textAlign: 'right', fontSize: 15, marginHorizontal: 10 },
-  sendBtn: { width: 45, height: 45, backgroundColor: AppColors.primary, borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
-  micBtn: { padding: 5 },
-  recordingBtn: { backgroundColor: AppColors.danger, borderRadius: 25, padding: 10 },
+  footerContainer: {
+    backgroundColor: '#f7faf6',
+  },
 
-  offlineBar: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, backgroundColor: AppColors.danger, paddingHorizontal: 15, paddingVertical: 8 },
-  offlineBarText: { color: '#FFF', fontSize: 12, fontWeight: 'bold', flex: 1, textAlign: 'right' },
-
-  recordingBar: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: AppColors.dangerBg, borderRadius: 25, marginHorizontal: 10, paddingHorizontal: 15, height: 45, gap: 10 },
-  recordingPulse: { width: 10, height: 10, borderRadius: 5, backgroundColor: AppColors.danger },
-  recordingTimerText: { fontSize: 18, fontWeight: '900', color: AppColors.danger, fontVariant: ['tabular-nums'] },
-  recordingLabel: { fontSize: 13, fontWeight: 'bold', color: AppColors.textMuted },
-
-  // Suggestions styles
-  suggestionsContainer: {
-    marginTop: 20,
+  quickActionsContainer: {
+    paddingVertical: 12,
     width: '100%',
   },
-  suggestionChip: {
-    backgroundColor: AppColors.surface,
-    borderWidth: 1,
-    borderColor: AppColors.border,
-    borderRadius: AppRadius.md,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    marginBottom: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+  quickActionsScroll: {
+    flexDirection: 'row', // RTL standard
+    paddingHorizontal: 16,
+    gap: 8,
   },
-  suggestionText: {
-    color: AppColors.primary,
-    fontFamily: AppFontFamily.medium,
+  quickActionChip: {
+    backgroundColor: '#e0e3df',
+    borderColor: 'rgba(190, 201, 194, 0.3)',
+    borderWidth: 1,
+    borderRadius: 9999,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quickActionText: {
+    color: '#181c1a',
+    fontSize: 14,
+    fontFamily: AppFontFamily.bold,
+  },
+
+  previewBox: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    padding: 12, 
+    backgroundColor: '#ffffff', 
+    borderColor: '#bec9c2',
+    borderWidth: 1,
+    marginHorizontal: 16, 
+    marginBottom: 8,
+    borderRadius: 16 
+  },
+  previewText: { 
+    fontSize: 12, 
+    color: '#181c1a', 
+    flex: 1, 
+    textAlign: 'left', // RTL Natural Flow
+    marginEnd: 10,
+    fontFamily: AppFontFamily.regular,
+  },
+
+  offlineBar: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8, 
+    backgroundColor: AppColors.danger, 
+    paddingHorizontal: 16, 
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  offlineBarText: { 
+    color: '#FFF', 
+    fontSize: 12, 
+    fontFamily: AppFontFamily.bold, 
+    flex: 1, 
+    textAlign: 'left' 
+  },
+
+  // Date Separator styles
+  dateSeparatorContainer: {
+    width: '100%',
+    alignItems: 'center',
+    marginVertical: 16,
+    // NO transform! FlatList with inverted={true} already handles the orientation!
+  },
+  dateSeparatorBox: {
+    backgroundColor: '#d3e3dc',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 9999,
+  },
+  dateSeparatorText: {
+    color: '#566660',
+    fontSize: 12,
+    fontFamily: AppFontFamily.bold,
     textAlign: 'center',
   },
+
+  // Composer styles
+  composerWrapper: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  composerContainer: {
+    backgroundColor: '#ffffff',
+    borderColor: '#bec9c2',
+    borderWidth: 1,
+    borderRadius: 24,
+    padding: 8,
+    flexDirection: 'row', // RTL standard
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: '#065f46',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 20,
+    elevation: 2,
+  },
+  composerAddBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  composerInput: {
+    flex: 1,
+    minHeight: 40,
+    maxHeight: 100,
+    paddingHorizontal: 8,
+    fontSize: 16,
+    fontFamily: AppFontFamily.regular,
+    color: '#181c1a',
+    textAlign: 'right', // Explicit right align for text input placeholder
+  },
+  composerSendBtn: {
+    width: 48,
+    height: 48,
+    backgroundColor: '#004532',
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+  },
+  composerMicBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recordingBtnActive: {
+    backgroundColor: '#EF4444',
+    borderRadius: 20,
+  },
+
+  recordingBar: { 
+    flex: 1, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: AppColors.dangerBg, 
+    borderRadius: 20, 
+    paddingHorizontal: 15, 
+    height: 40, 
+    gap: 10 
+  },
+  recordingPulse: { width: 10, height: 10, borderRadius: 5, backgroundColor: AppColors.danger },
+  recordingTimerText: { fontSize: 16, fontFamily: AppFontFamily.bold, color: AppColors.danger },
+  recordingLabel: { fontSize: 13, fontFamily: AppFontFamily.regular, color: AppColors.textMuted },
+
   closedInquiryBar: {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
     backgroundColor: '#F3F4F6',
-    borderTopWidth: 1,
-    borderTopColor: AppColors.border,
     gap: 8,
   },
   closedBarText: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontFamily: AppFontFamily.bold,
     color: AppColors.textSecondary,
     textAlign: 'center',
   },
@@ -288,6 +504,6 @@ const styles = StyleSheet.create({
   reopenActionText: {
     color: '#FFF',
     fontSize: 13,
-    fontWeight: 'bold',
+    fontFamily: AppFontFamily.bold,
   }
 });

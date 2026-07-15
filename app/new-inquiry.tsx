@@ -13,6 +13,9 @@ import { useChatAttachments } from '../src/features/chat/hooks/useChatAttachment
 import { supabase } from '../src/lib/supabase';
 import { generateUUID } from '../src/lib/offlineQueue';
 import NetInfo from '@react-native-community/netinfo';
+import { AnimatedButton } from '../components/animations/AnimatedButton';
+import { FadeInView } from '../components/animations/FadeInView';
+import { SlideInView } from '../components/animations/SlideInView';
 
 const CATEGORIES = [
   { id: 'nutrition', label: 'النظام الغذائي', icon: 'restaurant-outline' },
@@ -146,13 +149,13 @@ export default function NewInquiryScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <FadeInView delay={50} style={styles.header}>
+          <AnimatedButton onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="arrow-forward" size={24} color={AppColors.textPrimary} />
-          </TouchableOpacity>
+          </AnimatedButton>
           <Text style={styles.headerTitle}>استفسار جديد</Text>
           <View style={{ width: 40 }} />
-        </View>
+        </FadeInView>
 
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.sectionTitle}>موضوع الاستفسار</Text>
@@ -162,21 +165,23 @@ export default function NewInquiryScreen() {
             showsHorizontalScrollIndicator={false}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.categoriesContainer}
-            renderItem={({ item }) => {
+            renderItem={({ item, index }) => {
               const isSelected = category === item.id;
               return (
-                <TouchableOpacity
+                <FadeInView delay={index * 50}>
+                <AnimatedButton
                   style={[styles.categoryChip, isSelected && styles.categoryChipActive]}
                   onPress={() => setCategory(item.id)}
                 >
                   <Ionicons name={item.icon as any} size={20} color={isSelected ? '#FFF' : AppColors.textSecondary} />
                   <Text style={[styles.categoryText, isSelected && styles.categoryTextActive]}>{item.label}</Text>
-                </TouchableOpacity>
+                </AnimatedButton>
+                </FadeInView>
               );
             }}
           />
 
-          <View style={styles.formGroup}>
+          <SlideInView delay={100} direction="up" style={styles.formGroup}>
             <Text style={styles.label}>عنوان الاستفسار (اختياري)</Text>
             <TextInput
               style={styles.input}
@@ -185,10 +190,10 @@ export default function NewInquiryScreen() {
               onChangeText={setTitle}
               textAlign="left"
             />
-          </View>
+          </SlideInView>
 
           {category === 'weight' && (
-            <View style={styles.formGroup}>
+            <SlideInView delay={150} direction="up" style={styles.formGroup}>
               <Text style={styles.label}>وزنك الحالي (كجم)</Text>
               <TextInput
                 style={styles.input}
@@ -198,10 +203,10 @@ export default function NewInquiryScreen() {
                 keyboardType="numeric"
                 textAlign="left"
               />
-            </View>
+            </SlideInView>
           )}
 
-          <View style={styles.formGroup}>
+          <SlideInView delay={200} direction="up" style={styles.formGroup}>
             <Text style={styles.label}>التفاصيل</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
@@ -212,30 +217,30 @@ export default function NewInquiryScreen() {
               textAlign="left"
               textAlignVertical="top"
             />
-          </View>
+          </SlideInView>
 
-          <View style={styles.formGroup}>
+          <SlideInView delay={250} direction="up" style={styles.formGroup}>
             <Text style={styles.label}>المرفقات</Text>
             {attachment ? (
               <View style={styles.attachmentPreview}>
                 <Ionicons name="document-attach-outline" size={24} color={AppColors.primary} />
                 <Text style={styles.attachmentName} numberOfLines={1}>{attachment.name}</Text>
-                <TouchableOpacity onPress={() => setAttachment(null)}>
+                <AnimatedButton onPress={() => setAttachment(null)}>
                   <Ionicons name="close-circle" size={24} color={AppColors.danger} />
-                </TouchableOpacity>
+                </AnimatedButton>
               </View>
             ) : (
-              <TouchableOpacity style={styles.attachBtn} onPress={handleAttachmentClick}>
+              <AnimatedButton style={styles.attachBtn} onPress={handleAttachmentClick}>
                 <Ionicons name="cloud-upload-outline" size={24} color={AppColors.textSecondary} />
                 <Text style={styles.attachBtnText}>إرفاق صورة أو ملف (اختياري)</Text>
-              </TouchableOpacity>
+              </AnimatedButton>
             )}
-          </View>
+          </SlideInView>
 
         </ScrollView>
 
-        <View style={styles.footer}>
-          <TouchableOpacity 
+        <SlideInView delay={300} direction="up" style={styles.footer}>
+          <AnimatedButton 
             style={[styles.submitBtn, loading && styles.submitBtnDisabled]} 
             onPress={handleSubmit} 
             disabled={loading}
@@ -245,8 +250,8 @@ export default function NewInquiryScreen() {
             ) : (
               <Text style={styles.submitBtnText}>إرسال الاستفسار</Text>
             )}
-          </TouchableOpacity>
-        </View>
+          </AnimatedButton>
+        </SlideInView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

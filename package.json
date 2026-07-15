@@ -13,7 +13,6 @@
     "audit:prod": "npm audit --omit=dev"
   },
   "dependencies": {
-    "@expo-google-fonts/tajawal": "^0.4.1",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "11.4.1",
@@ -25,6 +24,7 @@
     "base64-arraybuffer": "^1.0.2",
     "expo": "~54.0.33",
     "expo-av": "~16.0.8",
+    "expo-clipboard": "~8.0.8",
     "expo-constants": "~18.0.13",
     "expo-device": "~8.0.10",
     "expo-document-picker": "~14.0.8",
@@ -42,6 +42,7 @@
     "expo-symbols": "~1.0.8",
     "expo-system-ui": "~6.0.9",
     "expo-web-browser": "~15.0.10",
+    "moti": "^0.30.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",

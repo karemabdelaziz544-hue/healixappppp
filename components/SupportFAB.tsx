@@ -25,7 +25,7 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     bottom: 110, // Above the custom tab bar
-    right: 20,
+    end: 20,
     width: 60,
     height: 60,
     borderRadius: 30,

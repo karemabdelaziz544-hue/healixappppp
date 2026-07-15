@@ -1,5 +1,6 @@
+import { Text } from '@/components/AppText';
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';;
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -88,7 +89,10 @@ export default function PaywallView() {
         <TouchableOpacity
           style={styles.subscribeBtn}
           activeOpacity={0.85}
-          onPress={() => router.push('/subscription-management')}
+          onPress={() => router.push({
+            pathname: '/subscription-management',
+            params: { paymentType: 'new' }
+          })}
         >
           <Ionicons name="rocket" size={20} color="#FFF" />
           <Text style={styles.subscribeBtnText}>ابدأ الاشتراك الآن</Text>

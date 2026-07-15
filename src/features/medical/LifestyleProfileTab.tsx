@@ -1,10 +1,12 @@
+import { Text, TextInput } from '@/components/AppText';
 import React from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator } from 'react-native';;
 import { Ionicons } from '@expo/vector-icons';
 import { MedicalTabProps, GOAL_OPTIONS, WORK_NATURE_OPTIONS, APPETITE_OPTIONS } from './medical.types';
 import { medicalStyles as styles } from './medicalStyles';
 import type { LifestyleProfile } from '../../types';
 import { useLifestyleProfile } from './hooks/useLifestyleProfile';
+import { AnimatedButton } from '../../../components/animations/AnimatedButton';
 
 interface LifestyleProfileTabProps extends MedicalTabProps {
   lifestyleProfile: LifestyleProfile | null;
@@ -23,10 +25,10 @@ export default function LifestyleProfileTab({ userId, lifestyleProfile, uploadin
         <View style={styles.profileCard}>
           <View style={styles.profileHeader}>
             <Text style={styles.profileTitle}>العادات اليومية ونمط الحياة</Text>
-            <TouchableOpacity style={[styles.editBtnSmall, { backgroundColor: '#F97316' }]} onPress={() => setIsEditing(true)}>
+            <AnimatedButton style={[styles.editBtnSmall, { backgroundColor: '#F97316' }]} onPress={() => setIsEditing(true)}>
               <Ionicons name="pencil" size={16} color="#FFF" />
               <Text style={styles.editBtnText}>تحديث</Text>
-            </TouchableOpacity>
+            </AnimatedButton>
           </View>
           {!lifestyleProfile ? (
             <View style={styles.emptyAlert}>
@@ -87,21 +89,21 @@ export default function LifestyleProfileTab({ userId, lifestyleProfile, uploadin
         <View style={styles.formContainer}>
           <View style={styles.formHeader}>
             <Text style={styles.formTitle}>تحديث نمط الحياة</Text>
-            <TouchableOpacity onPress={() => setIsEditing(false)}>
+            <AnimatedButton onPress={() => setIsEditing(false)}>
               <Ionicons name="close-circle" size={28} color="#EF4444" />
-            </TouchableOpacity>
+            </AnimatedButton>
           </View>
 
           <Text style={styles.inputLabel}>الهدف الأساسي</Text>
           <View style={styles.chipsContainer}>
             {GOAL_OPTIONS.map(d => (
-              <TouchableOpacity
+              <AnimatedButton
                 key={d}
                 style={[styles.chipSelect, form.goal === d && styles.chipSelectActive]}
                 onPress={() => setForm({ ...form, goal: d })}
               >
                 <Text style={[styles.chipSelectText, form.goal === d && styles.chipSelectTextActive]}>{d}</Text>
-              </TouchableOpacity>
+              </AnimatedButton>
             ))}
           </View>
 
@@ -129,73 +131,73 @@ export default function LifestyleProfileTab({ userId, lifestyleProfile, uploadin
           <Text style={styles.inputLabel}>تفاصيل الأكل اليومي</Text>
           <View style={styles.toggleRow}>
             <Text style={styles.toggleText}>أتناول الإفطار</Text>
-            <TouchableOpacity
+            <AnimatedButton
               style={[styles.toggleBtn, form.has_breakfast && styles.toggleBtnActive]}
               onPress={() => setForm({ ...form, has_breakfast: !form.has_breakfast })}
             >
               <View style={[styles.toggleDot, form.has_breakfast && styles.toggleDotActive]} />
-            </TouchableOpacity>
+            </AnimatedButton>
           </View>
           <View style={styles.toggleRow}>
             <Text style={styles.toggleText}>آكل سناكس بين الوجبات</Text>
-            <TouchableOpacity
+            <AnimatedButton
               style={[styles.toggleBtn, form.has_snacks && styles.toggleBtnActive]}
               onPress={() => setForm({ ...form, has_snacks: !form.has_snacks })}
             >
               <View style={[styles.toggleDot, form.has_snacks && styles.toggleDotActive]} />
-            </TouchableOpacity>
+            </AnimatedButton>
           </View>
           <View style={styles.toggleRow}>
             <Text style={styles.toggleText}>آكل في وقت متأخر ليلاً</Text>
-            <TouchableOpacity
+            <AnimatedButton
               style={[styles.toggleBtn, form.late_night_eating && styles.toggleBtnActive]}
               onPress={() => setForm({ ...form, late_night_eating: !form.late_night_eating })}
             >
               <View style={[styles.toggleDot, form.late_night_eating && styles.toggleDotActive]} />
-            </TouchableOpacity>
+            </AnimatedButton>
           </View>
           <View style={styles.toggleRow}>
             <Text style={styles.toggleText}>الارتباط العاطفي بالأكل (شراهة عند التوتر؟)</Text>
-            <TouchableOpacity
+            <AnimatedButton
               style={[styles.toggleBtn, form.emotional_eating && styles.toggleBtnActive]}
               onPress={() => setForm({ ...form, emotional_eating: !form.emotional_eating })}
             >
               <View style={[styles.toggleDot, form.emotional_eating && styles.toggleDotActive]} />
-            </TouchableOpacity>
+            </AnimatedButton>
           </View>
           <View style={styles.toggleRow}>
             <Text style={styles.toggleText}>أعاني من ثبات الوزن الفترات الأخيرة</Text>
-            <TouchableOpacity
+            <AnimatedButton
               style={[styles.toggleBtn, form.weight_plateau && styles.toggleBtnActive]}
               onPress={() => setForm({ ...form, weight_plateau: !form.weight_plateau })}
             >
               <View style={[styles.toggleDot, form.weight_plateau && styles.toggleDotActive]} />
-            </TouchableOpacity>
+            </AnimatedButton>
           </View>
 
           <Text style={[styles.inputLabel, { marginTop: 15 }]}>طبيعة العمل اليومي</Text>
           <View style={styles.chipsContainer}>
             {WORK_NATURE_OPTIONS.map(d => (
-              <TouchableOpacity
+              <AnimatedButton
                 key={d}
                 style={[styles.chipSelect, form.work_nature === d && styles.chipSelectActive]}
                 onPress={() => setForm({ ...form, work_nature: d })}
               >
                 <Text style={[styles.chipSelectText, form.work_nature === d && styles.chipSelectTextActive]}>{d}</Text>
-              </TouchableOpacity>
+              </AnimatedButton>
             ))}
           </View>
 
           <Text style={[styles.inputLabel, { marginTop: 15 }]}>مستوى الشهية العام</Text>
           <View style={styles.chipsContainer}>
             {APPETITE_OPTIONS.map(d => (
-              <TouchableOpacity
+              <AnimatedButton
                 key={d}
                 style={[styles.chipSelect, form.appetite_level === d && styles.chipSelectActive]}
                 onPress={() => setForm({ ...form, appetite_level: d })}
               >
                 <Text style={[styles.chipSelectText, form.appetite_level === d && styles.chipSelectTextActive]}>{d}</Text>
-              </TouchableOpacity>
+              </AnimatedButton>
             ))}
           </View>
 
@@ -241,18 +243,18 @@ export default function LifestyleProfileTab({ userId, lifestyleProfile, uploadin
 
           <Text style={[styles.inputLabel, { marginTop: 15 }]}>هل تمارس الرياضة؟</Text>
           <View style={styles.radioGroup}>
-            <TouchableOpacity
+            <AnimatedButton
               style={[styles.radioBtn, !form.does_exercise && styles.radioBtnActive]}
               onPress={() => setForm({ ...form, does_exercise: false })}
             >
               <Text style={[styles.radioText, !form.does_exercise && styles.radioTextActive]}>لا</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+            </AnimatedButton>
+            <AnimatedButton
               style={[styles.radioBtn, form.does_exercise && styles.radioBtnActive]}
               onPress={() => setForm({ ...form, does_exercise: true })}
             >
               <Text style={[styles.radioText, form.does_exercise && styles.radioTextActive]}>نعم</Text>
-            </TouchableOpacity>
+            </AnimatedButton>
           </View>
 
           {form.does_exercise && (
@@ -278,9 +280,9 @@ export default function LifestyleProfileTab({ userId, lifestyleProfile, uploadin
             </View>
           )}
 
-          <TouchableOpacity style={[styles.saveBtn, { marginTop: 20, backgroundColor: '#F97316' }]} onPress={saveProfile} disabled={uploading}>
+          <AnimatedButton style={[styles.saveBtn, { marginTop: 20, backgroundColor: '#F97316' }]} onPress={saveProfile} disabled={uploading}>
             {uploading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>تحديث نمط الحياة</Text>}
-          </TouchableOpacity>
+          </AnimatedButton>
         </View>
       )}
     </View>

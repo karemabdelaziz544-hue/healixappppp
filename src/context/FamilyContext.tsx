@@ -4,6 +4,8 @@ import { useFamilyOrchestration } from '../features/family/hooks/useFamilyOrches
 import type { Profile } from '../types';
 
 interface FamilyContextType {
+  /** Authenticated account identity; unlike currentProfile this never changes when viewing a family member. */
+  accountProfileId: string | undefined;
   currentProfile: Profile | null;
   familyMembers: Profile[];
   /** 🔴 AUDIT 8 FIX: Now returns Promise<void> matching async contract */
@@ -24,6 +26,7 @@ export const FamilyProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <FamilyContext.Provider value={{
+      accountProfileId: userId,
       currentProfile,
       familyMembers,
       switchProfile,

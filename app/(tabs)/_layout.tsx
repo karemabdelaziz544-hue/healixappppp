@@ -1,8 +1,12 @@
+import { Text } from '@/components/AppText';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Tabs } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, TouchableOpacity, View, Text } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { MotiView, MotiText } from 'moti';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
+import { AppMotion } from '@/constants/AppMotion';;
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { AppColors, AppFontFamily } from '../../constants/AppTheme';
@@ -11,105 +15,94 @@ import { useFamily } from '../../src/context/FamilyContext';
 
 // Tab Item Component for Fluid Animations
 function TabItem({ route, isFocused, onPress, iconName, a11yLabel }: any) {
-  const scale = useRef(new Animated.Value(isFocused ? 1.15 : 1)).current;
-  const opacity = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
-  const iconTranslateY = useRef(new Animated.Value(isFocused ? -2 : 8)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(scale, {
-        toValue: isFocused ? 1.15 : 1,
-        useNativeDriver: false,
-        tension: 80,
-        friction: 8,
-      }),
-      Animated.timing(opacity, {
-        toValue: isFocused ? 1 : 0,
-        duration: 200,
-        useNativeDriver: false,
-      }),
-      Animated.spring(iconTranslateY, {
-        toValue: isFocused ? -2 : 8,
-        useNativeDriver: false,
-        tension: 80,
-        friction: 8,
-      }),
-    ]).start();
-  }, [isFocused]);
+  const handlePress = (e: any) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPress(e);
+  };
 
   return (
     <TouchableOpacity
-      onPress={onPress}
+      onPress={handlePress}
       style={styles.tabItem}
-      activeOpacity={0.8}
+      activeOpacity={1}
       accessibilityRole="button"
       accessibilityLabel={a11yLabel}
       accessibilityState={{ selected: isFocused }}
     >
-      <Animated.View style={{ transform: [{ scale }, { translateY: iconTranslateY }] }}>
+      <MotiView
+        animate={{
+          scale: isFocused ? 1.15 : 1,
+          translateY: isFocused ? -2 : 8,
+        }}
+        transition={{ type: 'spring', ...AppMotion.spring }}
+      >
         <Ionicons name={iconName} size={26} color={isFocused ? AppColors.accent : AppColors.primary} />
-      </Animated.View>
-      <Animated.Text style={[
-        styles.tabLabel,
-        { 
-          opacity,
-          transform: [{ translateY: iconTranslateY }],
-          color: isFocused ? AppColors.accent : AppColors.primary,
-          fontFamily: isFocused ? AppFontFamily.bold : AppFontFamily.medium
-        }
-      ]}>
+      </MotiView>
+      <MotiText
+        animate={{
+          opacity: isFocused ? 1 : 0,
+          translateY: isFocused ? -2 : 8,
+        }}
+        transition={{ type: 'spring', ...AppMotion.spring }}
+        style={[
+          styles.tabLabel,
+          { 
+            color: isFocused ? AppColors.accent : AppColors.primary,
+            fontFamily: isFocused ? AppFontFamily.bold : AppFontFamily.medium
+          }
+        ]}
+      >
         {a11yLabel}
-      </Animated.Text>
+      </MotiText>
     </TouchableOpacity>
   );
 }
 
 // Medical Center Button with Breathing & Press Animations
 function MedicalButton({ route, isFocused, onPress, iconName, a11yLabel, floatLift }: any) {
-  const pressScale = useRef(new Animated.Value(1)).current;
-  const textOpacity = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
-  const iconScale = useRef(new Animated.Value(isFocused ? 1.2 : 1)).current;
-  const activeLift = useRef(new Animated.Value(isFocused ? -8 : 0)).current;
+  const scale = useSharedValue(1);
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(iconScale, {
-        toValue: isFocused ? 1.2 : 1,
-        useNativeDriver: false,
-        tension: 80,
-        friction: 8,
-      }),
-      Animated.spring(activeLift, {
-        toValue: isFocused ? -8 : 0,
-        useNativeDriver: true,
-        tension: 80,
-        friction: 8,
-      }),
-      Animated.timing(textOpacity, {
-        toValue: isFocused ? 1 : 0,
-        duration: 200,
-        useNativeDriver: true,
-      })
-    ]).start();
+  // Breathing animation when focused
+  React.useEffect(() => {
+    if (isFocused) {
+      scale.value = withRepeat(
+        withSequence(
+          withTiming(1.05, { duration: 1500 }),
+          withTiming(1, { duration: 1500 })
+        ),
+        -1,
+        true
+      );
+    } else {
+      scale.value = withTiming(1);
+    }
   }, [isFocused]);
 
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { translateY: -floatLift },
+        { scale: scale.value }
+      ]
+    };
+  });
+
   const handlePressIn = () => {
-    Animated.spring(pressScale, {
-      toValue: 0.9,
-      useNativeDriver: true,
-    }).start();
+    scale.value = withSpring(0.9, AppMotion.spring);
   };
 
   const handlePressOut = () => {
-    Animated.spring(pressScale, {
-      toValue: 1,
-      useNativeDriver: true,
-    }).start();
+    scale.value = withSpring(1, AppMotion.spring);
+  };
+
+  const handlePress = (e: any) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onPress(e);
   };
 
   return (
     <TouchableOpacity
-      onPress={onPress}
+      onPress={handlePress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       style={styles.centerButtonWrapper}
@@ -120,30 +113,30 @@ function MedicalButton({ route, isFocused, onPress, iconName, a11yLabel, floatLi
     >
       <Animated.View style={[
         styles.centerButton,
-        { 
-          transform: [
-            { translateY: -floatLift },
-            { translateY: activeLift },
-            { scale: pressScale }
-          ],
-          backgroundColor: isFocused ? AppColors.primary : AppColors.accent 
-        }
+        animatedStyle,
+        { backgroundColor: isFocused ? AppColors.primary : AppColors.accent }
       ]}>
-        <Animated.View style={{ transform: [{ scale: iconScale }] }}>
+        <MotiView
+          animate={{ scale: isFocused ? 1.2 : 1 }}
+          transition={{ type: 'spring', ...AppMotion.spring }}
+        >
           <Ionicons name={iconName} size={30} color="#FFFFFF" />
-        </Animated.View>
+        </MotiView>
       </Animated.View>
-      <Animated.Text style={[
-        styles.tabLabel,
-        { 
-          opacity: textOpacity,
-          color: isFocused ? AppColors.accent : AppColors.primary, 
-          marginTop: -floatLift - 2,
-          fontFamily: isFocused ? AppFontFamily.bold : AppFontFamily.medium
-        }
-      ]}>
+      <MotiText
+        animate={{ opacity: isFocused ? 1 : 0 }}
+        transition={{ type: 'timing', duration: AppMotion.duration.fast }}
+        style={[
+          styles.tabLabel,
+          { 
+            color: isFocused ? AppColors.accent : AppColors.primary, 
+            marginTop: -floatLift - 2,
+            fontFamily: isFocused ? AppFontFamily.bold : AppFontFamily.medium
+          }
+        ]}
+      >
         {a11yLabel}
-      </Animated.Text>
+      </MotiText>
     </TouchableOpacity>
   );
 }
@@ -237,8 +230,8 @@ export default function TabLayout() {
 const styles = StyleSheet.create({
   tabBarContainer: {
     position: 'absolute',
-    left: 20,
-    right: 20,
+    start: 20,
+    end: 20,
     height: 70,
     backgroundColor: AppColors.surface,
     borderRadius: 35,

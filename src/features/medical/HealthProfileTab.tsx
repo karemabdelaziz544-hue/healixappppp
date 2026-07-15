@@ -1,10 +1,12 @@
+import { Text, TextInput } from '@/components/AppText';
 import React from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator } from 'react-native';;
 import { Ionicons } from '@expo/vector-icons';
 import { MedicalTabProps, DISEASE_OPTIONS, DIET_OPTIONS, FAMILY_HISTORY_OPTIONS, DIGESTIVE_OPTIONS } from './medical.types';
 import { medicalStyles as styles } from './medicalStyles';
 import type { HealthProfile } from '../../types';
 import { useHealthProfile } from './hooks/useHealthProfile';
+import { AnimatedButton } from '../../../components/animations/AnimatedButton';
 
 interface HealthProfileTabProps extends MedicalTabProps {
   healthProfile: HealthProfile | null;
@@ -23,10 +25,10 @@ export default function HealthProfileTab({ userId, healthProfile, uploading, set
         <View style={styles.profileCard}>
           <View style={styles.profileHeader}>
             <Text style={styles.profileTitle}>البيانات الطبية الأساسية</Text>
-            <TouchableOpacity style={styles.editBtnSmall} onPress={() => setIsEditing(true)}>
+            <AnimatedButton style={styles.editBtnSmall} onPress={() => setIsEditing(true)}>
               <Ionicons name="pencil" size={16} color="#FFF" />
               <Text style={styles.editBtnText}>تعديل</Text>
-            </TouchableOpacity>
+            </AnimatedButton>
           </View>
           {!healthProfile ? (
             <View style={styles.emptyAlert}>
@@ -101,38 +103,38 @@ export default function HealthProfileTab({ userId, healthProfile, uploading, set
         <View style={styles.formContainer}>
           <View style={styles.formHeader}>
             <Text style={styles.formTitle}>تحديث الملف الطبي</Text>
-            <TouchableOpacity onPress={() => setIsEditing(false)}>
+            <AnimatedButton onPress={() => setIsEditing(false)}>
               <Ionicons name="close-circle" size={28} color="#EF4444" />
-            </TouchableOpacity>
+            </AnimatedButton>
           </View>
 
           <Text style={styles.inputLabel}>هل تعاني من أمراض مزمنة؟</Text>
           <View style={styles.chipsContainer}>
             {DISEASE_OPTIONS.map(d => (
-              <TouchableOpacity
+              <AnimatedButton
                 key={d}
                 style={[styles.chipSelect, form.diseases?.includes(d) && styles.chipSelectActiveRed]}
                 onPress={() => toggleArrayItem('diseases', d)}
               >
                 <Text style={[styles.chipSelectText, form.diseases?.includes(d) && styles.chipSelectTextActiveRed]}>{d}</Text>
-              </TouchableOpacity>
+              </AnimatedButton>
             ))}
           </View>
 
           <Text style={[styles.inputLabel, { marginTop: 15 }]}>هل لديك حساسية؟</Text>
           <View style={styles.radioGroup}>
-            <TouchableOpacity
+            <AnimatedButton
               style={[styles.radioBtn, !form.has_allergies && styles.radioBtnActive]}
               onPress={() => setForm({ ...form, has_allergies: false })}
             >
               <Text style={[styles.radioText, !form.has_allergies && styles.radioTextActive]}>لا</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+            </AnimatedButton>
+            <AnimatedButton
               style={[styles.radioBtn, form.has_allergies && styles.radioBtnActive]}
               onPress={() => setForm({ ...form, has_allergies: true })}
             >
               <Text style={[styles.radioText, form.has_allergies && styles.radioTextActive]}>نعم</Text>
-            </TouchableOpacity>
+            </AnimatedButton>
           </View>
           {form.has_allergies && (
             <TextInput
@@ -146,26 +148,26 @@ export default function HealthProfileTab({ userId, healthProfile, uploading, set
           <Text style={[styles.inputLabel, { marginTop: 15 }]}>تاريخ مرضي بالعائلة</Text>
           <View style={styles.chipsContainer}>
             {FAMILY_HISTORY_OPTIONS.map(d => (
-              <TouchableOpacity
+              <AnimatedButton
                 key={d}
                 style={[styles.chipSelect, form.family_history?.includes(d) && styles.chipSelectActive]}
                 onPress={() => toggleArrayItem('family_history', d)}
               >
                 <Text style={[styles.chipSelectText, form.family_history?.includes(d) && styles.chipSelectTextActive]}>{d}</Text>
-              </TouchableOpacity>
+              </AnimatedButton>
             ))}
           </View>
 
           <Text style={[styles.inputLabel, { marginTop: 15 }]}>نوع النظام المفضل</Text>
           <View style={styles.chipsContainer}>
             {DIET_OPTIONS.map(d => (
-              <TouchableOpacity
+              <AnimatedButton
                 key={d}
                 style={[styles.chipSelect, form.diet_type === d && styles.chipSelectActive]}
                 onPress={() => setForm({ ...form, diet_type: d })}
               >
                 <Text style={[styles.chipSelectText, form.diet_type === d && styles.chipSelectTextActive]}>{d}</Text>
-              </TouchableOpacity>
+              </AnimatedButton>
             ))}
           </View>
 
@@ -199,13 +201,13 @@ export default function HealthProfileTab({ userId, healthProfile, uploading, set
           <Text style={[styles.inputLabel, { marginTop: 15 }]}>مشاكل الجهاز الهضمي</Text>
           <View style={styles.chipsContainer}>
             {DIGESTIVE_OPTIONS.map(d => (
-              <TouchableOpacity
+              <AnimatedButton
                 key={d}
                 style={[styles.chipSelect, form.digestive_issues?.includes(d) && styles.chipSelectActive]}
                 onPress={() => toggleArrayItem('digestive_issues', d)}
               >
                 <Text style={[styles.chipSelectText, form.digestive_issues?.includes(d) && styles.chipSelectTextActive]}>{d}</Text>
-              </TouchableOpacity>
+              </AnimatedButton>
             ))}
           </View>
 
@@ -218,9 +220,9 @@ export default function HealthProfileTab({ userId, healthProfile, uploading, set
             onChangeText={t => setForm({ ...form, hormonal_status: t })}
           />
 
-          <TouchableOpacity style={[styles.saveBtn, { marginTop: 20 }]} onPress={saveProfile} disabled={uploading}>
+          <AnimatedButton style={[styles.saveBtn, { marginTop: 20 }]} onPress={saveProfile} disabled={uploading}>
             {uploading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>حفظ البيانات الطبية</Text>}
-          </TouchableOpacity>
+          </AnimatedButton>
         </View>
       )}
     </View>

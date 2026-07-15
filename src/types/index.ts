@@ -15,8 +15,10 @@ export interface Profile {
   is_onboarded: boolean;
   gender?: string;
   birth_date?: string;
+  age?: number | null;
   weight?: number;
   height?: number;
+  entitlement?: { status: 'included' | 'excluded' | 'expired' | 'cancelled'; included_until: string | null } | null;
 }
 
 export interface Plan {
@@ -176,9 +178,33 @@ export interface PaymentRequest {
   user_id: string;
   amount: number;
   plan_type: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
   receipt_url: string;
-  renewal_metadata?: Record<string, string | number | boolean> | null;
+  renewal_metadata?: Record<string, unknown> | null;
   created_at: string;
+  expected_amount?: number;
+  declared_transferred_amount?: number | null;
+  admin_confirmed_amount?: number | null;
+  previous_request_id?: string | null;
+  attempt_group_id?: string;
+  rejection_reason?: string | null;
+  admin_notes?: string | null;
+  reviewed_at?: string | null;
+  invoice_number?: string | null;
+  /** Discriminator: new | renewal | upgrade | downgrade */
+  payment_type?: 'new' | 'renewal' | 'upgrade' | 'downgrade';
+  /** First-class family quota (replaces renewal_metadata.sub_count) */
+  requested_family_quota?: number;
+  /** First-class member selection (replaces renewal_metadata.keep_member_ids) */
+  keep_member_ids?: string[];
 }
 
+export interface Article {
+  id: string;
+  title: string;
+  excerpt: string | null;
+  content: string;
+  image_url: string | null;
+  category?: string | null;
+  created_at: string;
+}

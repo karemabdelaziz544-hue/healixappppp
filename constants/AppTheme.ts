@@ -102,8 +102,10 @@ export const HydrationColors = {
 
 // 🔴 AUDIT FIX: خطوط التطبيق الموحدة
 export const AppFontFamily = {
-  regular: 'Tajawal-Regular',
-  medium: 'Tajawal-Medium',
-  bold: 'Tajawal-Bold',
+  light: 'Thmanyah-Light',
+  regular: 'Thmanyah-Regular',
+  medium: 'Thmanyah-Medium',
+  bold: 'Thmanyah-Bold',
+  extraBold: 'Thmanyah-Black',
 };
 

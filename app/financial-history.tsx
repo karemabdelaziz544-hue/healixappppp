@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Pressable, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Modal, Pressable, RefreshControl, ActivityIndicator } from 'react-native';
+import { Text } from '@/components/AppText';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFamily } from '../src/context/FamilyContext';
-import { useSubscriptionData } from '../src/features/subscriptions/hooks/useSubscriptionData';
+import { usePaymentHistory } from '../src/features/subscriptions/hooks/useSubscriptionData';
 import { SubscriptionConfig } from '../constants/subscriptionConfig';
 import { PaymentRequest } from '../src/types';
+import { AnimatedButton } from '../components/animations/AnimatedButton';
+import { FadeInView } from '../components/animations/FadeInView';
+import { SlideInView } from '../components/animations/SlideInView';
+import { paymentTypeLabel } from '../src/features/subscriptions/resolveSubscriptionState';
 
 const C = {
   primary: '#12362e',
@@ -41,17 +46,15 @@ export default function FinancialHistoryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   
-  const { currentProfile, familyMembers } = useFamily();
+  const { currentProfile } = useFamily();
   const userId = currentProfile?.id;
-  const subMembers = familyMembers.filter(m => m.manager_id === userId);
-  const subAccountsCount = subMembers.length;
 
   const {
     loading,
     refreshing,
     history,
     onRefresh,
-  } = useSubscriptionData(userId, subAccountsCount, subMembers);
+  } = usePaymentHistory(userId);
 
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [selectedInvoice, setSelectedInvoice] = useState<PaymentRequest | null>(null);
@@ -89,15 +92,15 @@ export default function FinancialHistoryScreen() {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
+      <FadeInView delay={50} style={styles.header}>
+        <AnimatedButton onPress={() => router.back()} style={styles.headerBackBtn}>
           <Ionicons name="arrow-forward" size={24} color={C.primary} />
-        </TouchableOpacity>
+        </AnimatedButton>
         <Text style={styles.headerTitle}>السجل المالي</Text>
         <View style={styles.crownBadge}>
           <Ionicons name="star" size={18} color="#D4AF37" />
         </View>
-      </View>
+      </FadeInView>
 
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}
@@ -105,10 +108,10 @@ export default function FinancialHistoryScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}
       >
         {/* Summary Dashboard Grid */}
-        <View style={styles.dashboardGrid}>
+        <SlideInView delay={100} direction="up" style={styles.dashboardGrid}>
           <View style={styles.dashboardCardPrimary}>
             <View style={styles.dashboardDecorativeCircle} />
-            <Text style={styles.dashboardCardLabel}>إجمالي المدفوعات</Text>
+            <Text style={styles.dashboardCardLabel}>إجمالي المدفوعات المقبولة</Text>
             <Text style={styles.dashboardCardValuePrimary}>
               {SubscriptionConfig.formatPrice(totalInvested)}
             </Text>
@@ -120,20 +123,9 @@ export default function FinancialHistoryScreen() {
 
           <View style={styles.dashboardSubGrid}>
             <View style={styles.dashboardCard}>
-              <Text style={styles.dashboardCardLabelSecondary}>الحسابات النشطة</Text>
-              <Text style={styles.dashboardCardValueSecondary}>{subAccountsCount + 1}</Text>
-              <View style={styles.avatarStack}>
-                <View style={[styles.avatarMini, { backgroundColor: C.brandOrange }]}>
-                  <Ionicons name="person" size={8} color="#FFF" />
-                </View>
-                {subMembers.map((m, index) => (
-                  index < 2 && (
-                    <View key={m.id} style={[styles.avatarMini, styles.avatarMiniOverlap, { backgroundColor: C.primaryContainer }]}>
-                      <Ionicons name="person" size={8} color="#FFF" />
-                    </View>
-                  )
-                ))}
-              </View>
+              <Text style={styles.dashboardCardLabelSecondary}>إجمالي المعاملات</Text>
+              <Text style={styles.dashboardCardValueSecondary}>{history.length}</Text>
+              <Text style={styles.dashboardCardFooterText}>طلب إيداع ومراجعة</Text>
             </View>
 
             <View style={styles.dashboardCard}>
@@ -141,26 +133,26 @@ export default function FinancialHistoryScreen() {
               <Text style={styles.dashboardCardValueDate}>
                 {formatDateShort(currentProfile?.subscription_end_date)}
               </Text>
-              <TouchableOpacity 
+              <AnimatedButton 
                 style={styles.manageBillingBtn}
                 onPress={() => router.push('/subscription-management')}
               >
                 <Text style={styles.manageBillingText}>إدارة الباقة</Text>
                 <Ionicons name="open-outline" size={10} color={C.brandOrange} />
-              </TouchableOpacity>
+              </AnimatedButton>
             </View>
           </View>
-        </View>
+        </SlideInView>
 
         {/* Filter Chips */}
-        <View style={styles.filterContainer}>
+        <SlideInView delay={150} direction="up" style={styles.filterContainer}>
           {[
             { id: 'all', label: 'الكل' },
             { id: 'approved', label: 'مقبول' },
-            { id: 'pending', label: 'قيد المراجعة' },
+            { id: 'pending', label: 'تحت المراجعة' },
             { id: 'rejected', label: 'مرفوض' },
           ].map(chip => (
-            <TouchableOpacity
+            <AnimatedButton
               key={chip.id}
               style={[styles.filterChip, filterStatus === chip.id && styles.filterChipActive]}
               onPress={() => setFilterStatus(chip.id as FilterStatus)}
@@ -168,9 +160,9 @@ export default function FinancialHistoryScreen() {
               <Text style={[styles.filterChipText, filterStatus === chip.id && styles.filterChipTextActive]}>
                 {chip.label}
               </Text>
-            </TouchableOpacity>
+            </AnimatedButton>
           ))}
-        </View>
+        </SlideInView>
 
         {/* Transactions list */}
         <View style={styles.transactionsHeader}>
@@ -185,15 +177,16 @@ export default function FinancialHistoryScreen() {
           </View>
         ) : (
           <View style={styles.transactionsList}>
-            {filteredHistory.map(item => (
-              <View key={item.id} style={styles.invoiceCard}>
+            {filteredHistory.map((item, index) => (
+              <SlideInView key={item.id} delay={200 + index * 50} direction="up">
+              <View style={styles.invoiceCard}>
                 <View style={styles.invoiceCardHeader}>
                   <View style={styles.invoiceCardHeaderRight}>
                     <View style={styles.receiptIconCircle}>
                       <Ionicons name="receipt-outline" size={20} color={C.primary} />
                     </View>
                     <View style={styles.invoiceMeta}>
-                      <Text style={styles.invoiceId}>INV-{item.id.slice(0, 8).toUpperCase()}</Text>
+                      <Text style={styles.invoiceId}>{item.invoice_number || `REQ-${item.id.slice(0, 8).toUpperCase()}`}</Text>
                       <Text style={styles.invoiceDate}>{formatDate(item.created_at)}</Text>
                     </View>
                   </View>
@@ -209,52 +202,67 @@ export default function FinancialHistoryScreen() {
                       item.status === 'rejected' ? styles.badgeTextRejected : 
                       styles.badgeTextPending
                     ]}>
-                      {item.status === 'approved' ? 'مقبول' : item.status === 'rejected' ? 'مرفوض' : 'قيد المراجعة'}
+                      {item.status === 'approved' ? 'مقبول' : item.status === 'rejected' ? 'مرفوض' : 'تحت المراجعة'}
                     </Text>
                   </View>
                 </View>
 
                 <View style={styles.invoiceDetailsGrid}>
                   <View style={styles.invoiceGridItem}>
-                    <Text style={styles.gridLabel}>الفترة</Text>
-                    <Text style={styles.gridValue}>شهرياً</Text>
-                  </View>
-                  <View style={styles.invoiceGridItem}>
-                    <Text style={styles.gridLabel}>الأعضاء</Text>
+                    <Text style={styles.gridLabel}>العملية</Text>
                     <Text style={styles.gridValue}>
-                      {((item.renewal_metadata as any)?.sub_count || 0) + 1} حسابات
+                      {paymentTypeLabel[item.payment_type || ''] || 'تفعيل جديد'}
                     </Text>
                   </View>
                   <View style={styles.invoiceGridItem}>
-                    <Text style={styles.gridLabel}>طريقة الدفع</Text>
-                    <Text style={styles.gridValue}>تحويل بنكي</Text>
+                    <Text style={styles.gridLabel}>المقاعد العائلية</Text>
+                    <Text style={styles.gridValue}>
+                      {item.requested_family_quota || 0} حسابات
+                    </Text>
                   </View>
                   <View style={styles.invoiceGridItem}>
-                    <Text style={styles.gridLabel}>القيمة</Text>
+                    <Text style={styles.gridLabel}>القيمة المطلوبة</Text>
                     <Text style={styles.gridValuePrice}>{SubscriptionConfig.formatPrice(item.amount)}</Text>
                   </View>
                 </View>
 
+                {item.status === 'rejected' && item.rejection_reason && (
+                  <View style={styles.rejectionCard}>
+                    <Text style={styles.rejectionLabel}>سبب الرفض:</Text>
+                    <Text style={styles.rejectionText}>{item.rejection_reason}</Text>
+                  </View>
+                )}
+
                 <View style={styles.invoiceCardActions}>
                   {item.status === 'rejected' ? (
-                    <TouchableOpacity 
+                    <AnimatedButton 
                       style={styles.retryBtn}
-                      onPress={() => router.push({ pathname: '/subscription-payment', params: { retryInvoiceId: item.id } })}
+                      onPress={() => router.push({
+                        pathname: '/subscription-payment',
+                        params: {
+                          retryInvoiceId: item.id,
+                          newSubCount: String(item.requested_family_quota || 0),
+                          paymentType: item.payment_type || 'new',
+                          totalPrice: String(item.amount),
+                          selectedMembersToKeep: JSON.stringify(item.keep_member_ids || []),
+                        }
+                      })}
                     >
                       <Text style={styles.retryBtnText}>إعادة الدفع</Text>
                       <Ionicons name="refresh" size={14} color="#FFF" />
-                    </TouchableOpacity>
+                    </AnimatedButton>
                   ) : (
-                    <TouchableOpacity 
+                    <AnimatedButton 
                       style={styles.detailsBtn}
                       onPress={() => setSelectedInvoice(item)}
                     >
                       <Text style={styles.detailsBtnText}>عرض التفاصيل</Text>
                       <Ionicons name="eye-outline" size={14} color={C.primaryContainer} />
-                    </TouchableOpacity>
+                    </AnimatedButton>
                   )}
                 </View>
               </View>
+              </SlideInView>
             ))}
           </View>
         )}
@@ -271,51 +279,70 @@ export default function FinancialHistoryScreen() {
           <Pressable style={styles.modalOverlay} onPress={() => setSelectedInvoice(null)}>
             <Pressable style={styles.modalSheet} onPress={() => {}}>
               <View style={styles.modalDragHandle} />
-              <Text style={styles.modalTitle}>تفاصيل الفاتورة</Text>
+              <Text style={styles.modalTitle}>تفاصيل المعاملة</Text>
               
               <View style={styles.modalRow}>
-                <Text style={styles.modalLabel}>رقم الفاتورة</Text>
-                <Text style={styles.modalValue}>INV-{selectedInvoice.id.slice(0, 8).toUpperCase()}</Text>
+                <Text style={styles.modalLabel}>رقم الطلب</Text>
+                <Text style={styles.modalValue}>{selectedInvoice.invoice_number || `REQ-${selectedInvoice.id.slice(0, 8).toUpperCase()}`}</Text>
               </View>
               <View style={styles.modalDivider} />
               <View style={styles.modalRow}>
-                <Text style={styles.modalLabel}>الخطة</Text>
-                <Text style={styles.modalValue}>{SubscriptionConfig.PLAN_NAME}</Text>
+                <Text style={styles.modalLabel}>نوع العملية</Text>
+                <Text style={styles.modalValue}>{paymentTypeLabel[selectedInvoice.payment_type || ''] || 'تفعيل جديد'}</Text>
               </View>
               <View style={styles.modalDivider} />
               <View style={styles.modalRow}>
-                <Text style={styles.modalLabel}>عدد الحسابات</Text>
+                <Text style={styles.modalLabel}>عدد حسابات العائلة</Text>
                 <Text style={styles.modalValue}>
-                  {((selectedInvoice.renewal_metadata as any)?.sub_count || 0) + 1} حسابات
+                  {selectedInvoice.requested_family_quota || 0} حسابات
                 </Text>
               </View>
               <View style={styles.modalDivider} />
               <View style={styles.modalRow}>
-                <Text style={styles.modalLabel}>الباقة الأساسية</Text>
-                <Text style={styles.modalValue}>{SubscriptionConfig.formatPrice(SubscriptionConfig.BASE_PRICE)}</Text>
+                <Text style={styles.modalLabel}>المبلغ المطلوب</Text>
+                <Text style={styles.modalValue}>{SubscriptionConfig.formatPrice(selectedInvoice.amount)}</Text>
               </View>
               <View style={styles.modalDivider} />
               <View style={styles.modalRow}>
-                <Text style={styles.modalLabel}>حسابات إضافية</Text>
+                <Text style={styles.modalLabel}>المبلغ المحوّل المعلن</Text>
                 <Text style={styles.modalValue}>
-                  {SubscriptionConfig.formatPrice(selectedInvoice.amount - SubscriptionConfig.BASE_PRICE)}
+                  {selectedInvoice.declared_transferred_amount 
+                    ? SubscriptionConfig.formatPrice(selectedInvoice.declared_transferred_amount) 
+                    : 'لم يحدد'}
                 </Text>
               </View>
               <View style={styles.modalDivider} />
               <View style={styles.modalRow}>
-                <Text style={styles.modalLabel}>الإجمالي المدفوع</Text>
-                <Text style={styles.modalValuePrice}>{SubscriptionConfig.formatPrice(selectedInvoice.amount)}</Text>
+                <Text style={styles.modalLabel}>المبلغ المؤكد إدارياً</Text>
+                <Text style={styles.modalValuePrice}>
+                  {selectedInvoice.admin_confirmed_amount 
+                    ? SubscriptionConfig.formatPrice(selectedInvoice.admin_confirmed_amount) 
+                    : 'تحت المراجعة'}
+                </Text>
               </View>
               <View style={styles.modalDivider} />
               <View style={styles.modalRow}>
-                <Text style={styles.modalLabel}>طريقة الدفع</Text>
-                <Text style={styles.modalValue}>تحويل بنكي</Text>
-              </View>
-              <View style={styles.modalDivider} />
-              <View style={styles.modalRow}>
-                <Text style={styles.modalLabel}>التاريخ</Text>
+                <Text style={styles.modalLabel}>تاريخ التقديم</Text>
                 <Text style={styles.modalValue}>{formatDate(selectedInvoice.created_at)}</Text>
               </View>
+              {selectedInvoice.reviewed_at && (
+                <>
+                  <View style={styles.modalDivider} />
+                  <View style={styles.modalRow}>
+                    <Text style={styles.modalLabel}>تاريخ المراجعة</Text>
+                    <Text style={styles.modalValue}>{formatDate(selectedInvoice.reviewed_at)}</Text>
+                  </View>
+                </>
+              )}
+              {selectedInvoice.admin_notes && (
+                <>
+                  <View style={styles.modalDivider} />
+                  <View style={styles.modalNotesRow}>
+                    <Text style={styles.modalLabel}>ملاحظات الإدارة:</Text>
+                    <Text style={styles.modalNotesValue}>{selectedInvoice.admin_notes}</Text>
+                  </View>
+                </>
+              )}
               <View style={styles.modalDivider} />
               <View style={styles.modalRow}>
                 <Text style={styles.modalLabel}>الحالة</Text>
@@ -331,14 +358,14 @@ export default function FinancialHistoryScreen() {
                     selectedInvoice.status === 'rejected' ? styles.badgeTextRejected : 
                     styles.badgeTextPending
                   ]}>
-                    {selectedInvoice.status === 'approved' ? 'مقبول' : selectedInvoice.status === 'rejected' ? 'مرفوض' : 'قيد المراجعة'}
+                    {selectedInvoice.status === 'approved' ? 'مقبول' : selectedInvoice.status === 'rejected' ? 'مرفوض' : 'تحت المراجعة'}
                   </Text>
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setSelectedInvoice(null)}>
+              <AnimatedButton style={styles.modalCloseBtn} onPress={() => setSelectedInvoice(null)}>
                 <Text style={styles.modalCloseBtnText}>إغلاق</Text>
-              </TouchableOpacity>
+              </AnimatedButton>
             </Pressable>
           </Pressable>
         </Modal>
@@ -377,12 +404,9 @@ const styles = StyleSheet.create({
   dashboardSubGrid: { flexDirection: 'row', gap: 12 },
   dashboardCard: { flex: 1, backgroundColor: C.cardSurface, borderRadius: 24, padding: 16, justifyContent: 'space-between', ...CARD_SHADOW },
   dashboardCardLabelSecondary: { fontSize: 11, fontWeight: '600', color: C.outline, textAlign: 'right', marginBottom: 8 },
-  dashboardCardValueSecondary: { fontSize: 22, fontWeight: '900', color: C.primary, textAlign: 'right', marginBottom: 10 },
+  dashboardCardValueSecondary: { fontSize: 22, fontWeight: '900', color: C.primary, textAlign: 'right', marginBottom: 6 },
+  dashboardCardFooterText: { fontSize: 10, color: C.outline, textAlign: 'right' },
   dashboardCardValueDate: { fontSize: 14, fontWeight: '800', color: C.primary, textAlign: 'right', marginBottom: 12 },
-
-  avatarStack: { flexDirection: 'row', alignItems: 'center' },
-  avatarMini: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: '#FFF', justifyContent: 'center', alignItems: 'center' },
-  avatarMiniOverlap: { marginLeft: -8 },
 
   manageBillingBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   manageBillingText: { fontSize: 10, fontWeight: '800', color: C.brandOrange },
@@ -428,6 +452,10 @@ const styles = StyleSheet.create({
   gridValue: { fontSize: 12, fontWeight: '700', color: C.primary },
   gridValuePrice: { fontSize: 13, fontWeight: '800', color: C.brandOrange },
 
+  rejectionCard: { backgroundColor: '#FEF2F2', padding: 12, borderRadius: 12, marginBottom: 16, borderStartWidth: 4, borderStartColor: C.error },
+  rejectionLabel: { fontSize: 11, fontWeight: '800', color: C.error, textAlign: 'left', marginBottom: 2 },
+  rejectionText: { fontSize: 12, color: '#991B1B', textAlign: 'left' },
+
   invoiceCardActions: { alignItems: 'flex-start' },
   detailsBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: C.background, borderWidth: 1, borderColor: C.outlineVariant },
   detailsBtnText: { fontSize: 11, fontWeight: '700', color: C.primaryContainer },
@@ -438,11 +466,13 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: C.cardSurface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
   modalDragHandle: { width: 40, height: 4, backgroundColor: C.outlineVariant, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: C.primary, textAlign: 'right', marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: C.primary, textAlign: 'left', marginBottom: 20 },
   modalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 },
   modalLabel: { fontSize: 13, fontWeight: '500', color: C.onSurfaceVariant },
   modalValue: { fontSize: 14, fontWeight: '700', color: C.primary },
   modalValuePrice: { fontSize: 15, fontWeight: '800', color: C.brandOrange },
+  modalNotesRow: { paddingVertical: 10, alignItems: 'flex-start' },
+  modalNotesValue: { fontSize: 13, color: C.onSurfaceVariant, marginTop: 4, textAlign: 'left' },
   modalDivider: { height: 1, backgroundColor: C.background },
   modalCloseBtn: { marginTop: 24, backgroundColor: C.surfaceContainerLow, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
   modalCloseBtnText: { fontSize: 14, fontWeight: '700', color: C.primary },

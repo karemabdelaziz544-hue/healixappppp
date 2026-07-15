@@ -19,7 +19,7 @@ export default function SupportScreen() {
       inquiryId="support"
       status="open"
       currentUserId={currentUserId}
-      headerTitle="خدمة العملاء"
+      headerTitle="خدمة عملاء هيليكس"
       headerIcon="headset"
       headerIconColor="#3B82F6"
       headerIconBg="#EBF4FF"

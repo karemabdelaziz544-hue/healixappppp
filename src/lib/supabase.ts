@@ -126,19 +126,25 @@ const xhrFetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Respons
  * - Otherwise, use originalFetch if available, or fallback to default fetch.
  */
 const safeFetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+
   // Prefer the un-patched native fetch saved by the debugger, if available
   const nativeFetch =
     (global as any).originalFetch ||
     (global as any).__fetch_original ||
     null;
 
-  if (nativeFetch) {
-    return nativeFetch(input, init);
+  // Bypasses the Expo Go debugger network wrapping for all Supabase requests in iOS development
+  if (
+    Platform.OS === 'ios' &&
+    __DEV__ &&
+    (urlStr.includes('/auth/v1/') || urlStr.includes('/rest/v1/') || urlStr.includes(supabaseUrl) || urlStr.includes('supabase.co'))
+  ) {
+    return xhrFetch(input, init);
   }
 
-  // Bypasses the Expo Go debugger network wrapping for all requests in iOS development
-  if (Platform.OS === 'ios' && __DEV__) {
-    return xhrFetch(input, init);
+  if (nativeFetch) {
+    return nativeFetch(input, init);
   }
 
   return fetch(input, init);

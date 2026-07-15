@@ -1,8 +1,10 @@
+import { Text, TextInput } from '@/components/AppText';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState, useEffect, useRef } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { AppColors } from '../constants/AppTheme';
+import { AnimatedButton } from '../components/animations/AnimatedButton';
 import { supabase } from '../src/lib/supabase';
 import { logger } from '../src/lib/logger';
 import { showToast } from '../components/AppToast';
@@ -119,7 +121,7 @@ export default function VerifyScreen() {
                     />
                 </View>
 
-                <TouchableOpacity
+                <AnimatedButton
                     style={[styles.button, (!code || code.length < 8) && styles.buttonDisabled]}
                     onPress={handleVerify}
                     disabled={loading || !code || code.length < 8}
@@ -129,10 +131,10 @@ export default function VerifyScreen() {
                     ) : (
                         <Text style={styles.buttonText}>تأكيد وتفعيل الحساب</Text>
                     )}
-                </TouchableOpacity>
+                </AnimatedButton>
 
                 {/* ✅ UX-04: زر إعادة إرسال الكود مع cooldown */}
-                <TouchableOpacity
+                <AnimatedButton
                     style={[styles.resendButton, (resending || resendCooldown > 0) && { opacity: 0.5 }]}
                     onPress={handleResend}
                     disabled={resending || resendCooldown > 0}
@@ -148,11 +150,11 @@ export default function VerifyScreen() {
                                 : 'لم يصل الكود؟ أعد الإرسال'}
                         </Text>
                     )}
-                </TouchableOpacity>
+                </AnimatedButton>
 
-                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+                <AnimatedButton style={styles.backButton} onPress={() => router.back()}>
                     <Text style={styles.backButtonText}>العودة والتعديل</Text>
-                </TouchableOpacity>
+                </AnimatedButton>
             </View>
         </KeyboardAvoidingView>
     );

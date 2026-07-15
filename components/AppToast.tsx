@@ -23,8 +23,8 @@ const toastConfig = {
     <BaseToast
       {...props}
       style={{
-        borderRightColor: AppColors.success,
-        borderRightWidth: 5,
+        borderEndColor: AppColors.success,
+        borderEndWidth: 5,
         borderRadius: AppRadius.lg,
         backgroundColor: AppColors.surface,
         elevation: 8,
@@ -53,8 +53,8 @@ const toastConfig = {
     <ErrorToast
       {...props}
       style={{
-        borderRightColor: AppColors.danger,
-        borderRightWidth: 5,
+        borderEndColor: AppColors.danger,
+        borderEndWidth: 5,
         borderRadius: AppRadius.lg,
         backgroundColor: AppColors.surface,
         elevation: 8,
@@ -83,8 +83,8 @@ const toastConfig = {
     <BaseToast
       {...props}
       style={{
-        borderRightColor: AppColors.accent,
-        borderRightWidth: 5,
+        borderEndColor: AppColors.accent,
+        borderEndWidth: 5,
         borderRadius: AppRadius.lg,
         backgroundColor: AppColors.surface,
         elevation: 8,

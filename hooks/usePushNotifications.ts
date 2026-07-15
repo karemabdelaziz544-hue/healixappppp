@@ -43,13 +43,22 @@ export function usePushNotifications() {
               return; // Already synced for this exact token & profile combination
             }
 
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user?.id) return;
+
             const { error } = await supabase
-              .from('profiles')
-              .update({ fcm_token: token })
-              .eq('id', currentProfile.id);
+              .from('device_push_tokens')
+              .upsert({ 
+                auth_user_id: user.id,
+                active_profile_id: currentProfile.id,
+                token: token,
+                platform: Platform.OS
+              }, { onConflict: 'auth_user_id, token' });
 
             if (!error) {
               lastSyncedTokenInfo.current = { token, profileId: currentProfile.id };
+            } else {
+              logger.error('Failed to sync push token:', error);
             }
           }
         }

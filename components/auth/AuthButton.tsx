@@ -1,5 +1,6 @@
+import { Text } from '@/components/AppText';
 import React from 'react';
-import { TouchableOpacity, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';;
 import { AppColors, AppRadius, AppSpacing, AppFontSize } from '../../constants/AppTheme';
 
 interface AuthButtonProps {

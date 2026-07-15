@@ -1,7 +1,8 @@
+import { Text } from '@/components/AppText';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, TouchableOpacity, View } from 'react-native';;
 import ExpiredState from '../../components/ExpiredState';
 import LockedTabView from '../../components/LockedTabView';
 import { AppColors, AppFontFamily, AppRadius } from '../../constants/AppTheme';
@@ -341,8 +342,8 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     bottom: 140, // تم رفعه بزيادة ملحوظة لضمان تخطيه التاب بار بالكامل (يشمل الـ SafeArea)
-    left: 20,
-    right: 20,
+    start: 20,
+    end: 20,
     backgroundColor: AppColors.primary,
     borderRadius: AppRadius.full,
     paddingVertical: 15,

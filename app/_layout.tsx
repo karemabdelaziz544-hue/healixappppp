@@ -10,12 +10,7 @@ import { StartupFailureBoundary } from '../components/bootstrap/StartupFailureBo
 import { AuthRoutingLogic } from '../components/bootstrap/AuthRoutingLogic';
 import { PushNotificationManager } from '../components/bootstrap/PushNotificationManager';
 import { GlobalOverlays } from '../components/bootstrap/GlobalOverlays';
-import {
-  useFonts,
-  Tajawal_400Regular,
-  Tajawal_500Medium,
-  Tajawal_700Bold,
-} from '@expo-google-fonts/tajawal';
+import { useFonts } from 'expo-font';
 
 import { I18nManager, DevSettings } from 'react-native';
 
@@ -65,9 +60,11 @@ function AppLayoutContent() {
 
 function RootLayout() {
   const [fontsLoaded] = useFonts({
-    'Tajawal-Regular': Tajawal_400Regular,
-    'Tajawal-Medium': Tajawal_500Medium,
-    'Tajawal-Bold': Tajawal_700Bold,
+    'Thmanyah-Light': require('../assets/fonts/thmanyahsans-Light.otf'),
+    'Thmanyah-Regular': require('../assets/fonts/thmanyahsans-Regular.otf'),
+    'Thmanyah-Medium': require('../assets/fonts/thmanyahsans-Medium.otf'),
+    'Thmanyah-Bold': require('../assets/fonts/thmanyahsans-Bold.otf'),
+    'Thmanyah-Black': require('../assets/fonts/thmanyahsans-Black.otf'),
   });
 
   if (!fontsLoaded) {

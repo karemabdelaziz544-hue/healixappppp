@@ -1,5 +1,6 @@
+import { Text, TextInput } from '@/components/AppText';
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';;
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../src/lib/supabase';
@@ -11,9 +12,13 @@ import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 import { useRouter } from 'expo-router';
 import { useFamily } from '../../src/context/FamilyContext';
+import { getCachedSignedUrl } from '../../src/lib/storageCache';
 import { showToast } from '../../components/AppToast';
-import { AppColors, AppFontFamily } from '../../constants/AppTheme';
+import { AppColors, AppFontFamily, AppSpacing } from '../../constants/AppTheme';
 import { Strings } from '../../constants/strings';
+import { AnimatedButton } from '../../components/animations/AnimatedButton';
+import { FadeInView } from '../../components/animations/FadeInView';
+import { SlideInView } from '../../components/animations/SlideInView';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -31,6 +36,11 @@ export default function ProfileScreen() {
   const [avatarPath, setAvatarPath] = useState<string | null>(null);
   const [avatarDisplayUrl, setAvatarDisplayUrl] = useState<string | null>(null);
   
+  const [gender, setGender] = useState<'male' | 'female' | string>('male');
+  const [age, setAge] = useState('');
+  const [height, setHeight] = useState('');
+  const [weight, setWeight] = useState('');
+  
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -40,20 +50,35 @@ export default function ProfileScreen() {
     const loadAvatar = async () => {
       if (currentProfile) {
         setFullName(currentProfile.full_name || '');
+        setGender(currentProfile.gender || 'male');
+        setAge(currentProfile.age ? String(currentProfile.age) : '');
+        setHeight(currentProfile.height ? String(currentProfile.height) : '');
+        setWeight(currentProfile.weight ? String(currentProfile.weight) : '');
         const path = currentProfile.avatar_url;
         if (path) {
           setAvatarPath(path);
           if (!path.startsWith('http')) {
             try {
-              const { data } = await supabase.storage.from('avatars').createSignedUrl(path, 3600); // 1 hour expiry
-              if (data?.signedUrl) setAvatarDisplayUrl(data.signedUrl);
+              const signedUrl = await getCachedSignedUrl('avatars', path, 3600); // 1 hour expiry
+              if (signedUrl) setAvatarDisplayUrl(signedUrl);
             } catch (err) {
               logger.error('Error fetching avatar url:', err);
             }
           } else {
             setAvatarDisplayUrl(path);
           }
+        } else {
+          setAvatarPath(null);
+          setAvatarDisplayUrl(null);
         }
+      } else {
+        setFullName('');
+        setGender('male');
+        setAge('');
+        setHeight('');
+        setWeight('');
+        setAvatarPath(null);
+        setAvatarDisplayUrl(null);
       }
       setFetching(false);
     };
@@ -65,10 +90,22 @@ export default function ProfileScreen() {
     if (!profileId) return;
     setLoading(true);
     try {
+      const currentYear = new Date().getFullYear();
+      const ageNum = parseInt(age, 10);
+      let calculatedBirthDate = null;
+      if (!isNaN(ageNum) && ageNum > 0) {
+        calculatedBirthDate = `${currentYear - ageNum}-01-01`;
+      }
+
       const updates = {
         id: profileId,
         full_name: fullName,
         avatar_url: avatarPath,
+        gender: gender,
+        age: !isNaN(ageNum) ? ageNum : null,
+        birth_date: calculatedBirthDate,
+        height: height ? Number(height) : null,
+        weight: weight ? Number(weight) : null,
         updated_at: new Date().toISOString(),
       };
       const { error } = await supabase.from('profiles').upsert(updates);
@@ -114,12 +151,10 @@ export default function ProfileScreen() {
 
       setAvatarPath(fileName);
 
-      const { data: signedData } = await supabase.storage
-        .from('avatars')
-        .createSignedUrl(fileName, 3600);
+      const signedUrl = await getCachedSignedUrl('avatars', fileName, 3600);
 
-      if (signedData?.signedUrl) {
-        setAvatarDisplayUrl(signedData.signedUrl);
+      if (signedUrl) {
+        setAvatarDisplayUrl(signedUrl);
       }
 
       showToast.success('تم رفع الصورة، اضغط "حفظ التغييرات" لتأكيد التغيير.');
@@ -213,7 +248,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Centered TopAppBar Header */}
-      <View style={styles.header}>
+      <FadeInView delay={100} style={styles.header}>
         <TouchableOpacity 
           style={styles.headerButton} 
           onPress={() => router.canGoBack() ? router.back() : null}
@@ -237,7 +272,7 @@ export default function ProfileScreen() {
           <Ionicons name="notifications-outline" size={24} color="#121c2a" />
           <View style={styles.notificationDot} />
         </TouchableOpacity>
-      </View>
+      </FadeInView>
 
       {/* Sub-profile viewing switch banner */}
       {isSubAccount && (
@@ -271,7 +306,7 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* User Profile Card */}
-        <View style={styles.profileCard}>
+        <FadeInView delay={200} style={styles.profileCard}>
           <View style={styles.avatarContainer}>
             <View style={styles.avatarWrapper}>
               {avatarDisplayUrl ? (
@@ -305,7 +340,7 @@ export default function ProfileScreen() {
               <Text style={styles.profilePhone}>{user.phone}</Text>
             ) : null}
 
-            <TouchableOpacity 
+            <AnimatedButton 
               style={styles.editProfileCardBtn}
               onPress={() => setActiveSection(activeSection === 'profile' ? null : 'profile')}
               accessibilityRole="button"
@@ -313,13 +348,13 @@ export default function ProfileScreen() {
             >
               <Ionicons name="create-outline" size={14} color="#2A4D44" />
               <Text style={styles.editProfileCardBtnText}>تعديل الملف الشخصي</Text>
-            </TouchableOpacity>
+            </AnimatedButton>
           </View>
-        </View>
+        </FadeInView>
 
         {/* Profile Personal Data Edit Accordion Section */}
         {activeSection === 'profile' && (
-          <View style={styles.expandedFormCard}>
+          <SlideInView direction="down" style={styles.expandedFormCard}>
             <View style={styles.avatarSection}>
               <TouchableOpacity 
                 style={styles.formAvatarWrapper} 
@@ -359,6 +394,62 @@ export default function ProfileScreen() {
             </View>
 
             <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>النوع</Text>
+              <View style={styles.genderToggle}>
+                <AnimatedButton 
+                  style={[styles.genderBtn, gender === 'male' && styles.genderBtnActive]} 
+                  onPress={() => setGender('male')}
+                >
+                  <Text style={[styles.genderText, gender === 'male' && styles.genderTextActive]}>ذكر</Text>
+                </AnimatedButton>
+                <AnimatedButton 
+                  style={[styles.genderBtn, gender === 'female' && styles.genderBtnActive]} 
+                  onPress={() => setGender('female')}
+                >
+                  <Text style={[styles.genderText, gender === 'female' && styles.genderTextActive]}>أنثى</Text>
+                </AnimatedButton>
+              </View>
+            </View>
+
+            <View style={styles.rowInputs}>
+              <View style={[styles.inputGroup, { flex: 1 }]}>
+                <Text style={styles.inputLabel}>العمر (بالسنوات)</Text>
+                <TextInput 
+                  style={styles.input} 
+                  value={age} 
+                  onChangeText={setAge} 
+                  placeholder="مثال: 25" 
+                  keyboardType="numeric"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+              <View style={{ width: AppSpacing.md }} />
+              <View style={[styles.inputGroup, { flex: 1 }]}>
+                <Text style={styles.inputLabel}>الطول (سم)</Text>
+                <TextInput 
+                  style={styles.input} 
+                  value={height} 
+                  onChangeText={setHeight} 
+                  placeholder="مثال: 175" 
+                  keyboardType="numeric"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+              <View style={{ width: AppSpacing.md }} />
+              <View style={[styles.inputGroup, { flex: 1 }]}>
+                <Text style={styles.inputLabel}>الوزن (كجم)</Text>
+                <TextInput 
+                  style={styles.input} 
+                  value={weight} 
+                  onChangeText={setWeight} 
+                  placeholder="مثال: 70" 
+                  keyboardType="numeric"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>البريد الإلكتروني (غير قابل للتعديل)</Text>
               <TextInput 
                 style={[styles.input, styles.disabledInput]} 
@@ -367,7 +458,7 @@ export default function ProfileScreen() {
               />
             </View>
 
-            <TouchableOpacity 
+            <AnimatedButton 
               style={styles.saveBtn} 
               onPress={handleUpdateProfile} 
               disabled={loading}
@@ -376,14 +467,14 @@ export default function ProfileScreen() {
             >
               <Ionicons name="save-outline" size={18} color="#FFF" />
               <Text style={styles.saveBtnText}>حفظ التغييرات</Text>
-            </TouchableOpacity>
-          </View>
+            </AnimatedButton>
+          </SlideInView>
         )}
 
         {/* Settings List Container */}
-        <View style={styles.settingsCard}>
+        <FadeInView delay={300} style={styles.settingsCard}>
           {/* Row 1: Personal Info */}
-          <TouchableOpacity 
+          <AnimatedButton 
             style={styles.settingsRow} 
             onPress={() => setActiveSection(activeSection === 'profile' ? null : 'profile')}
             accessibilityRole="button"
@@ -400,12 +491,12 @@ export default function ProfileScreen() {
               </View>
             </View>
             <Ionicons name="chevron-back" size={18} color="#717975" />
-          </TouchableOpacity>
+          </AnimatedButton>
 
           <View style={styles.divider} />
 
           {/* Row 2: Diet Programs */}
-          <TouchableOpacity 
+          <AnimatedButton 
             style={styles.settingsRow} 
             onPress={() => router.push('/plans-history')}
             accessibilityRole="button"
@@ -421,14 +512,56 @@ export default function ProfileScreen() {
               </View>
             </View>
             <Ionicons name="chevron-back" size={18} color="#717975" />
-          </TouchableOpacity>
+          </AnimatedButton>
+
+          <View style={styles.divider} />
+
+          {/* Row 3: Blog Articles / المقالات */}
+          <AnimatedButton 
+            style={styles.settingsRow} 
+            onPress={() => router.push('/blog')}
+            accessibilityRole="button"
+            accessibilityLabel="المقالات"
+          >
+            <View style={styles.settingsRowContent}>
+              <View style={styles.settingsIconWrapper}>
+                <Ionicons name="document-text-outline" size={20} color="#2A4D44" />
+              </View>
+              <View style={styles.settingsTextContainer}>
+                <Text style={styles.settingsTitle}>المقالات</Text>
+                <Text style={styles.settingsSubtitle}>تعرف على أحدث المقالات الصحية من فريق Healix</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-back" size={18} color="#717975" />
+          </AnimatedButton>
+
+          <View style={styles.divider} />
+
+          {/* Row 4: Events / الفعاليات */}
+          <AnimatedButton 
+            style={styles.settingsRow} 
+            onPress={() => router.push('/events')}
+            accessibilityRole="button"
+            accessibilityLabel="الفعاليات واللقاءات"
+          >
+            <View style={styles.settingsRowContent}>
+              <View style={styles.settingsIconWrapper}>
+                <Ionicons name="calendar-outline" size={20} color="#2A4D44" />
+              </View>
+              <View style={styles.settingsTextContainer}>
+                <Text style={styles.settingsTitle}>الفعاليات واللقاءات</Text>
+                <Text style={styles.settingsSubtitle}>شارك في الورش والمؤتمرات واللقاءات الصحية</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-back" size={18} color="#717975" />
+          </AnimatedButton>
 
           {!isSubAccount && (
             <>
               <View style={styles.divider} />
 
               {/* Row 3: Security & Password */}
-              <TouchableOpacity 
+              <AnimatedButton 
                 style={styles.settingsRow} 
                 onPress={() => setActiveSection(activeSection === 'security' ? null : 'security')}
                 accessibilityRole="button"
@@ -445,7 +578,7 @@ export default function ProfileScreen() {
                   </View>
                 </View>
                 <Ionicons name="chevron-back" size={18} color="#717975" />
-              </TouchableOpacity>
+              </AnimatedButton>
             </>
           )}
 
@@ -454,7 +587,7 @@ export default function ProfileScreen() {
               <View style={styles.divider} />
 
               {/* Row 4: Subscription Management */}
-              <TouchableOpacity 
+              <AnimatedButton 
                 style={styles.settingsRow} 
                 onPress={() => router.push('/subscriptions')}
                 accessibilityRole="button"
@@ -470,12 +603,12 @@ export default function ProfileScreen() {
                   </View>
                 </View>
                 <Ionicons name="chevron-back" size={18} color="#717975" />
-              </TouchableOpacity>
+              </AnimatedButton>
 
               <View style={styles.divider} />
 
               {/* Row 5: Family Management */}
-              <TouchableOpacity 
+              <AnimatedButton 
                 style={styles.settingsRow} 
                 onPress={() => router.push('/family')}
                 accessibilityRole="button"
@@ -491,14 +624,14 @@ export default function ProfileScreen() {
                   </View>
                 </View>
                 <Ionicons name="chevron-back" size={18} color="#717975" />
-              </TouchableOpacity>
+              </AnimatedButton>
             </>
           )}
 
           <View style={styles.divider} />
 
           {/* Row 6: Contact Support */}
-          <TouchableOpacity 
+          <AnimatedButton 
             style={styles.settingsRow} 
             onPress={() => router.push('/support')}
             accessibilityRole="button"
@@ -514,12 +647,12 @@ export default function ProfileScreen() {
               </View>
             </View>
             <Ionicons name="chevron-back" size={18} color="#717975" />
-          </TouchableOpacity>
-        </View>
+          </AnimatedButton>
+        </FadeInView>
 
         {/* Security & Password Accordion Form */}
         {activeSection === 'security' && !isSubAccount && (
-          <View style={styles.expandedFormCard}>
+          <SlideInView direction="down" style={styles.expandedFormCard}>
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>كلمة المرور الجديدة</Text>
               <TextInput 
@@ -544,7 +677,7 @@ export default function ProfileScreen() {
               />
             </View>
 
-            <TouchableOpacity 
+            <AnimatedButton 
               style={[styles.outlineBtn, (!newPassword || loading) && { opacity: 0.5 }]} 
               onPress={handleChangePassword} 
               disabled={!newPassword || loading}
@@ -552,16 +685,16 @@ export default function ProfileScreen() {
               accessibilityLabel={Strings.profile.updatePassword}
             >
               <Text style={styles.outlineBtnText}>تحديث كلمة المرور</Text>
-            </TouchableOpacity>
-          </View>
+            </AnimatedButton>
+          </SlideInView>
         )}
 
         {/* Danger Zone */}
-        <View style={styles.dangerZoneContainer}>
+        <FadeInView delay={400} style={styles.dangerZoneContainer}>
           <Text style={styles.sectionTitle}>إجراءات الحساب</Text>
 
           {/* Logout standalone card */}
-          <TouchableOpacity 
+          <AnimatedButton 
             style={styles.logoutCard} 
             onPress={handleLogout}
             accessibilityRole="button"
@@ -574,11 +707,11 @@ export default function ProfileScreen() {
               <Text style={styles.logoutText}>تسجيل الخروج</Text>
             </View>
             <Ionicons name="chevron-back" size={18} color="#717975" />
-          </TouchableOpacity>
+          </AnimatedButton>
 
           {/* Delete Account standalone card */}
           {!isSubAccount && (
-            <TouchableOpacity 
+            <AnimatedButton 
               style={styles.deleteAccountCard} 
               onPress={handleDeleteAccount} 
               disabled={loading}
@@ -594,9 +727,9 @@ export default function ProfileScreen() {
                   <Text style={styles.deleteSubtitle}>سيتم حذف جميع بياناتك نهائياً ولا يمكن استعادتها</Text>
                 </View>
               </View>
-            </TouchableOpacity>
+            </AnimatedButton>
           )}
-        </View>
+        </FadeInView>
 
         {/* Legal Links Footer */}
         <View style={styles.legalFooter}>
@@ -669,7 +802,7 @@ const styles = StyleSheet.create({
   notificationDot: {
     position: 'absolute',
     top: 8,
-    right: 8,
+    end: 8,
     width: 8,
     height: 8,
     borderRadius: 4,
@@ -758,7 +891,7 @@ const styles = StyleSheet.create({
   verifiedBadge: {
     position: 'absolute',
     bottom: 0,
-    right: 0,
+    end: 0,
     backgroundColor: '#2A4D44',
     width: 20,
     height: 20,
@@ -872,7 +1005,7 @@ const styles = StyleSheet.create({
   cameraIconBadge: {
     position: 'absolute',
     bottom: 0,
-    right: 0,
+    end: 0,
     backgroundColor: '#F26E11',
     width: 32,
     height: 32,
@@ -885,8 +1018,8 @@ const styles = StyleSheet.create({
   loadingOverlay: {
     position: 'absolute',
     top: 0,
-    left: 0,
-    right: 0,
+    start: 0,
+    end: 0,
     bottom: 0,
     backgroundColor: 'rgba(255, 255, 255, 0.7)',
     borderRadius: 50,
@@ -1118,5 +1251,41 @@ const styles = StyleSheet.create({
     color: '#717975',
     fontSize: 13,
     marginHorizontal: 8,
+  },
+  genderToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#F9FAFB',
+    height: 45,
+    borderRadius: 12,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  genderBtn: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  genderBtnActive: {
+    backgroundColor: '#FFF',
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  genderText: {
+    fontSize: 14,
+    fontFamily: AppFontFamily.bold,
+    color: '#9CA3AF',
+  },
+  genderTextActive: {
+    color: '#2A4D44',
+  },
+  rowInputs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
 });

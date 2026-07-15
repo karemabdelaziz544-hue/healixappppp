@@ -1,10 +1,14 @@
+import { Text } from '@/components/AppText';
 import React, { useRef, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, FlatList, TouchableOpacity, Image } from 'react-native';
+import { View, StyleSheet, Dimensions, FlatList, TouchableOpacity, Image } from 'react-native';
+import { AnimatedCard } from '../components/animations/AnimatedCard';
+import { FadeInView } from '../components/animations/FadeInView';
+import { AnimatedButton } from '../components/animations/AnimatedButton';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { AppColors, AppRadius, AppSpacing } from '../constants/AppTheme';
+import { AppColors, AppRadius, AppSpacing , AppFontFamily } from '@/constants/AppTheme';
 import { showToast } from '../components/AppToast';
 
 const { width } = Dimensions.get('window');
@@ -89,9 +93,9 @@ export default function OnboardingScreen() {
       <View style={styles.header}>
         <Image source={require('../assets/images/icon.png')} style={styles.logo} resizeMode="contain" />
         {currentIndex < slides.length - 1 && (
-          <TouchableOpacity onPress={handleSkip} style={styles.skipBtn}>
+          <AnimatedButton onPress={handleSkip} style={styles.skipBtn}>
             <Text style={styles.skipText}>تخطي</Text>
-          </TouchableOpacity>
+          </AnimatedButton>
         )}
       </View>
 
@@ -122,22 +126,22 @@ export default function OnboardingScreen() {
                 <Text style={styles.interactiveTitle}>ما هو هدفك الصحي الأساسي؟</Text>
                 <Text style={styles.interactiveSubtitle}>سنقوم بتفصيل تجربتك بناءً على اختيارك</Text>
                 <View style={styles.optionsContainer}>
-                  {GOALS.map((g) => (
-                    <TouchableOpacity
-                      key={g.id}
+                  {GOALS.map((g, idx) => (
+                    <FadeInView key={g.id} delay={idx * 100}>
+                    <AnimatedCard
                       style={[
                         styles.optionCard,
                         selectedGoal === g.id && styles.optionCardActive,
                       ]}
                       onPress={() => setSelectedGoal(g.id)}
-                      activeOpacity={0.8}
                     >
                       <Text style={[
                         styles.optionLabel,
                         selectedGoal === g.id && styles.optionLabelActive
                       ]}>{g.label}</Text>
                       <Text style={styles.optionDesc}>{g.desc}</Text>
-                    </TouchableOpacity>
+                    </AnimatedCard>
+                    </FadeInView>
                   ))}
                 </View>
               </View>
@@ -148,23 +152,23 @@ export default function OnboardingScreen() {
               <Text style={styles.interactiveTitle}>ما هو مستوى التزامك اليومي؟</Text>
               <Text style={styles.interactiveSubtitle}>حدد نمط التغيير والسرعة المناسبة لك</Text>
               <View style={styles.optionsContainer}>
-                {COMMITMENTS.map((c) => (
-                  <TouchableOpacity
-                    key={c.id}
-                    style={[
-                      styles.optionCard,
-                      selectedCommitment === c.id && styles.optionCardActive,
-                    ]}
-                    onPress={() => setSelectedCommitment(c.id)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[
-                      styles.optionLabel,
-                      selectedCommitment === c.id && styles.optionLabelActive
-                    ]}>{c.label}</Text>
-                    <Text style={styles.optionDesc}>{c.desc}</Text>
-                  </TouchableOpacity>
-                ))}
+                  {COMMITMENTS.map((c, idx) => (
+                    <FadeInView key={c.id} delay={idx * 100}>
+                    <AnimatedCard
+                      style={[
+                        styles.optionCard,
+                        selectedCommitment === c.id && styles.optionCardActive,
+                      ]}
+                      onPress={() => setSelectedCommitment(c.id)}
+                    >
+                      <Text style={[
+                        styles.optionLabel,
+                        selectedCommitment === c.id && styles.optionLabelActive
+                      ]}>{c.label}</Text>
+                      <Text style={styles.optionDesc}>{c.desc}</Text>
+                    </AnimatedCard>
+                    </FadeInView>
+                  ))}
               </View>
             </View>
           );
@@ -178,10 +182,10 @@ export default function OnboardingScreen() {
           ))}
         </View>
 
-        <TouchableOpacity style={styles.btn} onPress={handleNext}>
+        <AnimatedButton style={styles.btn} onPress={handleNext}>
           <Text style={styles.btnText}>{currentIndex === slides.length - 1 ? 'ابدأ خطتك المبدئية' : 'التالي'}</Text>
-          <Ionicons name={arrowIcon} size={20} color="#FFF" style={{ marginRight: 10 }} />
-        </TouchableOpacity>
+          <Ionicons name={arrowIcon} size={20} color="#FFF" style={{ marginEnd: 10 }} />
+        </AnimatedButton>
       </View>
     </SafeAreaView>
   );
@@ -201,10 +205,10 @@ const styles = StyleSheet.create({
   skipText: { fontSize: 15, color: AppColors.textSecondary, fontWeight: 'bold' },
   slide: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: AppSpacing.xxxl },
   iconBox: { width: 180, height: 180, borderRadius: 90, justifyContent: 'center', alignItems: 'center', marginBottom: 40 },
-  title: { fontSize: 28, fontWeight: '900', color: AppColors.textPrimary, textAlign: 'center', marginBottom: 15, fontFamily: 'Tajawal-Bold' },
-  description: { fontSize: 16, color: AppColors.textSecondary, textAlign: 'center', lineHeight: 24, fontWeight: 'bold', fontFamily: 'Tajawal-Medium' },
-  interactiveTitle: { fontSize: 22, fontWeight: '900', color: AppColors.textPrimary, textAlign: 'center', marginBottom: 8, fontFamily: 'Tajawal-Bold' },
-  interactiveSubtitle: { fontSize: 14, color: AppColors.textSecondary, textAlign: 'center', marginBottom: 30, fontFamily: 'Tajawal-Medium' },
+  title: { fontSize: 28, fontWeight: '900', color: AppColors.textPrimary, textAlign: 'center', marginBottom: 15, fontFamily: AppFontFamily.bold },
+  description: { fontSize: 16, color: AppColors.textSecondary, textAlign: 'center', lineHeight: 24, fontWeight: 'bold', fontFamily: AppFontFamily.medium },
+  interactiveTitle: { fontSize: 22, fontWeight: '900', color: AppColors.textPrimary, textAlign: 'center', marginBottom: 8, fontFamily: AppFontFamily.bold },
+  interactiveSubtitle: { fontSize: 14, color: AppColors.textSecondary, textAlign: 'center', marginBottom: 30, fontFamily: AppFontFamily.medium },
   optionsContainer: { width: '100%', gap: 15 },
   optionCard: {
     width: '100%',
@@ -221,9 +225,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   optionCardActive: { borderColor: AppColors.primary, backgroundColor: AppColors.primaryLight },
-  optionLabel: { fontSize: 16, fontWeight: 'bold', color: AppColors.textPrimary, marginBottom: 4, fontFamily: 'Tajawal-Bold' },
+  optionLabel: { fontSize: 16, fontWeight: 'bold', color: AppColors.textPrimary, marginBottom: 4, fontFamily: AppFontFamily.bold },
   optionLabelActive: { color: AppColors.primary },
-  optionDesc: { fontSize: 12, color: AppColors.textSecondary, textAlign: 'right', fontFamily: 'Tajawal-Regular' },
+  optionDesc: { fontSize: 12, color: AppColors.textSecondary, textAlign: 'right', fontFamily: AppFontFamily.regular },
   footer: { padding: AppSpacing.xxxl },
   pagination: { flexDirection: 'row-reverse', justifyContent: 'center', marginBottom: AppSpacing.xxxl },
   dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: AppColors.border, marginHorizontal: 5 },
@@ -236,6 +240,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  btnText: { color: '#FFF', fontSize: 18, fontWeight: 'bold', fontFamily: 'Tajawal-Bold' },
+  btnText: { color: '#FFF', fontSize: 18, fontWeight: 'bold', fontFamily: AppFontFamily.bold },
 });
 

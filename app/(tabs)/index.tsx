@@ -9,6 +9,7 @@ import PaywallView from '../../components/dashboard/PaywallView';
 import AssistantOnboardingView from '../../components/dashboard/AssistantOnboardingView';
 import MainDashboardView from '../../components/dashboard/MainDashboardView';
 import ExpiredState from '../../components/ExpiredState';
+import { SubscriptionPendingView } from '../../components/dashboard/SubscriptionPendingView';
 import Skeleton from '../../components/Skeleton';
 import { AppColors } from '../../constants/AppTheme';
 
@@ -18,6 +19,7 @@ import { AppColors } from '../../constants/AppTheme';
  * 'loading'         → Skeleton
  * 'admin_or_doctor' → MainDashboardView
  * 'active'          → MainDashboardView
+ * 'expiring_soon'   → MainDashboardView
  * 'lead'            → PaywallView
  * 'expired'         → ExpiredState
  * 'onboarding'      → AssistantOnboardingView
@@ -41,7 +43,11 @@ export default function DashboardController() {
   }
 
   // 🔥 عملاء نشطين + الأدمن والدكتور → الداشبورد الكامل
-  if (userLifecycleState === 'admin_or_doctor' || userLifecycleState === 'active') {
+  if (
+    userLifecycleState === 'admin_or_doctor' || 
+    userLifecycleState === 'active' || 
+    userLifecycleState === 'expiring_soon'
+  ) {
     return <MainDashboardView />;
   }
 
@@ -52,6 +58,16 @@ export default function DashboardController() {
 
   // ⏰ اشتراك منتهي → شاشة التجديد
   if (userLifecycleState === 'expired') {
+    return <ExpiredState />;
+  }
+
+  if (userLifecycleState === 'payment_pending') return <SubscriptionPendingView state="pending_review" />;
+  if (userLifecycleState === 'payment_rejected') return <SubscriptionPendingView rejected />;
+  if (userLifecycleState === 'renewing') return <SubscriptionPendingView state="renewing" />;
+  if (userLifecycleState === 'upgrade_pending') return <SubscriptionPendingView state="upgrade_pending" />;
+  if (userLifecycleState === 'downgrade_pending') return <SubscriptionPendingView state="downgrade_pending" />;
+  
+  if (userLifecycleState === 'cancelled' || userLifecycleState === 'sub_excluded') {
     return <ExpiredState />;
   }
 

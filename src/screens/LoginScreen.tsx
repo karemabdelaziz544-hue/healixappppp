@@ -1,7 +1,10 @@
+import { Text } from '@/components/AppText';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import * as WebBrowser from 'expo-web-browser';
-import { Animated, Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { SlideInView } from '../../components/animations/SlideInView';
+import { AnimatedButton } from '../../components/animations/AnimatedButton';
 import { showToast } from '../../components/AppToast';
 import { AppColors, AppRadius, AppSpacing, AppFontSize } from '../../constants/AppTheme';
 import { handleError } from '../lib/errorHandler';
@@ -14,15 +17,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(20)).current;
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
-      Animated.spring(translateY, { toValue: 0, friction: 8, tension: 40, useNativeDriver: true })
-    ]).start();
-  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -69,7 +64,7 @@ export default function LoginScreen() {
       <View style={[styles.bgCircle, styles.circleTopRight]} />
       <View style={[styles.bgCircle, styles.circleBottomLeft]} />
 
-      <Animated.View style={[styles.formCard, { opacity: fadeAnim, transform: [{ translateY }] }]}>
+      <SlideInView direction="up" distance={20} style={[styles.formCard]}>
 
         <View style={styles.header}>
           <Image source={require('../../assets/images/icon.png')} style={styles.logo} resizeMode="contain" />
@@ -95,9 +90,9 @@ export default function LoginScreen() {
           value={password}
           onChangeText={setPassword}
           headerRight={
-            <TouchableOpacity onPress={handleForgotPassword} accessibilityRole="button">
+            <AnimatedButton onPress={handleForgotPassword} accessibilityRole="button">
               <Text style={styles.forgotPasswordText}>نسيت كلمة المرور؟</Text>
-            </TouchableOpacity>
+            </AnimatedButton>
           }
         />
 
@@ -105,22 +100,22 @@ export default function LoginScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>ليس لديك حساب؟ </Text>
-          <TouchableOpacity onPress={() => router.replace('/signup')}>
+          <AnimatedButton onPress={() => router.replace('/signup')}>
             <Text style={styles.signupLink}>حساب جديد</Text>
-          </TouchableOpacity>
+          </AnimatedButton>
         </View>
 
         <View style={styles.legalFooter}>
-          <TouchableOpacity onPress={() => WebBrowser.openBrowserAsync('https://healix.app/terms')}>
+          <AnimatedButton onPress={() => WebBrowser.openBrowserAsync('https://healix.app/terms')}>
             <Text style={styles.legalLink}>شروط الخدمة</Text>
-          </TouchableOpacity>
+          </AnimatedButton>
           <Text style={styles.legalSeparator}> • </Text>
-          <TouchableOpacity onPress={() => WebBrowser.openBrowserAsync('https://healix.app/privacy')}>
+          <AnimatedButton onPress={() => WebBrowser.openBrowserAsync('https://healix.app/privacy')}>
             <Text style={styles.legalLink}>سياسة الخصوصية</Text>
-          </TouchableOpacity>
+          </AnimatedButton>
         </View>
 
-      </Animated.View>
+      </SlideInView>
     </KeyboardAvoidingView>
   );
 }
@@ -129,8 +124,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: AppColors.background, justifyContent: 'center', padding: AppSpacing.xl },
 
   bgCircle: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.4 },
-  circleTopRight: { backgroundColor: AppColors.successLight, top: -100, right: -150 },
-  circleBottomLeft: { backgroundColor: AppColors.accentBorder, bottom: -100, left: -150 },
+  circleTopRight: { backgroundColor: AppColors.successLight, top: -100, end: -150 },
+  circleBottomLeft: { backgroundColor: AppColors.accentBorder, bottom: -100, start: -150 },
 
   formCard: { 
     backgroundColor: AppColors.surface, 

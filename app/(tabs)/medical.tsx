@@ -1,5 +1,6 @@
+import { Text } from '@/components/AppText';
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, RefreshControl } from 'react-native';
+import { View, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, RefreshControl } from 'react-native';;
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../src/lib/supabase';
@@ -19,6 +20,9 @@ import DocumentsTab from '../../src/features/medical/DocumentsTab';
 import HealthProfileTab from '../../src/features/medical/HealthProfileTab';
 import LifestyleProfileTab from '../../src/features/medical/LifestyleProfileTab';
 import { useRouter } from 'expo-router';
+import { AnimatedButton } from '../../components/animations/AnimatedButton';
+import { FadeInView } from '../../components/animations/FadeInView';
+import { SlideInView } from '../../components/animations/SlideInView';
 
 export default function MedicalRecordsScreen() {
   const { currentProfile } = useFamily();
@@ -134,7 +138,7 @@ export default function MedicalRecordsScreen() {
           <Skeleton width={230} height={16} borderRadius={8} />
         </View>
         <View style={styles.tabScrollContainer}>
-          {[1, 2, 3, 4].map(i => <Skeleton key={i} width={90} height={40} borderRadius={12} style={{ marginLeft: 10 }} />)}
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} width={90} height={40} borderRadius={12} style={{ marginStart: 10 }} />)}
         </View>
         <View style={styles.scrollContent}>
           <Skeleton width="100%" height={120} borderRadius={20} style={{ marginBottom: 20 }} />
@@ -172,36 +176,37 @@ export default function MedicalRecordsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <View style={styles.header}>
+        <FadeInView delay={100} style={styles.header}>
           <Text style={styles.title}>مركز القياسات <Ionicons name="pulse" size={24} color={AppColors.accent} /></Text>
           <Text style={styles.subtitle}>البيانات الطبية، نمط الحياة، والتحاليل</Text>
-        </View>
+        </FadeInView>
 
-        <View>
+        <FadeInView delay={200}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScrollContainer}>
-            <TouchableOpacity style={[styles.tabBtn, activeTab === 'inbody' && styles.tabBtnActive]} onPress={() => setActiveTab('inbody')}>
+            <AnimatedButton style={[styles.tabBtn, activeTab === 'inbody' && styles.tabBtnActive]} onPress={() => setActiveTab('inbody')}>
               <Ionicons name="body" size={18} color={activeTab === 'inbody' ? AppColors.primary : AppColors.textMuted} />
               <Text style={[styles.tabText, activeTab === 'inbody' && styles.tabTextActive]}>InBody</Text>
-            </TouchableOpacity>
+            </AnimatedButton>
 
-            <TouchableOpacity style={[styles.tabBtn, activeTab === 'docs' && styles.tabBtnActive]} onPress={() => setActiveTab('docs')}>
+            <AnimatedButton style={[styles.tabBtn, activeTab === 'docs' && styles.tabBtnActive]} onPress={() => setActiveTab('docs')}>
               <Ionicons name="document-text" size={18} color={activeTab === 'docs' ? AppColors.primary : AppColors.textMuted} />
               <Text style={[styles.tabText, activeTab === 'docs' && styles.tabTextActive]}>التحاليل</Text>
-            </TouchableOpacity>
+            </AnimatedButton>
 
-            <TouchableOpacity style={[styles.tabBtn, activeTab === 'health' && styles.tabBtnActive]} onPress={() => setActiveTab('health')}>
+            <AnimatedButton style={[styles.tabBtn, activeTab === 'health' && styles.tabBtnActive]} onPress={() => setActiveTab('health')}>
               <Ionicons name="heart-half" size={18} color={activeTab === 'health' ? AppColors.primary : AppColors.textMuted} />
               <Text style={[styles.tabText, activeTab === 'health' && styles.tabTextActive]}>الملف الطبي</Text>
-            </TouchableOpacity>
+            </AnimatedButton>
 
-            <TouchableOpacity style={[styles.tabBtn, activeTab === 'lifestyle' && styles.tabBtnActive]} onPress={() => setActiveTab('lifestyle')}>
+            <AnimatedButton style={[styles.tabBtn, activeTab === 'lifestyle' && styles.tabBtnActive]} onPress={() => setActiveTab('lifestyle')}>
               <Ionicons name="cafe" size={18} color={activeTab === 'lifestyle' ? AppColors.primary : AppColors.textMuted} />
               <Text style={[styles.tabText, activeTab === 'lifestyle' && styles.tabTextActive]}>نمط الحياة</Text>
-            </TouchableOpacity>
+            </AnimatedButton>
           </ScrollView>
-        </View>
+        </FadeInView>
 
         {activeTab === 'inbody' && (
+          <FadeInView key="inbody" style={{ flex: 1 }}>
           <ScrollView
             contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
             showsVerticalScrollIndicator={false}
@@ -215,9 +220,11 @@ export default function MedicalRecordsScreen() {
               onRefresh={onRefresh}
             />
           </ScrollView>
+          </FadeInView>
         )}
 
         {activeTab === 'docs' && (
+          <FadeInView key="docs" style={{ flex: 1 }}>
           <ScrollView
             contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
             showsVerticalScrollIndicator={false}
@@ -231,9 +238,11 @@ export default function MedicalRecordsScreen() {
               onRefresh={onRefresh}
             />
           </ScrollView>
+          </FadeInView>
         )}
 
         {activeTab === 'health' && (
+          <FadeInView key="health" style={{ flex: 1 }}>
           <ScrollView
             contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
             showsVerticalScrollIndicator={false}
@@ -247,6 +256,7 @@ export default function MedicalRecordsScreen() {
               onRefresh={onRefresh}
             />
           </ScrollView>
+          </FadeInView>
         )}
 
         {activeTab === 'lifestyle' && (

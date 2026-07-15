@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform, Keyboard, Pressable } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, KeyboardAvoidingView, Platform, Keyboard, Image } from 'react-native';
+import { Text } from '@/components/AppText';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../src/lib/supabase';
@@ -8,6 +9,12 @@ import { logger } from '../src/lib/logger';
 import { useFamily } from '../src/context/FamilyContext';
 import { useRouter } from 'expo-router';
 import { showToast } from '../components/AppToast';
+import { useSubscriptionDetails } from '../src/features/subscriptions/hooks/useSubscriptionData';
+import { resolveSubscriptionState } from '../src/features/subscriptions/resolveSubscriptionState';
+import { AnimatedButton } from '../components/animations/AnimatedButton';
+import { FadeInView } from '../components/animations/FadeInView';
+import { SlideInView } from '../components/animations/SlideInView';
+import { getCachedSignedUrl } from '../src/lib/storageCache';
 
 const toEnglishDigits = (str: string): string => {
   const arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
@@ -19,14 +26,45 @@ const toEnglishDigits = (str: string): string => {
 
 export default function FamilyScreen() {
   const router = useRouter();
-  const { familyMembers, currentProfile, switchProfile, refreshFamily } = useFamily();
+  const { familyMembers, currentProfile, switchProfile, refreshFamily, accountProfileId } = useFamily();
   
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // التحقق من صلاحية الاشتراك للحساب الرئيسي
-  const isSubscribed = currentProfile?.subscription_status === 'active' && 
-                       (!currentProfile.subscription_end_date || new Date(currentProfile.subscription_end_date) > new Date());
+  // Decomposed details hook for manager quota
+  const { details } = useSubscriptionDetails(accountProfileId);
+
+  const [avatarUrls, setAvatarUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const fetchAvatars = async () => {
+      const urls: Record<string, string> = {};
+      for (const member of familyMembers) {
+        if (member.avatar_url) {
+          if (member.avatar_url.startsWith('http')) {
+            urls[member.id] = member.avatar_url;
+          } else {
+            try {
+              const signedUrl = await getCachedSignedUrl('avatars', member.avatar_url, 3600);
+              if (signedUrl) urls[member.id] = signedUrl;
+            } catch (err) {
+              logger.error('Error fetching member avatar url:', err);
+            }
+          }
+        }
+      }
+      setAvatarUrls(urls);
+    };
+    fetchAvatars();
+  }, [familyMembers]);
+
+  // Validate active subscription state
+  const subscriptionState = resolveSubscriptionState(currentProfile, null, currentProfile?.entitlement);
+  const isSubscribed = subscriptionState === 'active' || subscriptionState === 'expiring_soon' || subscriptionState === 'admin';
+
+  const familyQuota = details?.family_quota ?? 0;
+  const childMembers = familyMembers.filter(m => m.manager_id);
+  const slotsUsed = childMembers.filter(m => m.subscription_status === 'active').length;
 
   const [formData, setFormData] = useState({
     fullName: '', gender: 'male', height: '', weight: '', birthYear: '', relation: 'son'
@@ -37,28 +75,48 @@ export default function FamilyScreen() {
       showToast.info("يجب تفعيل أو تجديد الاشتراك أولاً لتتمكن من إضافة أفراد.");
       return;
     }
-    if (!formData.fullName || !formData.height || !formData.weight) {
-      showToast.info("يرجى إكمال جميع البيانات");
+
+    if (slotsUsed >= familyQuota) {
+      showToast.info("لقد استنفدت الحد الأقصى للمقاعد المتاحة بالباقة. يمكنك ترقية الباقة لزيادة المقاعد.");
+      return;
+    }
+
+    if (!formData.fullName || !formData.height || !formData.weight || !formData.birthYear) {
+      showToast.info("يرجى إكمال جميع البيانات بما في ذلك سنة الميلاد");
+      return;
+    }
+
+    const cleanBirthYear = toEnglishDigits(formData.birthYear || '');
+    let birthYearNum = parseInt(cleanBirthYear, 10);
+    if (isNaN(birthYearNum) || birthYearNum <= 0) {
+      showToast.info("يرجى إدخال سنة ميلاد صحيحة");
+      return;
+    }
+
+    // Convert age to birth year if user typed age (e.g. 28)
+    const currentYear = new Date().getFullYear();
+    if (birthYearNum < 120) {
+      birthYearNum = currentYear - birthYearNum;
+    } else if (birthYearNum < 1900 || birthYearNum > currentYear) {
+      showToast.info("سنة الميلاد المدخلة غير منطقية");
       return;
     }
 
     setLoading(true);
     try {
-      const cleanBirthYear = toEnglishDigits(formData.birthYear || '');
       const cleanHeight = toEnglishDigits(formData.height || '');
       const cleanWeight = toEnglishDigits(formData.weight || '');
 
-      // 🔴 CF-01 FIX: Wrapped with executeQuery for timeout/error classification
       const { error } = await executeQuery(
         supabase.rpc('create_sub_member', {
           member_name: formData.fullName,
           member_gender: formData.gender,
-          member_birth: cleanBirthYear ? `${cleanBirthYear}-01-01` : '2000-01-01',
+          member_birth: `${birthYearNum}-01-01`,
           member_relation: formData.relation,
           member_height: Number(cleanHeight),
           member_weight: Number(cleanWeight)
         }),
-        { retries: 0 } // Not idempotent — creates a new profile
+        { retries: 0 }
       );
 
       if (error) throw error;
@@ -79,7 +137,6 @@ export default function FamilyScreen() {
   };
 
   const handleDeleteMember = async (id: string) => {
-    // 🛡️ تأمين: التأكد إن المستخدم الحالي هو المدير قبل السماح بالحذف
     const memberToDelete = familyMembers.find(m => m.id === id);
     if (!memberToDelete || !memberToDelete.manager_id) {
       showToast.error("لا يمكن حذف الحساب الرئيسي.");
@@ -94,7 +151,6 @@ export default function FamilyScreen() {
       { text: "إلغاء", style: "cancel" },
       { text: "حذف", style: "destructive", onPress: async () => {
           try {
-            // 🔴 CF-01 FIX: Wrapped with executeQuery
             const { error } = await executeQuery(
               supabase.from('profiles').delete().eq('id', id),
               { retries: 0 }
@@ -107,7 +163,6 @@ export default function FamilyScreen() {
               if (mainUser) switchProfile(mainUser.id);
             }
           } catch (error: unknown) {
-            // 🔴 AUDIT FIX: Don't leak PostgreSQL error messages to users
             const msg = error instanceof Error ? error.message : 'فشل الحذف';
             showToast.error("فشل الحذف. يرجى المحاولة مرة أخرى.");
             logger.error('[family] delete member:', msg);
@@ -118,8 +173,8 @@ export default function FamilyScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity 
+      <FadeInView delay={100} style={styles.header}>
+        <AnimatedButton 
           onPress={() => router.back()} 
           style={styles.backBtn}
           accessibilityRole="button"
@@ -127,20 +182,30 @@ export default function FamilyScreen() {
           hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
         >
           <Ionicons name="arrow-forward" size={24} color="#1F2937" />
-        </TouchableOpacity>
+        </AnimatedButton>
         <View style={styles.headerTitleBox}>
           <Text style={styles.title}>إدارة العائلة <Ionicons name="people" size={24} color="#F97316" /></Text>
           <Text style={styles.subtitle}>أضف وبدل بين أفراد عائلتك بسهولة</Text>
         </View>
-      </View>
+      </FadeInView>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           
-          {/* أزرار الإضافة أو الرجوع */}
+          {/* Quota Banner */}
+          {isSubscribed && !currentProfile?.manager_id && (
+            <View style={styles.quotaBanner}>
+              <Ionicons name="people-outline" size={20} color="#2A4B46" />
+              <Text style={styles.quotaText}>
+                الحد المسموح به: تم استخدام {slotsUsed} من أصل {familyQuota} مقاعد بالباقة
+              </Text>
+            </View>
+          )}
+
+          {/* Action Header */}
           <View style={styles.actionHeader}>
             {currentProfile?.manager_id ? (
-              <TouchableOpacity 
+              <AnimatedButton 
                 style={[styles.addBtn, { backgroundColor: '#EF4444' }]} 
                 onPress={() => {
                   const mainUser = familyMembers.find(m => !m.manager_id);
@@ -155,21 +220,33 @@ export default function FamilyScreen() {
               >
                 <Ionicons name="arrow-undo-outline" size={20} color="#FFF" />
                 <Text style={styles.addBtnText}>العودة لحسابي الرئيسي</Text>
-              </TouchableOpacity>
+              </AnimatedButton>
             ) : (
               isSubscribed ? (
-                <TouchableOpacity 
-                  style={[styles.addBtn, showForm && styles.cancelBtn]} 
-                  onPress={() => setShowForm(!showForm)}
-                  accessibilityRole="button"
-                  accessibilityLabel={showForm ? 'إلغاء الإضافة' : 'إضافة فرد جديد'}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Ionicons name={showForm ? "close" : "add"} size={20} color="#FFF" />
-                  <Text style={styles.addBtnText}>{showForm ? 'إلغاء الإضافة' : 'إضافة فرد جديد'}</Text>
-                </TouchableOpacity>
+                slotsUsed < familyQuota ? (
+                  <AnimatedButton 
+                    style={[styles.addBtn, showForm && styles.cancelBtn]} 
+                    onPress={() => setShowForm(!showForm)}
+                    accessibilityRole="button"
+                    accessibilityLabel={showForm ? 'إلغاء الإضافة' : 'إضافة فرد جديد'}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name={showForm ? "close" : "add"} size={20} color="#FFF" />
+                    <Text style={styles.addBtnText}>{showForm ? 'إلغاء الإضافة' : 'إضافة فرد جديد'}</Text>
+                  </AnimatedButton>
+                ) : (
+                  <AnimatedButton 
+                    style={styles.upgradeBtn} 
+                    onPress={() => router.push('/subscription-management')}
+                    accessibilityRole="button"
+                    accessibilityLabel="ترقية الباقة لزيادة المقاعد"
+                  >
+                    <Ionicons name="rocket-outline" size={20} color="#FFF" />
+                    <Text style={styles.addBtnText}>ترقية الباقة لزيادة المقاعد</Text>
+                  </AnimatedButton>
+                )
               ) : (
-                <TouchableOpacity 
+                <AnimatedButton 
                   style={styles.lockedBtn} 
                   onPress={() => router.push('/subscriptions')}
                   accessibilityRole="button"
@@ -178,14 +255,14 @@ export default function FamilyScreen() {
                 >
                   <Ionicons name="lock-closed" size={16} color="#EA580C" />
                   <Text style={styles.lockedBtnText}>اشترك للإضافة</Text>
-                </TouchableOpacity>
+                </AnimatedButton>
               )
             )}
           </View>
 
-          {/* فورم الإضافة */}
+          {/* Add Form */}
           {showForm && isSubscribed && (
-            <View style={styles.formCard}>
+            <SlideInView direction="up" delay={50} style={styles.formCard}>
               <Text style={styles.formTitle}>بيانات الفرد الجديد</Text>
               
               <View style={styles.inputGroup}>
@@ -201,8 +278,8 @@ export default function FamilyScreen() {
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>النوع</Text>
                 <View style={styles.genderToggle}>
-                  <TouchableOpacity style={[styles.genderBtn, formData.gender === 'male' && styles.genderBtnActive]} onPress={() => setFormData({...formData, gender: 'male'})}><Text style={[styles.genderText, formData.gender === 'male' && styles.genderTextActive]}>ذكر</Text></TouchableOpacity>
-                  <TouchableOpacity style={[styles.genderBtn, formData.gender === 'female' && styles.genderBtnActive]} onPress={() => setFormData({...formData, gender: 'female'})}><Text style={[styles.genderText, formData.gender === 'female' && styles.genderTextActive]}>أنثى</Text></TouchableOpacity>
+                  <AnimatedButton style={[styles.genderBtn, formData.gender === 'male' && styles.genderBtnActive]} onPress={() => setFormData({...formData, gender: 'male'})}><Text style={[styles.genderText, formData.gender === 'male' && styles.genderTextActive]}>ذكر</Text></AnimatedButton>
+                  <AnimatedButton style={[styles.genderBtn, formData.gender === 'female' && styles.genderBtnActive]} onPress={() => setFormData({...formData, gender: 'female'})}><Text style={[styles.genderText, formData.gender === 'female' && styles.genderTextActive]}>أنثى</Text></AnimatedButton>
                 </View>
               </View>
 
@@ -221,14 +298,14 @@ export default function FamilyScreen() {
                     { key: 'brother', label: 'أخ' },
                     { key: 'sister', label: 'أخت' },
                   ].map(rel => (
-                    <TouchableOpacity key={rel.key} style={[styles.relationBtn, formData.relation === rel.key && styles.genderBtnActive]} onPress={() => setFormData({...formData, relation: rel.key})}>
+                    <AnimatedButton key={rel.key} style={[styles.relationBtn, formData.relation === rel.key && styles.genderBtnActive]} onPress={() => setFormData({...formData, relation: rel.key})}>
                       <Text style={[styles.genderText, formData.relation === rel.key && styles.genderTextActive]}>{rel.label}</Text>
-                    </TouchableOpacity>
+                    </AnimatedButton>
                   ))}
                 </View>
               </View>
 
-              <TouchableOpacity 
+              <AnimatedButton 
                 style={styles.submitBtn} 
                 onPress={handleAddMember} 
                 disabled={loading}
@@ -236,38 +313,45 @@ export default function FamilyScreen() {
                 accessibilityLabel="حفظ وإضافة فرد عائلة جديد"
               >
                 {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.submitBtnText}>حفظ وإضافة</Text>}
-              </TouchableOpacity>
-            </View>
+              </AnimatedButton>
+            </SlideInView>
           )}
 
-          {/* قائمة أفراد العائلة */}
+          {/* Family Members List */}
           <View style={styles.membersList}>
             {familyMembers.map(member => {
               const isMain = !member.manager_id;
               const isActiveProfile = currentProfile?.id === member.id;
               
-              // 🔥 التعديل السحري: الكشف عن الحساب الموقوف (المنتهي أو المستثنى)
-              const isLocked = !isMain && member.subscription_status === 'expired';
+              // Resolve specific membership access state
+              const memberState = resolveSubscriptionState(member, null, member.entitlement);
+              const isLocked = !isMain && (memberState === 'family_expired' || memberState === 'family_removed');
 
               return (
+                <FadeInView delay={100} key={member.id}>
                 <View 
-                  key={member.id} 
                   style={[
                     styles.memberCard, 
                     isActiveProfile && styles.activeMemberCard,
                     isLocked && { opacity: 0.6, borderColor: '#FEE2E2', backgroundColor: '#FEF2F2' }
                   ]}
                 >
-                  {/* صورة الفرد (أو قفل) */}
-                  <View style={[styles.avatarBox, isActiveProfile && {backgroundColor: 'colors.card'}, isLocked && {backgroundColor: '#FEE2E2'}]}>
-                    <Ionicons 
-                      name={isLocked ? "lock-closed" : "person"} 
-                      size={24} 
-                      color={isActiveProfile ? "#2A4B46" : isLocked ? "#EF4444" : "#2A4B46"} 
-                    />
+                  {/* Photo or Lock */}
+                  <View style={[styles.avatarBox, isActiveProfile && {backgroundColor: '#FFF'}, isLocked && {backgroundColor: '#FEE2E2'}]}>
+                    {isLocked ? (
+                      <Ionicons name="lock-closed" size={24} color="#EF4444" />
+                    ) : avatarUrls[member.id] ? (
+                      <Image source={{ uri: avatarUrls[member.id] }} style={styles.memberAvatarImage} />
+                    ) : (
+                      <Ionicons 
+                        name="person" 
+                        size={24} 
+                        color="#2A4B46" 
+                      />
+                    )}
                   </View>
 
-                  {/* بيانات الفرد */}
+                  {/* Profile Info */}
                   <View style={styles.memberInfo}>
                     <View style={styles.nameRow}>
                       <Text style={[styles.memberName, isActiveProfile && {color: '#FFF'}, isLocked && {color: '#991B1B', textDecorationLine: 'line-through'}]}>
@@ -276,18 +360,22 @@ export default function FamilyScreen() {
                       {isMain && <View style={styles.mainBadge}><Ionicons name="star" size={10} color="#FFF" /><Text style={styles.mainBadgeText}>رئيسي</Text></View>}
                     </View>
                     <Text style={[styles.memberDetails, isActiveProfile && {color: 'rgba(255,255,255,0.8)'}, isLocked && {color: '#EF4444'}]}>
-                      {isLocked ? 'الاشتراك منتهي/مستثنى' : `${member.gender === 'male' ? 'ذكر' : 'أنثى'} • ${member.weight || '-'} كجم`}
+                      {isLocked ? (
+                        memberState === 'family_removed' ? 'مستبعد من الباقة' : 'الاشتراك منتهي'
+                      ) : (
+                        `${member.gender === 'male' ? 'ذكر' : 'أنثى'} • ${member.weight || '-'} كجم`
+                      )}
                     </Text>
                   </View>
 
-                  {/* أزرار التحكم (حذف وتبديل) */}
+                  {/* Actions */}
                   <View style={styles.cardActions}>
                     {!isActiveProfile && (
-                      <TouchableOpacity 
+                      <AnimatedButton 
                         style={[styles.switchBtn, isLocked && { backgroundColor: '#FEE2E2' }]} 
                         onPress={() => { 
                           if (isLocked) {
-                            showToast.info('هذا الحساب غير مفعل. يرجى تجديد أو تعديل الباقة لتفعيله.');
+                            showToast.info('هذا الحساب غير مفعل حالياً. يرجى تجديد الباقة أو إضافته لتفعيله.');
                           } else {
                             switchProfile(member.id); 
                             showToast.success(`تم التبديل لحساب ${member.full_name}`); 
@@ -300,10 +388,10 @@ export default function FamilyScreen() {
                         <Text style={[styles.switchBtnText, isLocked && { color: '#EF4444' }]}>
                           {isLocked ? 'مقفل' : 'تبديل'}
                         </Text>
-                      </TouchableOpacity>
+                      </AnimatedButton>
                     )}
                     {!isMain && (
-                      <TouchableOpacity 
+                      <AnimatedButton 
                         style={styles.deleteBtn} 
                         onPress={() => handleDeleteMember(member.id)}
                         accessibilityRole="button"
@@ -311,11 +399,12 @@ export default function FamilyScreen() {
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       >
                         <Ionicons name="trash" size={18} color="#EF4444" />
-                      </TouchableOpacity>
+                      </AnimatedButton>
                     )}
                   </View>
 
                 </View>
+                </FadeInView>
               );
             })}
           </View>
@@ -335,9 +424,13 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 12, color: '#6B7280', fontWeight: 'bold', textAlign: 'left' },
   scrollContent: { padding: 20 },
 
+  quotaBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#E8F3F1', padding: 12, borderRadius: 14, marginBottom: 20 },
+  quotaText: { fontSize: 12, fontWeight: '700', color: '#2A4B46' },
+
   actionHeader: { alignItems: 'flex-start', marginBottom: 20 },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#2A4B46', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 12 },
   cancelBtn: { backgroundColor: '#EF4444' },
+  upgradeBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#F97316', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 12 },
   addBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
   lockedBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#FFF7ED', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#FFEDD5' },
   lockedBtnText: { color: '#EA580C', fontWeight: 'bold', fontSize: 13 },
@@ -359,7 +452,8 @@ const styles = StyleSheet.create({
   membersList: { gap: 15 },
   memberCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', padding: 20, borderRadius: 20, borderWidth: 1, borderColor: '#E5E7EB', elevation: 1, gap: 15 },
   activeMemberCard: { backgroundColor: '#2A4B46', borderColor: '#2A4B46', transform: [{scale: 1.02}], elevation: 5 },
-  avatarBox: { width: 50, height: 50, backgroundColor: '#E8F3F1', borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
+  avatarBox: { width: 50, height: 50, backgroundColor: '#E8F3F1', borderRadius: 15, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  memberAvatarImage: { width: '100%', height: '100%' },
   memberInfo: { flex: 1, alignItems: 'flex-start' },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 5 },
   memberName: { fontSize: 18, fontWeight: 'bold', color: '#1F2937', textAlign: 'left' },

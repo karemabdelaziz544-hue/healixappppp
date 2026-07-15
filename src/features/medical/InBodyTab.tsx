@@ -1,15 +1,20 @@
+import { Text, TextInput } from '@/components/AppText';
 /**
  * InBodyTab — قياسات الـ InBody والرسوم البيانية
  */
 import { Ionicons } from '@expo/vector-icons';
 import React, { memo } from 'react';
-import { ActivityIndicator, Dimensions, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Dimensions, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';;
 import { LineChart } from 'react-native-chart-kit';
 import type { InbodyRecord } from '../../types';
 import { useInBody } from './hooks/useInBody';
 import { ARABIC_MONTHS, MedicalTabProps } from './medical.types';
 import { medicalStyles as styles } from './medicalStyles';
 import { AppFontFamily } from '../../../constants/AppTheme';
+import { AnimatedCard } from '../../../components/animations/AnimatedCard';
+import { AnimatedButton } from '../../../components/animations/AnimatedButton';
+import { FadeInView } from '../../../components/animations/FadeInView';
+import { SlideInView } from '../../../components/animations/SlideInView';
 
 
 const screenWidth = Dimensions.get('window').width;
@@ -20,10 +25,11 @@ interface InBodyTabProps extends MedicalTabProps {
 }
 
 // 🌟 Performance: Memoize History Card to prevent re-renders in lists
-const HistoryCard = memo(({ record, onPress }: { record: InbodyRecord, onPress: (r: InbodyRecord) => void }) => {
+const HistoryCard = memo(({ record, onPress, index }: { record: InbodyRecord, onPress: (r: InbodyRecord) => void, index?: number }) => {
   const d = new Date(record.record_date);
   return (
-    <TouchableOpacity style={styles.historyCard} onPress={() => onPress(record)} activeOpacity={0.7}>
+    <FadeInView delay={(index || 0) * 50}>
+    <AnimatedCard style={styles.historyCard} onPress={() => onPress(record)}>
       <View style={styles.historyDateBox}>
         <Text style={styles.historyDay}>{d.getDate()}</Text>
         <Text style={styles.historyMonth}>{ARABIC_MONTHS[d.getMonth()]}</Text>
@@ -37,7 +43,8 @@ const HistoryCard = memo(({ record, onPress }: { record: InbodyRecord, onPress: 
           <Text style={localStyles.clickForMoreText}>اضغط لمزيد من التفاصيل</Text>
         </View>
       </View>
-    </TouchableOpacity>
+    </AnimatedCard>
+    </FadeInView>
   );
 });
 
@@ -102,26 +109,26 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
 
       {/* --- أزرار الإضافة --- */}
       {!showForm && (
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={[styles.actionBtn, { borderColor: '#F97316', backgroundColor: '#FFF7ED' }]} onPress={handleAnalyzeImage} disabled={analyzing}>
+        <FadeInView delay={300} style={styles.actionRow}>
+          <AnimatedButton style={[styles.actionBtn, { borderColor: '#F97316', backgroundColor: '#FFF7ED' }]} onPress={handleAnalyzeImage} disabled={analyzing}>
             {analyzing ? <ActivityIndicator color="#F97316" /> : <Ionicons name="color-wand" size={28} color="#F97316" />}
             <Text style={[styles.actionBtnText, { color: '#F97316' }]}>{analyzing ? 'جاري التحليل...' : 'قراءة ذكية للورقة'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => setShowForm(true)}>
+          </AnimatedButton>
+          <AnimatedButton style={styles.actionBtn} onPress={() => setShowForm(true)}>
             <Ionicons name="create-outline" size={28} color="#6B7280" />
             <Text style={styles.actionBtnText}>إدخال يدوي</Text>
-          </TouchableOpacity>
-        </View>
+          </AnimatedButton>
+        </FadeInView>
       )}
 
       {/* --- فورم الإضافة --- */}
       {showForm && (
-        <View style={styles.formContainer}>
+        <SlideInView direction="up" style={styles.formContainer}>
           <View style={styles.formHeader}>
             <Text style={styles.formTitle}>تسجيل قياس جديد</Text>
-            <TouchableOpacity onPress={resetForm}>
+            <AnimatedButton onPress={resetForm}>
               <Ionicons name="close-circle" size={28} color="#EF4444" />
-            </TouchableOpacity>
+            </AnimatedButton>
           </View>
           {aiReport ? (
             <View style={styles.aiSummaryBox}>
@@ -139,10 +146,10 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
             <View style={styles.inputWrap}><Text style={styles.inputLabel}>العضلات (كجم)</Text><TextInput style={styles.input} value={muscle} onChangeText={setMuscle} keyboardType="decimal-pad" /></View>
             <View style={styles.inputWrap}><Text style={styles.inputLabel}>الوزن (كجم)</Text><TextInput style={styles.input} value={weight} onChangeText={setWeight} keyboardType="decimal-pad" /></View>
           </View>
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSubmit} disabled={uploading}>
+          <AnimatedButton style={styles.saveBtn} onPress={handleSubmit} disabled={uploading}>
             {uploading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>حفظ في السجل</Text>}
-          </TouchableOpacity>
-        </View>
+          </AnimatedButton>
+        </SlideInView>
       )}
 
       {/* --- سجل القياسات (الكروت) --- */}
@@ -334,6 +341,6 @@ const localStyles = StyleSheet.create({
     fontFamily: AppFontFamily.medium,
     fontSize: 13,
     color: '#F97316',
-    marginRight: 4,
+    marginEnd: 4,
   },
 });

@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, ScrollView, Image, LayoutAnimation, Platform, RefreshControl, StyleSheet, Text, TouchableOpacity, UIManager, View, Modal } from 'react-native';
+import { Animated, ScrollView, Image, LayoutAnimation, Platform, RefreshControl, StyleSheet, UIManager, View, Modal, TouchableOpacity } from 'react-native';
+import { Text } from '@/components/AppText';
 import { useFocusEffect } from 'expo-router';
+import { AnimatedButton } from '../animations/AnimatedButton';
 
 // 🔴 AUDIT FIX: تفعيل LayoutAnimation على أندرويد
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -165,16 +167,16 @@ const AccountSwitcherHeader = React.memo(({
   return (
     <View style={{ zIndex: 100 }}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.iconCircle}>
+        <AnimatedButton style={styles.iconCircle}>
           <NotificationBell />
-        </TouchableOpacity>
+        </AnimatedButton>
 
         <Animated.View style={[styles.headerTextWrap, { opacity: fadeAnim }]}>
           <Text style={styles.greeting}>صباح الخير، {displayUserName}</Text>
           <Text style={styles.subGreeting}>لنكمل رحلتك الغذائية اليوم.</Text>
         </Animated.View>
 
-        <TouchableOpacity 
+        <AnimatedButton 
           activeOpacity={hasSubAccounts ? 0.7 : 1}
           onPress={openDropdown}
           style={[styles.avatarButton, !hasSubAccounts && { opacity: 0.6 }]}
@@ -191,7 +193,7 @@ const AccountSwitcherHeader = React.memo(({
               <Ionicons name="chevron-down" size={10} color="#FFFFFF" />
             </View>
           )}
-        </TouchableOpacity>
+        </AnimatedButton>
       </View>
 
       <Modal visible={isOpen} transparent animationType="none">
@@ -206,7 +208,7 @@ const AccountSwitcherHeader = React.memo(({
               const isMain = !member.manager_id;
               const roleText = isMain ? "الحساب الرئيسي" : "حساب تابع";
               return (
-                <TouchableOpacity 
+                <AnimatedButton 
                   key={member.id} 
                   style={[styles.dropdownItem, isActive && styles.dropdownItemActive]}
                   onPress={() => handleSwitch(member.id)}
@@ -225,7 +227,7 @@ const AccountSwitcherHeader = React.memo(({
                     <Text style={styles.dropdownItemRole}>{roleText}</Text>
                   </View>
                   {isActive && <View style={styles.activeProfileBadge} />}
-                </TouchableOpacity>
+                </AnimatedButton>
               );
             })}
           </Animated.View>
@@ -273,6 +275,7 @@ export default function MainDashboardView() {
           .select('id, user_id, title, status, start_date, created_at')
           .eq('user_id', userId)
           .neq('plan_type', 'workout')
+          .eq('status', 'active')
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
@@ -573,14 +576,14 @@ export default function MainDashboardView() {
                 </View>
 
                 {/* Fixed CTA button */}
-                <TouchableOpacity
+                <AnimatedButton
                   activeOpacity={0.9}
                   onPress={() => toggleTask(currentMealTask.id, currentMealTask.is_completed)}
                   style={styles.ctaButton}
                 >
                   <Ionicons name="checkmark-circle" size={20} color="#FFF" style={{ marginLeft: 8 }} />
                   <Text style={styles.ctaButtonText}>تم تناول الوجبة</Text>
-                </TouchableOpacity>
+                </AnimatedButton>
               </View>
             ) : (
               // 4. Celebration Card when all meals completed
@@ -625,7 +628,7 @@ export default function MainDashboardView() {
 
                   return (
                     <View key={task.id}>
-                      <TouchableOpacity
+                      <AnimatedButton
                         activeOpacity={0.8}
                         onPress={() => toggleTask(task.id, task.is_completed)}
                         style={styles.journeyRow}
@@ -661,7 +664,7 @@ export default function MainDashboardView() {
                             <Ionicons name="ellipse-outline" size={24} color="#D1D5DB" />
                           )}
                         </View>
-                      </TouchableOpacity>
+                      </AnimatedButton>
 
                       {/* Divider */}
                       {idx < tasks.length - 1 && <View style={styles.journeyDivider} />}

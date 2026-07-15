@@ -1,5 +1,6 @@
+import { Text, TextInput } from '@/components/AppText';
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, TextInput } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';;
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../src/lib/supabase';
@@ -12,6 +13,9 @@ import ExpiredState from '../components/ExpiredState';
 import Skeleton from '../components/Skeleton';
 import type { Plan } from '../src/types';
 import { AppColors, AppRadius, AppFontSize, AppFontFamily } from '../constants/AppTheme';
+import { AnimatedButton } from '../components/animations/AnimatedButton';
+import { FadeInView } from '../components/animations/FadeInView';
+import { SlideInView } from '../components/animations/SlideInView';
 
 export default function PlansHistoryScreen() {
   const { currentProfile } = useFamily();
@@ -110,17 +114,16 @@ export default function PlansHistoryScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* TopAppBar */}
-      <View style={styles.header}>
-        <TouchableOpacity
+      <FadeInView delay={50} style={styles.header}>
+        <AnimatedButton
           onPress={() => router.back()}
           style={styles.backButton}
-          activeOpacity={0.8}
         >
           <Ionicons name="arrow-forward" size={24} color={AppColors.primary} />
-        </TouchableOpacity>
+        </AnimatedButton>
         <Text style={styles.headerTitle}>الأنظمة الغذائية</Text>
         <View style={styles.headerSpacer} />
-      </View>
+      </FadeInView>
 
       <ScrollView
         style={styles.mainScrollView}
@@ -129,7 +132,7 @@ export default function PlansHistoryScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[AppColors.accent, AppColors.primary]} tintColor={AppColors.primary} />}
       >
         {/* Search Section */}
-        <View style={styles.searchSection}>
+        <SlideInView delay={100} direction="up" style={styles.searchSection}>
           <View style={[styles.searchContainer, isSearchFocused && styles.searchContainerFocused]}>
             <Ionicons name="search" size={24} color={isSearchFocused ? AppColors.accent : AppColors.textMuted} style={styles.searchIcon} />
             <TextInput
@@ -143,41 +146,40 @@ export default function PlansHistoryScreen() {
               textAlign="right"
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearSearchBtn}>
+              <AnimatedButton onPress={() => setSearchQuery('')} style={styles.clearSearchBtn}>
                 <Ionicons name="close-circle" size={18} color={AppColors.textMuted} />
-              </TouchableOpacity>
+              </AnimatedButton>
             )}
           </View>
-        </View>
+        </SlideInView>
 
         {/* Filter Chips */}
+        <SlideInView delay={150} direction="up">
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.chipsContainer}
         >
-          <TouchableOpacity
+          <AnimatedButton
             style={[styles.chip, selectedFilter === 'all' ? styles.chipActive : styles.chipInactive]}
             onPress={() => setSelectedFilter('all')}
-            activeOpacity={0.9}
           >
             <Text style={[styles.chipText, selectedFilter === 'all' ? styles.chipTextActive : styles.chipTextInactive]}>الكل</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </AnimatedButton>
+          <AnimatedButton
             style={[styles.chip, selectedFilter === 'active' ? styles.chipActive : styles.chipInactive]}
             onPress={() => setSelectedFilter('active')}
-            activeOpacity={0.9}
           >
             <Text style={[styles.chipText, selectedFilter === 'active' ? styles.chipTextActive : styles.chipTextInactive]}>نشط</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </AnimatedButton>
+          <AnimatedButton
             style={[styles.chip, selectedFilter === 'archived' ? styles.chipActive : styles.chipInactive]}
             onPress={() => setSelectedFilter('archived')}
-            activeOpacity={0.9}
           >
             <Text style={[styles.chipText, selectedFilter === 'archived' ? styles.chipTextActive : styles.chipTextInactive]}>منتهي</Text>
-          </TouchableOpacity>
+          </AnimatedButton>
         </ScrollView>
+        </SlideInView>
 
         {/* Diet Plan Cards List */}
         {loading || isGuardLoading ? (
@@ -203,10 +205,9 @@ export default function PlansHistoryScreen() {
               const taskCount = plan.plan_tasks?.[0]?.count || 0;
 
               return (
-                <TouchableOpacity
-                  key={plan.id}
+                <SlideInView key={plan.id} delay={200} direction="up">
+                <AnimatedButton
                   style={[styles.card, isCurrent && styles.currentPlanCard]}
-                  activeOpacity={0.95}
                   onPress={() => router.push({ pathname: '/plan-details', params: { planId: plan.id } })}
                 >
                   <View style={styles.cardTopRow}>
@@ -243,7 +244,8 @@ export default function PlansHistoryScreen() {
                       <Text style={[styles.cardInfoText, isCurrent && styles.cardInfoTextAccent]}>{taskCount} مهام</Text>
                     </View>
                   </View>
-                </TouchableOpacity>
+                </AnimatedButton>
+                </SlideInView>
               );
             })}
           </View>
@@ -304,7 +306,7 @@ const styles = StyleSheet.create({
     borderColor: AppColors.accent,
   },
   searchIcon: {
-    marginRight: 8,
+    marginEnd: 8,
   },
   searchInput: {
     flex: 1,
@@ -316,7 +318,7 @@ const styles = StyleSheet.create({
   },
   clearSearchBtn: {
     padding: 4,
-    marginLeft: 4,
+    marginStart: 4,
   },
   chipsContainer: {
     paddingHorizontal: 24,
@@ -369,8 +371,8 @@ const styles = StyleSheet.create({
   },
   currentPlanCard: {
     borderColor: AppColors.accentBorder,
-    borderRightWidth: 4,
-    borderRightColor: AppColors.accent,
+    borderEndWidth: 4,
+    borderEndColor: AppColors.accent,
   },
   cardTopRow: {
     flexDirection: 'row',

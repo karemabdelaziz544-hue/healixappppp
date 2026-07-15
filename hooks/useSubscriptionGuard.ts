@@ -1,15 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFamily } from '../src/context/FamilyContext';
+import { supabase } from '../src/lib/supabase';
+import type { PaymentRequest } from '../src/types';
+import { resolveSubscriptionState } from '../src/features/subscriptions/resolveSubscriptionState';
 
 /**
  * حالات دورة حياة المستخدم (User Lifecycle States)
  * ===================================================
- * 'loading'         — جاري تحميل بيانات المستخدم
- * 'admin_or_doctor' — المستخدم ليس عميل (طبيب أو مدير)
- * 'lead'            — عميل جديد لم يدفع بعد (subscription_status = 'new')
- * 'onboarding'      — عميل دفع لكن لم يكمل بياناته (active + !is_onboarded)
- * 'active'          — عميل نشط مكتمل البيانات
- * 'expired'         — عميل اشتراكه منتهي
+ * 'loading'           — جاري تحميل بيانات المستخدم
+ * 'admin_or_doctor'   — المستخدم ليس عميل (طبيب أو مدير)
+ * 'lead'              — عميل جديد لم يدفع بعد (no_subscription)
+ * 'onboarding'        — عميل دفع لكن لم يكمل بياناته (active + !is_onboarded)
+ * 'active'            — عميل نشط مكتمل البيانات
+ * 'expiring_soon'     — عميل نشط اشتراكه ينتهي خلال 7 أيام
+ * 'expired'           — عميل اشتراكه منتهي
+ * 'payment_pending'   — طلب دفع قيد المراجعة (new)
+ * 'payment_rejected'  — آخر طلب مرفوض
+ * 'renewing'          — طلب تجديد قيد المراجعة
+ * 'upgrade_pending'   — طلب ترقية قيد المراجعة
+ * 'downgrade_pending' — طلب تخفيض قيد المراجعة
+ * 'cancelled'         — تم إلغاء الاشتراك
+ * 'sub_excluded'      — حساب عائلي مستثنى أو منتهي
  */
 export type UserLifecycleState =
   | 'loading'
@@ -17,14 +28,32 @@ export type UserLifecycleState =
   | 'lead'
   | 'onboarding'
   | 'active'
-  | 'expired';
+  | 'expiring_soon'
+  | 'expired'
+  | 'payment_pending'
+  | 'payment_rejected'
+  | 'renewing'
+  | 'upgrade_pending'
+  | 'downgrade_pending'
+  | 'cancelled'
+  | 'sub_excluded';
 
 export function useSubscriptionGuard() {
-  const { currentProfile } = useFamily();
+  const { currentProfile, accountProfileId } = useFamily();
   const [userLifecycleState, setUserLifecycleState] = useState<UserLifecycleState>('loading');
   const [isGuardLoading, setIsGuardLoading] = useState(true);
+  const [latestRequest, setLatestRequest] = useState<PaymentRequest | null>(null);
   // ✅ BUG-02: فصل التحميل الأولي عن التحديثات اللاحقة
   const initialized = useRef(false);
+
+  useEffect(() => {
+    if (!accountProfileId || currentProfile?.manager_id) { setLatestRequest(null); return; }
+    supabase.from('payment_requests')
+      .select('id,user_id,amount,plan_type,status,receipt_url,renewal_metadata,created_at,payment_type,requested_family_quota')
+      .eq('user_id', accountProfileId)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle()
+      .then(({ data }) => setLatestRequest(data as PaymentRequest | null));
+  }, [accountProfileId, currentProfile?.manager_id]);
 
   useEffect(() => {
     if (!currentProfile) {
@@ -36,7 +65,7 @@ export function useSubscriptionGuard() {
       return;
     }
 
-    const { role, subscription_status, subscription_end_date } = currentProfile;
+    const { role } = currentProfile;
     // ⚠️ is_onboarded comes as null from DB for existing rows — coerce to boolean
     const isOnboarded = !!currentProfile.is_onboarded;
 
@@ -48,57 +77,108 @@ export function useSubscriptionGuard() {
       return;
     }
 
-    // 🔴 FIX: If the database trigger incorrectly assigns 'expired' to a brand new user
-    // (no end date + not onboarded), treat them as a new lead.
-    const isActuallyNew = subscription_status === 'new' || 
-      (!subscription_end_date && !isOnboarded && subscription_status === 'expired');
+    const state = resolveSubscriptionState(currentProfile, latestRequest, currentProfile.entitlement);
 
-    // 2. عميل جديد لم يدفع
-    if (isActuallyNew) {
-      setUserLifecycleState('lead');
-      setIsGuardLoading(false);
-      initialized.current = true;
-      return;
-    }
+    const isPeriodActive = currentProfile.subscription_status === 'active' &&
+                           currentProfile.subscription_end_date &&
+                           new Date(currentProfile.subscription_end_date) > new Date();
 
-    // 3. عميل نشط — نتحقق من التاريخ أولاً
-    if (subscription_status === 'active') {
-      const isDateValid = !subscription_end_date ||
-        new Date(subscription_end_date) > new Date();
+    const isExpiringSoon = state === 'expiring_soon';
 
-      if (!isDateValid) {
-        // التاريخ انتهى رغم أن الحالة active — يعتبر expired
-        setUserLifecycleState('expired');
-      } else if (!isOnboarded) {
-        // دفع لكن لم يكمل بياناته
-        setUserLifecycleState('onboarding');
-      } else {
-        // عميل نشط مكتمل
-        setUserLifecycleState('active');
+    // Map subscription access state to user lifecycle state
+    switch (state) {
+      case 'no_subscription':
+        setUserLifecycleState('lead');
+        break;
+
+      case 'active':
+      case 'expiring_soon': {
+        if (!isOnboarded) {
+          setUserLifecycleState('onboarding');
+        } else {
+          setUserLifecycleState(isExpiringSoon ? 'expiring_soon' : 'active');
+        }
+        break;
       }
-      setIsGuardLoading(false);
-      initialized.current = true;
-      return;
+
+      case 'family_active': {
+        if (!isOnboarded) {
+          setUserLifecycleState('onboarding');
+        } else {
+          setUserLifecycleState('active');
+        }
+        break;
+      }
+
+      case 'pending_review':
+        setUserLifecycleState('payment_pending');
+        break;
+
+      case 'rejected':
+        setUserLifecycleState('payment_rejected');
+        break;
+
+      case 'renewing':
+        // If renewing early (subscription still active), treat them as active/expiring_soon
+        if (isPeriodActive) {
+          setUserLifecycleState(isExpiringSoon ? 'expiring_soon' : 'active');
+        } else {
+          setUserLifecycleState('renewing');
+        }
+        break;
+
+      case 'upgrade_pending':
+        if (isPeriodActive) {
+          setUserLifecycleState(isExpiringSoon ? 'expiring_soon' : 'active');
+        } else {
+          setUserLifecycleState('upgrade_pending');
+        }
+        break;
+
+      case 'downgrade_pending':
+        if (isPeriodActive) {
+          setUserLifecycleState(isExpiringSoon ? 'expiring_soon' : 'active');
+        } else {
+          setUserLifecycleState('downgrade_pending');
+        }
+        break;
+
+      case 'expired':
+        setUserLifecycleState('expired');
+        break;
+
+      case 'cancelled':
+        setUserLifecycleState('cancelled');
+        break;
+
+      case 'family_expired':
+      case 'family_removed':
+        setUserLifecycleState('sub_excluded');
+        break;
+
+      default:
+        setUserLifecycleState('lead');
+        break;
     }
 
-    // 4. اشتراك منتهي
-    if (subscription_status === 'expired') {
-      setUserLifecycleState('expired');
-      setIsGuardLoading(false);
-      initialized.current = true;
-      return;
-    }
-
-    // حالة غير معروفة — fallback إلى lead
-    setUserLifecycleState('lead');
     setIsGuardLoading(false);
     initialized.current = true;
-  }, [currentProfile]);
+  }, [currentProfile, latestRequest]);
+
+  // Check if current user period is active
+  const isPeriodActive = currentProfile?.subscription_status === 'active' &&
+                         currentProfile?.subscription_end_date &&
+                         new Date(currentProfile.subscription_end_date) > new Date();
 
   // ✅ Backward compatibility — isSubscribed للتوافقية مع أي كود قديم
+  // Grants access to tab screens when active or onboarding
   const isSubscribed = userLifecycleState === 'active' ||
+    userLifecycleState === 'expiring_soon' ||
     userLifecycleState === 'onboarding' ||
-    userLifecycleState === 'admin_or_doctor';
+    userLifecycleState === 'admin_or_doctor' ||
+    userLifecycleState === 'upgrade_pending' ||
+    userLifecycleState === 'downgrade_pending' ||
+    (userLifecycleState === 'renewing' && isPeriodActive);
 
   return { userLifecycleState, isGuardLoading, isSubscribed };
 }

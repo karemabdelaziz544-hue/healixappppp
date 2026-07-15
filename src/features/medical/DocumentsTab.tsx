@@ -1,11 +1,14 @@
+import { Text, TextInput } from '@/components/AppText';
 import React, { memo, useState, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, TextInput, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';;
 import { Ionicons } from '@expo/vector-icons';
 import { MedicalTabProps } from './medical.types';
 import { medicalStyles as styles } from './medicalStyles';
 import type { ClientDocument } from '../../types';
 import { useDocuments } from './hooks/useDocuments';
 import { AppColors, AppRadius, AppFontSize, AppFontFamily } from '../../../constants/AppTheme';
+import { AnimatedButton } from '../../../components/animations/AnimatedButton';
+import { SlideInView } from '../../../components/animations/SlideInView';
 
 interface DocumentsTabProps extends MedicalTabProps {
   docs: ClientDocument[];
@@ -13,8 +16,8 @@ interface DocumentsTabProps extends MedicalTabProps {
 }
 
 // 🌟 Memoize DocumentCard for performance
-const DocumentCard = memo(({ doc, onView }: { doc: ClientDocument, onView: (url: string) => void }) => (
-  <View style={styles.docCard}>
+const DocumentCard = memo(({ doc, onView, index }: { doc: ClientDocument, onView: (url: string) => void, index: number }) => (
+  <SlideInView delay={100 + index * 50} direction="up" style={styles.docCard}>
     <View style={styles.docIconBox}>
       <Ionicons name="document-text" size={24} color="#3B82F6" />
     </View>
@@ -22,10 +25,10 @@ const DocumentCard = memo(({ doc, onView }: { doc: ClientDocument, onView: (url:
       <Text style={styles.docName} numberOfLines={1}>{doc.file_name}</Text>
       <Text style={styles.docDate}>{new Date(doc.created_at).toLocaleDateString('ar-EG')}</Text>
     </View>
-    <TouchableOpacity style={styles.viewDocBtn} onPress={() => onView(doc.file_url)}>
+    <AnimatedButton style={styles.viewDocBtn} onPress={() => onView(doc.file_url)}>
       <Text style={styles.viewDocBtnText}>عرض</Text>
-    </TouchableOpacity>
-  </View>
+    </AnimatedButton>
+  </SlideInView>
 ));
 
 export default function DocumentsTab({ userId, docs, uploading, setUploading, onRefresh }: DocumentsTabProps) {
@@ -41,7 +44,7 @@ export default function DocumentsTab({ userId, docs, uploading, setUploading, on
 
   return (
     <View style={styles.fadeContainer}>
-      <TouchableOpacity style={styles.uploadDocBtn} onPress={handleUploadPress} disabled={uploading}>
+      <AnimatedButton style={styles.uploadDocBtn} onPress={handleUploadPress} disabled={uploading}>
         {uploading ? (
           <ActivityIndicator size="large" color={AppColors.primary} />
         ) : (
@@ -51,10 +54,10 @@ export default function DocumentsTab({ userId, docs, uploading, setUploading, on
             <Text style={styles.uploadDocSub}>صور تحاليل، روشتة، أو أي مستند طبي</Text>
           </>
         )}
-      </TouchableOpacity>
+      </AnimatedButton>
 
       {docs.length > 0 && (
-        <View style={localStyles.searchBar}>
+        <SlideInView delay={50} direction="up" style={localStyles.searchBar}>
           <Ionicons name="search-outline" size={20} color={AppColors.textSecondary} style={localStyles.searchIcon} />
           <TextInput
             style={localStyles.searchInput}
@@ -65,11 +68,11 @@ export default function DocumentsTab({ userId, docs, uploading, setUploading, on
             textAlign="left"
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <AnimatedButton onPress={() => setSearchQuery('')}>
               <Ionicons name="close-circle" size={18} color={AppColors.textMuted} />
-            </TouchableOpacity>
+            </AnimatedButton>
           )}
-        </View>
+        </SlideInView>
       )}
 
       <View style={styles.docsList}>
@@ -78,8 +81,8 @@ export default function DocumentsTab({ userId, docs, uploading, setUploading, on
         ) : filteredDocs.length === 0 ? (
           <Text style={styles.emptyText}>لا توجد نتائج تطابق بحثك.</Text>
         ) : (
-          filteredDocs.map(doc => (
-            <DocumentCard key={doc.id} doc={doc} onView={handleViewDocument} />
+          filteredDocs.map((doc, index) => (
+            <DocumentCard key={doc.id} doc={doc} onView={handleViewDocument} index={index} />
           ))
         )}
       </View>
@@ -98,7 +101,7 @@ const localStyles = StyleSheet.create({
     marginBottom: 20,
   },
   searchIcon: {
-    marginLeft: 8,
+    marginStart: 8,
   },
   searchInput: {
     flex: 1,

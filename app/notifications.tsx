@@ -1,5 +1,6 @@
+import { Text } from '@/components/AppText';
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, SectionList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, StyleSheet, SectionList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';;
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -10,6 +11,9 @@ import { AppColors } from '../constants/AppTheme';
 import { validateNotificationRoute } from '../src/lib/notificationRoutes';
 import { logger } from '../src/lib/logger';
 import type { AppNotification } from '../src/types';
+import { AnimatedButton } from '../components/animations/AnimatedButton';
+import { FadeInView } from '../components/animations/FadeInView';
+import { SlideInView } from '../components/animations/SlideInView';
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -136,13 +140,13 @@ export default function NotificationsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+      <FadeInView delay={50} style={styles.header}>
+        <AnimatedButton onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="chevron-forward" size={24} color="#1F2937" />
-        </TouchableOpacity>
+        </AnimatedButton>
         <Text style={styles.headerTitle}>الإشعارات</Text>
         <View style={{ width: 40 }} />
-      </View>
+      </FadeInView>
 
       <SectionList
         sections={groupedNotifications}
@@ -164,8 +168,9 @@ export default function NotificationsScreen() {
             <Text style={styles.emptyText}>لا توجد إشعارات حالياً</Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <TouchableOpacity 
+        renderItem={({ item, index }) => (
+          <SlideInView delay={index * 50} direction="right">
+          <AnimatedButton 
             style={[styles.notificationCard, item.is_read ? null : styles.unreadCard]}
             onPress={() => handleNotificationPress(item)}
           >
@@ -178,7 +183,8 @@ export default function NotificationsScreen() {
               <Text style={styles.time}>{new Date(item.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</Text>
             </View>
             {item.is_read ? null : <View style={styles.unreadDot} />}
-          </TouchableOpacity>
+          </AnimatedButton>
+          </SlideInView>
         )}
       />
     </SafeAreaView>
@@ -195,12 +201,12 @@ const styles = StyleSheet.create({
   listEmpty: { flexGrow: 1 },
   notificationCard: { flexDirection: 'row', backgroundColor: AppColors.surface, padding: 15, borderRadius: 20, marginBottom: 15, elevation: 1, alignItems: 'center' },
   unreadCard: { backgroundColor: AppColors.successBg, borderColor: AppColors.successLight, borderWidth: 1 },
-  iconBox: { width: 50, height: 50, backgroundColor: AppColors.inputBg, borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginLeft: 15 },
+  iconBox: { width: 50, height: 50, backgroundColor: AppColors.inputBg, borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginStart: 15 },
   textContent: { flex: 1, alignItems: 'flex-end' },
   title: { fontSize: 15, fontWeight: 'bold', color: AppColors.textPrimary, marginBottom: 3 },
   message: { fontSize: 13, color: AppColors.textSecondary, textAlign: 'right', marginBottom: 5 },
   time: { fontSize: 11, color: AppColors.textMuted, fontWeight: 'bold' },
-  unreadDot: { width: 10, height: 10, backgroundColor: AppColors.success, borderRadius: 5, marginRight: 10 },
+  unreadDot: { width: 10, height: 10, backgroundColor: AppColors.success, borderRadius: 5, marginEnd: 10 },
   // ✅ P2.5: Empty State محسّن
   emptyBox: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
   emptyTitle: { fontSize: 18, color: AppColors.textMuted, fontWeight: '900', marginTop: 15 },

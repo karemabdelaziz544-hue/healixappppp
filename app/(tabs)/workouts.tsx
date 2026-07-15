@@ -1,5 +1,6 @@
+import { Text } from '@/components/AppText';
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, ActivityIndicator, RefreshControl } from 'react-native';;
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -12,6 +13,11 @@ import { useFamily } from '../../src/context/FamilyContext';
 import { supabase } from '../../src/lib/supabase';
 import { logger } from '../../src/lib/logger';
 import type { Plan, PlanTask } from '../../src/types';
+import { AnimatedCard } from '../../components/animations/AnimatedCard';
+import { AnimatedButton } from '../../components/animations/AnimatedButton';
+import { FadeInView } from '../../components/animations/FadeInView';
+import { SlideInView } from '../../components/animations/SlideInView';
+import { SkeletonLoader } from '../../components/animations/SkeletonLoader';
 
 const { width } = Dimensions.get('window');
 
@@ -356,7 +362,7 @@ export default function WorkoutsScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[VITALITY_COLORS.primaryDark]} />}
         >
           {/* Weekly Progress Card */}
-          <View style={styles.progressCard}>
+          <FadeInView delay={100} style={styles.progressCard}>
             <View style={styles.progressTopRow}>
               <View style={styles.progressInfo}>
                 <Text style={styles.progressTitle}>
@@ -387,7 +393,7 @@ export default function WorkoutsScreen() {
             )}
 
             <View style={styles.cardDecorativeCircle} />
-          </View>
+          </FadeInView>
 
           {/* Weekly Calendar */}
           <View style={styles.calendarSection}>
@@ -418,7 +424,7 @@ export default function WorkoutsScreen() {
           </View>
 
           {/* Doctor recommendations card */}
-          <View style={styles.doctorNotesCard}>
+          <FadeInView delay={200} style={styles.doctorNotesCard}>
             <View style={styles.doctorNotesHeader}>
               <View style={styles.doctorIconContainer}>
                 <Ionicons name="medical" size={20} color={VITALITY_COLORS.primaryDark} />
@@ -439,19 +445,19 @@ export default function WorkoutsScreen() {
                 <Text style={styles.doctorNoteText}>توقف فوراً عن ممارسة أي تمرين رياضي في حال الشعور بألم حاد</Text>
               </View>
             </View>
-          </View>
+          </FadeInView>
 
           {/* Today's Exercises */}
           <View style={styles.exercisesSection}>
             <Text style={styles.sectionTitleText}>تمارين اليوم المحددة</Text>
 
             {workouts.length === 0 ? (
-              <View style={styles.emptyWorkoutsContainer}>
+              <FadeInView delay={300} style={styles.emptyWorkoutsContainer}>
                 <Ionicons name="cafe-outline" size={48} color={VITALITY_COLORS.textMuted} />
                 <Text style={styles.emptyWorkoutsText}>لا توجد تمارين محددة لهذا اليوم. خذ قسطاً من الراحة!</Text>
-              </View>
+              </FadeInView>
             ) : (
-              workouts.map((workout) => {
+              workouts.map((workout, index) => {
                 const meta = workout.metadata as any || {};
                 
                 // Extract exercise info with fallback templates
@@ -468,8 +474,8 @@ export default function WorkoutsScreen() {
                 const mistakesArray = meta.mistakes || [];
 
                 return (
+                  <FadeInView key={workout.id} delay={100 + index * 100}>
                   <View 
-                    key={workout.id} 
                     style={[styles.exerciseCard, workout.is_completed && styles.exerciseCardCompleted]}
                   >
                     <View style={styles.exerciseCardContent}>
@@ -510,7 +516,7 @@ export default function WorkoutsScreen() {
                     </View>
 
                     <View style={styles.exerciseCardActions}>
-                      <TouchableOpacity 
+                      <AnimatedButton 
                         style={[styles.exerciseActionButton, styles.exerciseActionSecondary]}
                         onPress={() => toggleExercise(workout.id, workout.is_completed)}
                       >
@@ -522,8 +528,8 @@ export default function WorkoutsScreen() {
                         <Text style={[styles.exerciseActionText, { color: VITALITY_COLORS.textMain }]}>
                           {workout.is_completed ? 'تم الإنجاز' : 'تحديد كمنجز'}
                         </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
+                      </AnimatedButton>
+                      <AnimatedButton 
                         style={[styles.exerciseActionButton, styles.exerciseActionPrimary]}
                         onPress={() => router.push({
                           pathname: '/exercise-details',
@@ -544,9 +550,10 @@ export default function WorkoutsScreen() {
                       >
                         <Ionicons name="play" size={18} color="#FFF" />
                         <Text style={[styles.exerciseActionText, { color: '#FFF' }]}>ابدأ التمرين</Text>
-                      </TouchableOpacity>
+                      </AnimatedButton>
                     </View>
                   </View>
+                  </FadeInView>
                 );
               })
             )}
@@ -555,39 +562,39 @@ export default function WorkoutsScreen() {
           {/* Statistics Grid */}
           <View style={styles.statisticsSection}>
             <Text style={styles.sectionTitleText}>إحصائيات الشهر</Text>
-            <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
+            <FadeInView delay={300} style={styles.statsGrid}>
+              <SlideInView direction="up" delay={400} style={styles.statCard}>
                 <View style={[styles.statIconContainer, { backgroundColor: '#FEE2E2' }]}>
                   <Ionicons name="flame" size={20} color="#EF4444" />
                 </View>
                 <Text style={styles.statLabel}>السعرات المحروقة</Text>
                 <Text style={styles.statValue}>{stats.calories}</Text>
-              </View>
+              </SlideInView>
 
-              <View style={styles.statCard}>
+              <SlideInView direction="up" delay={450} style={styles.statCard}>
                 <View style={[styles.statIconContainer, { backgroundColor: '#D1FAE5' }]}>
                   <Ionicons name="checkbox" size={20} color={VITALITY_COLORS.successGreen} />
                 </View>
                 <Text style={styles.statLabel}>التمارين المنجزة</Text>
                 <Text style={styles.statValue}>{stats.exercisesDone} تمارين</Text>
-              </View>
+              </SlideInView>
 
-              <View style={styles.statCard}>
+              <SlideInView direction="up" delay={500} style={styles.statCard}>
                 <View style={[styles.statIconContainer, { backgroundColor: '#DBEAFE' }]}>
                   <Ionicons name="time" size={20} color="#3B82F6" />
                 </View>
                 <Text style={styles.statLabel}>ساعات التدريب</Text>
                 <Text style={styles.statValue}>{stats.workoutHours} ساعة</Text>
-              </View>
+              </SlideInView>
 
-              <View style={styles.statCard}>
+              <SlideInView direction="up" delay={550} style={styles.statCard}>
                 <View style={[styles.statIconContainer, { backgroundColor: '#FEF3C7' }]}>
                   <Ionicons name="flash" size={20} color="#F59E0B" />
                 </View>
                 <Text style={styles.statLabel}>أيام الاستمرار</Text>
                 <Text style={styles.statValue}>{stats.streak} أيام</Text>
-              </View>
-            </View>
+              </SlideInView>
+            </FadeInView>
           </View>
         </ScrollView>
       )}
@@ -632,7 +639,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: VITALITY_COLORS.primaryDark,
-    marginLeft: 6,
+    marginStart: 6,
     fontFamily: AppFontFamily.bold,
   },
   headerTitleIcon: {
@@ -699,7 +706,7 @@ const styles = StyleSheet.create({
     height: 8,
     backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: 4,
-    marginRight: 12,
+    marginEnd: 12,
     overflow: 'hidden',
   },
   progressBarFill: {
@@ -725,7 +732,7 @@ const styles = StyleSheet.create({
     borderRadius: 75,
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
     top: -50,
-    left: -50,
+    start: -50,
   },
   calendarSection: {
     marginBottom: 24,
@@ -752,7 +759,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: '#F3F4F6',
     alignItems: 'center',
-    marginLeft: 8,
+    marginStart: 8,
     borderWidth: 1,
     borderColor: 'transparent',
   },
@@ -931,7 +938,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
-    marginRight: 8,
+    marginEnd: 8,
   },
   completedBadgeText: {
     fontSize: 10,
@@ -967,7 +974,7 @@ const styles = StyleSheet.create({
   exerciseMetaText: {
     fontSize: 12,
     color: VITALITY_COLORS.textSecondary,
-    marginRight: 4,
+    marginEnd: 4,
   },
   exerciseCardActions: {
     flexDirection: 'row',
@@ -983,8 +990,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   exerciseActionSecondary: {
-    borderLeftWidth: 1,
-    borderLeftColor: '#F3F4F6',
+    borderStartWidth: 1,
+    borderStartColor: '#F3F4F6',
     backgroundColor: '#FAFAFA',
   },
   exerciseActionPrimary: {
@@ -1034,7 +1041,7 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     bottom: 95,
-    left: 20,
+    start: 20,
     width: 56,
     height: 56,
     borderRadius: 28,

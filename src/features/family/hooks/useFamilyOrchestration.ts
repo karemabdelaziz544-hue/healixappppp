@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../../lib/supabase';
 import { executeQuery } from '../../../lib/apiClient';
 import { logger } from '../../../lib/logger';
@@ -24,6 +25,7 @@ export function useFamilyOrchestration(userId: string | undefined) {
 
   const isInitialLoadDone = useRef(false);
   const currentProfileIdRef = useRef<string | null>(null);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchFamily = useCallback(async (silent = false) => {
     if (!userId) {
@@ -53,28 +55,27 @@ export function useFamilyOrchestration(userId: string | undefined) {
       if (error) throw error;
 
       if (data) {
-        const manager = data.find(p => p.id === userId);
-
-        const processedMembers = data.map(member => {
-          const safeMember = { ...member, is_onboarded: !!member.is_onboarded };
-
-          if (safeMember.manager_id && manager) {
-            const managerStatus = manager.subscription_status;
-            
-            return {
-              ...safeMember,
-              subscription_status: managerStatus,
-              subscription_end_date: manager.subscription_end_date,
-            };
-          }
-          return safeMember;
-        });
+        const memberIds = data.filter(member => member.manager_id).map(member => member.id);
+        const { data: entitlements, error: entitlementError } = memberIds.length
+          ? await executeQuery<{ member_id: string; status: 'included' | 'excluded' | 'expired' | 'cancelled'; included_until: string | null }[]>(
+              supabase.from('family_subscription_memberships').select('member_id,status,included_until').in('member_id', memberIds).order('included_until', { ascending: false }),
+              { isIdempotent: true },
+            )
+          : { data: [], error: null };
+        if (entitlementError) logger.warn('[FamilyOrchestration] entitlement fetch error:', entitlementError.message);
+        const entitlementByMember = new Map<string, { status: 'included' | 'excluded' | 'expired' | 'cancelled'; included_until: string | null }>();
+        entitlements?.forEach(entitlement => { if (!entitlementByMember.has(entitlement.member_id)) entitlementByMember.set(entitlement.member_id, entitlement); });
+        // Never copy the manager subscription onto children. Their entitlement
+        // is explicit and can represent excluded/expired/cancelled correctly.
+        const processedMembers = data.map(member => ({ ...member, is_onboarded: !!member.is_onboarded, entitlement: entitlementByMember.get(member.id) ?? null }));
 
         setFamilyMembers(processedMembers);
 
         const activeId = currentProfileIdRef.current;
         if (!activeId) {
-          const mainProfile = processedMembers.find(p => p.id === userId) || processedMembers[0];
+          const persistedId = await AsyncStorage.getItem(`healix.active-profile.${userId}`);
+          const persistedProfile = persistedId ? processedMembers.find(profile => profile.id === persistedId) : undefined;
+          const mainProfile = persistedProfile || processedMembers.find(p => p.id === userId) || processedMembers[0];
           setCurrentProfile(mainProfile);
           currentProfileIdRef.current = mainProfile?.id || null;
         } else {
@@ -93,6 +94,11 @@ export function useFamilyOrchestration(userId: string | undefined) {
     }
   }, [userId]);
 
+  const scheduleRefresh = useCallback(() => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => { fetchFamily(true); }, 250);
+  }, [fetchFamily]);
+
   useEffect(() => {
     isInitialLoadDone.current = false;
     fetchFamily();
@@ -100,14 +106,18 @@ export function useFamilyOrchestration(userId: string | undefined) {
     if (!userId) return;
 
     const channel = supabase.channel(`family-changes-${userId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, () => fetchFamily(true))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `manager_id=eq.${userId}` }, () => fetchFamily(true))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, () => scheduleRefresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `manager_id=eq.${userId}` }, () => scheduleRefresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'family_subscription_memberships', filter: `manager_id=eq.${userId}` }, () => scheduleRefresh())
       .subscribe();
 
     return () => {
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
       supabase.removeChannel(channel);
     };
-  }, [userId, fetchFamily]);
+  // Coalesce updates from the manager row and its membership rows.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, fetchFamily, scheduleRefresh]);
 
   /**
    * 🔴 AUDIT 8 FIX (Issue 2): switchProfile is now async (Promise<void>).
@@ -119,8 +129,9 @@ export function useFamilyOrchestration(userId: string | undefined) {
     if (profile) {
       setCurrentProfile(profile);
       currentProfileIdRef.current = profile.id;
+      if (userId) await AsyncStorage.setItem(`healix.active-profile.${userId}`, profile.id);
     }
-  }, [familyMembers]);
+  }, [familyMembers, userId]);
 
   return {
     currentProfile,

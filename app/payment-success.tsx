@@ -1,9 +1,12 @@
+import { Text } from '@/components/AppText';
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SubscriptionConfig } from '../constants/subscriptionConfig';
+import { AnimatedButton } from '../components/animations/AnimatedButton';
+import { SlideInView } from '../components/animations/SlideInView';
 
 const C = {
   primary: '#12362e',
@@ -34,32 +37,58 @@ export default function PaymentSuccessScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const totalPrice = params.totalPrice ? parseFloat(params.totalPrice as string) : 0;
+  const paymentType = params.paymentType || 'new';
 
-  // Generate a dummy readable request ID
+  const submittedRequestId = params.invoiceId as string | undefined;
   const today = new Date();
   const reqDateStr = today.toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' });
-  const randomNum = Math.floor(1000 + Math.random() * 9000);
-  const reqId = `REQ-${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}-${randomNum}`;
+
+  // Custom text based on process type
+  const getSuccessMessage = () => {
+    switch (paymentType) {
+      case 'upgrade':
+        return 'تم إرسال طلب ترقية الباقة بنجاح!';
+      case 'downgrade':
+        return 'تم إرسال طلب تعديل الباقة بنجاح!';
+      case 'renewal':
+        return 'تم إرسال طلب تجديد الاشتراك بنجاح!';
+      default:
+        return 'تم إرسال طلب الاشتراك بنجاح!';
+    }
+  };
+
+  const getSuccessDesc = () => {
+    switch (paymentType) {
+      case 'upgrade':
+        return 'نشكرك على إتمام العملية. سنقوم بمراجعة الطلب وزيادة مقاعد عائلتك فوراً بعد التحقق.';
+      case 'downgrade':
+        return 'تم استلام طلب التعديل. سنقوم بمراجعة الطلب واستبعاد الأعضاء المحددين بعد التأكيد.';
+      case 'renewal':
+        return 'تم استلام طلب تجديد اشتراكك بنجاح. سيتم تمديد صلاحية باقتك قريباً.';
+      default:
+        return 'نشكرك على إتمام عملية التحويل. طلبك حالياً تحت المراجعة من قبل الإدارة لتفعيل الباقة.';
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         {/* Success Icon */}
-        <View style={styles.successIconCircle}>
+        <SlideInView delay={100} direction="up" style={styles.successIconCircle}>
           <Ionicons name="checkmark-circle" size={80} color={C.success} />
-        </View>
+        </SlideInView>
 
         {/* Message */}
-        <Text style={styles.successTitle}>تم إرسال طلب التجديد بنجاح!</Text>
-        <Text style={styles.successDesc}>
-          نشكرك على إتمام عملية التحويل. طلبك حالياً تحت المراجعة من قبل الإدارة.
-        </Text>
+        <SlideInView delay={200} direction="up">
+          <Text style={styles.successTitle}>{getSuccessMessage()}</Text>
+          <Text style={styles.successDesc}>{getSuccessDesc()}</Text>
+        </SlideInView>
 
         {/* Details Card */}
-        <View style={styles.detailsCard}>
+        <SlideInView delay={300} direction="up" style={styles.detailsCard}>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>رقم الطلب</Text>
-            <Text style={styles.detailValue}>{reqId}</Text>
+            <Text style={styles.detailValue}>{submittedRequestId || '—'}</Text>
           </View>
           <View style={styles.detailDivider} />
           <View style={styles.detailRow}>
@@ -68,7 +97,7 @@ export default function PaymentSuccessScreen() {
           </View>
           <View style={styles.detailDivider} />
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>المبلغ المدفوع</Text>
+            <Text style={styles.detailLabel}>المبلغ الإجمالي</Text>
             <Text style={styles.detailValue}>{SubscriptionConfig.formatPrice(totalPrice)}</Text>
           </View>
           <View style={styles.detailDivider} />
@@ -78,30 +107,29 @@ export default function PaymentSuccessScreen() {
               <Text style={styles.pendingStatusText}>قيد المراجعة</Text>
             </View>
           </View>
-        </View>
+        </SlideInView>
 
         {/* Expected Duration Note */}
-        <View style={styles.noteBox}>
+        <SlideInView delay={400} direction="up" style={styles.noteBox}>
           <Ionicons name="time-outline" size={20} color={C.primary} />
           <View style={styles.noteTextBox}>
             <Text style={styles.noteTitle}>مدة المراجعة المتوقعة</Text>
             <Text style={styles.noteDesc}>
-              يتم مراجعة الطلب وتفعيل الحسابات خلال أقل من 24 ساعة. سيتم إرسال إشعار فوري لك بمجرد التفعيل.
+              يتم مراجعة الطلبات وتحديث الحسابات خلال أقل من 24 ساعة. سيتم إرسال إشعار فوري لك بمجرد التفعيل.
             </Text>
           </View>
-        </View>
+        </SlideInView>
       </View>
 
       {/* Back Button Sticky at Bottom */}
       <View style={[styles.bottomAction, { paddingBottom: Math.max(insets.bottom, 12) + 12 }]}>
-        <TouchableOpacity 
+        <AnimatedButton 
           style={styles.backBtn} 
           onPress={() => router.replace('/subscriptions')}
-          activeOpacity={0.9}
         >
           <Text style={styles.backBtnText}>العودة إلى اشتراكي</Text>
           <Ionicons name="arrow-forward" size={20} color="#FFF" />
-        </TouchableOpacity>
+        </AnimatedButton>
       </View>
     </SafeAreaView>
   );
@@ -134,7 +162,7 @@ const styles = StyleSheet.create({
   noteDesc: { fontSize: 11, fontWeight: '600', color: C.primaryContainer, textAlign: 'right', lineHeight: 16 },
 
   // Bottom action
-  bottomAction: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: C.background, paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.outlineVariant },
+  bottomAction: { position: 'absolute', bottom: 0, start: 0, end: 0, backgroundColor: C.background, paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.outlineVariant },
   backBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.primaryContainer, paddingVertical: 16, borderRadius: 16, ...CARD_SHADOW },
   backBtnText: { fontSize: 16, fontWeight: '800', color: '#FFF' },
 });

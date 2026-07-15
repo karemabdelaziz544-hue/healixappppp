@@ -2,6 +2,8 @@ import { supabase } from '../../../lib/supabase';
 import { executeQuery } from '../../../lib/apiClient';
 import type { ClientDocument } from '../../../../src/types';
 
+import { getCachedSignedUrl } from '../../../lib/storageCache';
+
 export const documentsService = {
   uploadFile: async (filePath: string, arrayBuffer: ArrayBuffer, contentType: string) => {
     // 🌟 Safely upload using ArrayBuffer instead of FormData for cross-platform RN stability
@@ -21,8 +23,8 @@ export const documentsService = {
   },
 
   getSignedUrl: async (pathOrUrl: string) => {
-    const { data, error } = await supabase.storage.from('medical-docs').createSignedUrl(pathOrUrl, 3600);
-    if (error) throw error;
-    return data?.signedUrl;
+    const signedUrl = await getCachedSignedUrl('medical-docs', pathOrUrl, 3600);
+    if (!signedUrl) throw new Error('Failed to generate signed URL');
+    return signedUrl;
   }
 };

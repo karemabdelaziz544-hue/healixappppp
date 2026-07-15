@@ -1,14 +1,17 @@
+import { Text } from '@/components/AppText';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
-import { Animated, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { SlideInView } from '../../components/animations/SlideInView';
+import { AnimatedButton } from '../../components/animations/AnimatedButton';
 import { handleError } from '../lib/errorHandler';
 import { supabase } from '../lib/supabase';
 import { showToast } from '../../components/AppToast';
 import { AuthInput } from '../../components/auth/AuthInput';
 import { AuthButton } from '../../components/auth/AuthButton';
-import { AppColors, AppRadius, AppSpacing, AppFontSize } from '../../constants/AppTheme';
+import { AppColors, AppRadius, AppSpacing, AppFontSize , AppFontFamily } from '@/constants/AppTheme';
 
 export default function SignupScreen() {
   const [step, setStep] = useState(1);
@@ -20,16 +23,6 @@ export default function SignupScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // أنيميشن لدخول الشاشة بنعومة (Fade In & Scale)
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
-      Animated.spring(scaleAnim, { toValue: 1, friction: 8, tension: 40, useNativeDriver: true })
-    ]).start();
-  }, []);
 
   const getPasswordStrength = (pass: string) => {
     if (!pass) return { score: 0, label: 'أدخل كلمة المرور', icon: 'key-outline', color: AppColors.textMuted };
@@ -142,7 +135,7 @@ export default function SignupScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-        <Animated.View style={[styles.formCard, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
+        <SlideInView direction="up" distance={20} style={[styles.formCard]}>
 
           <View style={styles.header}>
             <Image source={require('../../assets/images/icon.png')} style={styles.logo} resizeMode="contain" />
@@ -182,12 +175,12 @@ export default function SignupScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.label}>النوع</Text>
                   <View style={styles.genderToggle}>
-                    <TouchableOpacity style={[styles.genderBtn, gender === 'male' && styles.genderBtnActive]} onPress={() => setGender('male')}>
+                    <AnimatedButton style={[styles.genderBtn, gender === 'male' && styles.genderBtnActive]} onPress={() => setGender('male')}>
                       <Text style={[styles.genderText, gender === 'male' && styles.genderTextActive]}>ذكر</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.genderBtn, gender === 'female' && styles.genderBtnActive]} onPress={() => setGender('female')}>
+                    </AnimatedButton>
+                    <AnimatedButton style={[styles.genderBtn, gender === 'female' && styles.genderBtnActive]} onPress={() => setGender('female')}>
                       <Text style={[styles.genderText, gender === 'female' && styles.genderTextActive]}>أنثى</Text>
-                    </TouchableOpacity>
+                    </AnimatedButton>
                   </View>
                 </View>
               </View>
@@ -231,31 +224,31 @@ export default function SignupScreen() {
 
               <AuthButton title="إنشاء حساب جديد" onPress={handleSignup} loading={loading} />
 
-              <TouchableOpacity style={styles.backStepBtn} onPress={() => setStep(1)} activeOpacity={0.8}>
+              <AnimatedButton style={styles.backStepBtn} onPress={() => setStep(1)} activeOpacity={0.8}>
                 <Text style={styles.backStepBtnText}>العودة للخطوة السابقة</Text>
-              </TouchableOpacity>
+              </AnimatedButton>
             </>
           )}
 
           {/* رابط تسجيل الدخول */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>لديك حساب بالفعل؟ </Text>
-            <TouchableOpacity onPress={() => router.replace('/login')}>
+            <AnimatedButton onPress={() => router.replace('/login')}>
               <Text style={styles.loginLink}>سجل دخولك</Text>
-            </TouchableOpacity>
+            </AnimatedButton>
           </View>
 
           <View style={styles.legalFooter}>
-            <TouchableOpacity onPress={() => WebBrowser.openBrowserAsync('https://healix.app/terms')}>
+            <AnimatedButton onPress={() => WebBrowser.openBrowserAsync('https://healix.app/terms')}>
               <Text style={styles.legalLink}>شروط الخدمة</Text>
-            </TouchableOpacity>
+            </AnimatedButton>
             <Text style={styles.legalSeparator}> • </Text>
-            <TouchableOpacity onPress={() => WebBrowser.openBrowserAsync('https://healix.app/privacy')}>
+            <AnimatedButton onPress={() => WebBrowser.openBrowserAsync('https://healix.app/privacy')}>
               <Text style={styles.legalLink}>سياسة الخصوصية</Text>
-            </TouchableOpacity>
+            </AnimatedButton>
           </View>
 
-        </Animated.View>
+        </SlideInView>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -266,8 +259,8 @@ const styles = StyleSheet.create({
   scrollContent: { flexGrow: 1, justifyContent: 'center', padding: AppSpacing.xl },
 
   bgCircle: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.4 },
-  circleTopRight: { backgroundColor: AppColors.successLight, top: -100, right: -150 },
-  circleBottomLeft: { backgroundColor: AppColors.accentBorder, bottom: -100, left: -150 },
+  circleTopRight: { backgroundColor: AppColors.successLight, top: -100, end: -150 },
+  circleBottomLeft: { backgroundColor: AppColors.accentBorder, bottom: -100, start: -150 },
 
   formCard: { 
     backgroundColor: AppColors.surface, 
@@ -303,9 +296,9 @@ const styles = StyleSheet.create({
   stepIndicator: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
   stepCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: AppColors.inputBg, justifyContent: 'center', alignItems: 'center' },
   stepCircleActive: { backgroundColor: AppColors.primary },
-  stepCircleText: { fontSize: 12, fontWeight: 'bold', color: AppColors.textMuted, fontFamily: 'Tajawal-Bold' },
+  stepCircleText: { fontSize: 12, fontWeight: 'bold', color: AppColors.textMuted, fontFamily: AppFontFamily.bold },
   stepCircleTextActive: { color: '#FFF' },
-  stepLabel: { fontSize: 13, color: AppColors.textMuted, fontFamily: 'Tajawal-Bold' },
+  stepLabel: { fontSize: 13, color: AppColors.textMuted, fontFamily: AppFontFamily.bold },
   stepLabelActive: { color: AppColors.primary },
   stepLine: { flex: 1, height: 2, backgroundColor: AppColors.inputBg, maxWidth: 60 },
   stepLineActive: { backgroundColor: AppColors.primary },
@@ -314,11 +307,11 @@ const styles = StyleSheet.create({
   strengthContainer: { width: '100%', marginBottom: AppSpacing.lg, alignItems: 'flex-end' },
   strengthBarBg: { width: '100%', height: 6, backgroundColor: AppColors.inputBg, borderRadius: 3, overflow: 'hidden', marginBottom: 6 },
   strengthBarFill: { height: '100%', borderRadius: 3 },
-  strengthText: { fontSize: 12, fontFamily: 'Tajawal-Medium' },
+  strengthText: { fontSize: 12, fontFamily: AppFontFamily.medium },
 
   // Back Button
   backStepBtn: { marginTop: 15, paddingVertical: 12, alignItems: 'center', width: '100%' },
-  backStepBtnText: { color: AppColors.textSecondary, fontSize: 14, fontFamily: 'Tajawal-Bold' },
+  backStepBtnText: { color: AppColors.textSecondary, fontSize: 14, fontFamily: AppFontFamily.bold },
   legalFooter: { flexDirection: 'row-reverse', justifyContent: 'center', alignItems: 'center', marginTop: AppSpacing.xl, gap: 5 },
   legalLink: { color: AppColors.textSecondary, fontSize: AppFontSize.sm, textDecorationLine: 'underline', fontWeight: 'bold' },
   legalSeparator: { color: AppColors.textMuted, fontSize: AppFontSize.sm },

@@ -1,12 +1,17 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Pressable, RefreshControl, Animated } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, Modal, Pressable, RefreshControl } from 'react-native';
+import { Text } from '@/components/AppText';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFamily } from '../src/context/FamilyContext';
 import { useRouter } from 'expo-router';
 import Skeleton from '../components/Skeleton';
 import { SubscriptionConfig } from '../constants/subscriptionConfig';
-import { useSubscriptionData } from '../src/features/subscriptions/hooks/useSubscriptionData';
+import { usePaymentHistory, useSubscriptionDetails } from '../src/features/subscriptions/hooks/useSubscriptionData';
+import { AnimatedButton } from '../components/animations/AnimatedButton';
+import { FadeInView } from '../components/animations/FadeInView';
+import { SlideInView } from '../components/animations/SlideInView';
+import { resolveSubscriptionState, subscriptionStateLabel, paymentTypeLabel } from '../src/features/subscriptions/resolveSubscriptionState';
 
 // ─── Design System Colors ───
 const C = {
@@ -40,39 +45,34 @@ export default function SubscriptionsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   
-  const { currentProfile, familyMembers } = useFamily();
-  const userId = currentProfile?.id;
+  const { currentProfile, familyMembers, accountProfileId } = useFamily();
+  const userId = accountProfileId;
   const subMembers = familyMembers.filter(m => m.manager_id === userId);
   const subAccountsCount = subMembers.length;
 
-  const {
-    loading,
-    refreshing,
-    history,
-    pendingRequest,
-    onRefresh,
-    totalPrice,
-  } = useSubscriptionData(userId, subAccountsCount, subMembers);
+  // Use decomposed hooks
+  const { loading: historyLoading, refreshing, history, pendingRequest, onRefresh } = usePaymentHistory(userId);
+  const { details, loading: detailsLoading } = useSubscriptionDetails(userId);
 
-  const isActive = !!(currentProfile?.subscription_status === 'active' && 
-                      currentProfile?.subscription_end_date && 
-                      new Date(currentProfile.subscription_end_date) > new Date());
-                   
-  const isActuallyNew = currentProfile?.subscription_status === 'new' || 
-                        (!currentProfile?.subscription_end_date && 
-                         !currentProfile?.is_onboarded && 
-                         currentProfile?.subscription_status === 'expired');
+  const loading = historyLoading || detailsLoading;
+
+  const subscriptionState = resolveSubscriptionState(currentProfile, pendingRequest, currentProfile?.entitlement);
 
   const isSubAccount = !!currentProfile?.manager_id;
+  const isActive = subscriptionState === 'active' || subscriptionState === 'expiring_soon' || subscriptionState === 'family_active';
+  const isExpiringSoon = subscriptionState === 'expiring_soon';
+  const isNew = subscriptionState === 'no_subscription';
+  const isExpired = subscriptionState === 'expired' || subscriptionState === 'cancelled';
+  const isExcluded = subscriptionState === 'family_removed' || subscriptionState === 'family_expired';
 
-  // Determine shown count and cost based on pending request or current active subscription
-  const displayedSubAccountsCount = pendingRequest && pendingRequest.renewal_metadata && typeof (pendingRequest.renewal_metadata as any).sub_count === 'number'
-    ? (pendingRequest.renewal_metadata as any).sub_count
-    : subAccountsCount;
+  // Determine family quota and member count
+  const familyQuota = details?.family_quota ?? subAccountsCount;
+  const activeMemberCount = details?.included_member_count ?? subAccountsCount;
 
+  // Determine shown cost
   const displayedTotalPrice = pendingRequest
     ? pendingRequest.amount
-    : SubscriptionConfig.calculateTotal(subAccountsCount);
+    : SubscriptionConfig.estimateTotal(familyQuota);
 
   // Invoice Bottom Sheet state
   const [invoiceModalVisible, setInvoiceModalVisible] = React.useState(false);
@@ -119,35 +119,39 @@ export default function SubscriptionsScreen() {
   }
 
   // ─── Sub Account Warning Screen ───
-  if (isSubAccount && !isActive) {
+  if (isSubAccount && (isExcluded || isExpired)) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
+        <FadeInView delay={100} style={styles.header}>
+          <AnimatedButton onPress={() => router.back()} style={styles.headerBackBtn}>
             <Ionicons name="arrow-forward" size={24} color={C.primary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>اشتراكي</Text>
+          </AnimatedButton>
+          <Text style={styles.headerTitle}>إدارة الاشتراك</Text>
           <View style={styles.crownBadge}>
             <Ionicons name="star" size={18} color="#D4AF37" />
           </View>
-        </View>
+        </FadeInView>
         <View style={styles.alertContainer}>
           <View style={styles.alertIconBox}>
             <Ionicons name="warning" size={48} color={C.error} />
           </View>
           <Text style={styles.alertTitle}>تنبيه بخصوص اشتراكك</Text>
           <Text style={styles.alertText}>
-            نحيطك علماً بأنه <Text style={{fontWeight: 'bold', color: C.error}}>تم استثناء هذا الحساب</Text> من الاشتراك العائلي الجديد، أو أن الباقة قد انتهت صلاحيتها حالياً.
+            {subscriptionState === 'family_removed' ? (
+              <Text>نحيطك علماً بأنه <Text style={{fontWeight: 'bold', color: C.error}}>تم استبعاد هذا الحساب</Text> من الباقة العائلية بواسطة المشترك الرئيسي.</Text>
+            ) : (
+              <Text>نحيطك علماً بأن الباقة العائلية المضافة إليها قد انتهت صلاحيتها حالياً.</Text>
+            )}
           </Text>
           <View style={styles.alertStepsBox}>
             <Text style={styles.alertStepsTitle}>ماذا تفعل الآن؟</Text>
-            <Text style={styles.alertStep}>• تواصل مع مدير الحساب الأساسي لتجديد الباقة</Text>
+            <Text style={styles.alertStep}>• تواصل مع المشترك الرئيسي لإضافة حسابك أو تفعيل الباقة</Text>
             <Text style={styles.alertStep}>• أو تحدث مع خدمة عملائنا لمساعدتك فوريًا</Text>
           </View>
-          <TouchableOpacity style={styles.alertBtn} onPress={() => router.replace('/chat')}>
+          <AnimatedButton style={styles.alertBtn} onPress={() => router.replace('/chat')}>
             <Text style={styles.alertBtnText}>تحدث مع خدمة العملاء</Text>
             <Ionicons name="chatbubbles" size={20} color="#FFF" />
-          </TouchableOpacity>
+          </AnimatedButton>
         </View>
       </SafeAreaView>
     );
@@ -172,14 +176,39 @@ export default function SubscriptionsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}
       >
+        {/* ─── Expiring Soon Banner ─── */}
+        {isExpiringSoon && (
+          <SlideInView delay={100} direction="up" style={[styles.expiredBanner, { backgroundColor: '#D97706', marginBottom: 16 }]}>
+            <View style={styles.expiredBannerLeft}>
+              <Ionicons name="time-outline" size={20} color="#FFF" />
+              <Text style={styles.expiredBannerText}>ينتهي اشتراكك قريباً! تفضل بالتجديد الآن للحفاظ على عائلتك وميزاتك.</Text>
+            </View>
+            <TouchableOpacity style={[styles.expiredBadge, { backgroundColor: '#FEF3C7' }]} onPress={() => router.push('/subscription-management')}>
+              <Text style={[styles.expiredBadgeText, { color: '#92400E' }]}>تجديد</Text>
+            </TouchableOpacity>
+          </SlideInView>
+        )}
+
         {/* ─── Quick Status Card ─── */}
         <View style={styles.quickStatusCard}>
           <View style={styles.quickStatusLeft}>
             <Text style={styles.quickStatusPlan}>{SubscriptionConfig.PLAN_NAME}</Text>
-            <View style={[styles.statusBadge, isActive ? styles.statusBadgeActive : styles.statusBadgeExpired]}>
-              <View style={[styles.statusDot, isActive ? styles.statusDotActive : styles.statusDotExpired]} />
-              <Text style={[styles.statusBadgeText, isActive ? styles.statusBadgeTextActive : styles.statusBadgeTextExpired]}>
-                {isActive ? 'فعّال' : (isActuallyNew ? 'جديد' : 'منتهي')}
+            <View style={[
+              styles.statusBadge,
+              isActive ? styles.statusBadgeActive : styles.statusBadgeExpired,
+              isExpiringSoon && { backgroundColor: '#FEF3C7' }
+            ]}>
+              <View style={[
+                styles.statusDot,
+                isActive ? styles.statusDotActive : styles.statusDotExpired,
+                isExpiringSoon && { backgroundColor: '#D97706' }
+              ]} />
+              <Text style={[
+                styles.statusBadgeText,
+                isActive ? styles.statusBadgeTextActive : styles.statusBadgeTextExpired,
+                isExpiringSoon && { color: '#92400E' }
+              ]}>
+                {subscriptionStateLabel[subscriptionState] || 'منتهي'}
               </Text>
             </View>
           </View>
@@ -197,57 +226,73 @@ export default function SubscriptionsScreen() {
         </View>
 
         {/* ─── Hero Premium Plan Card ─── */}
-        <View style={[styles.heroCard, isActive ? styles.heroCardActive : styles.heroCardExpired]}>
+        <View style={styles.heroCard}>
           {/* Decorative circle */}
           <View style={styles.heroDecorativeCircle} />
           
-          <View style={styles.heroTopRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.heroPlanName}>{SubscriptionConfig.PLAN_NAME}</Text>
-              <View style={[styles.heroBadge, isActive ? styles.heroBadgeActive : styles.heroBadgeExpired]}>
-                <View style={[styles.heroBadgeDot, isActive && { backgroundColor: '#4ADE80' }]} />
-                <Text style={styles.heroBadgeText}>{isActive ? 'اشتراك فعّال' : (isActuallyNew ? 'غير مفعل' : 'منتهي الصلاحية')}</Text>
+          <FadeInView delay={200} style={styles.subCard}>
+            <View style={styles.heroTopRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.heroPlanName}>{SubscriptionConfig.PLAN_NAME}</Text>
+                <View style={[
+                  styles.heroBadge,
+                  isActive ? styles.heroBadgeActive : styles.heroBadgeExpired,
+                  isExpiringSoon && { backgroundColor: 'rgba(217, 119, 6, 0.2)' }
+                ]}>
+                  <View style={[
+                    styles.heroBadgeDot,
+                    isActive && { backgroundColor: '#4ADE80' },
+                    isExpiringSoon && { backgroundColor: '#D97706' }
+                  ]} />
+                  <Text style={styles.heroBadgeText}>
+                    {subscriptionStateLabel[subscriptionState]}
+                  </Text>
+                </View>
               </View>
             </View>
-          </View>
 
-          {/* Dates */}
-          <View style={styles.heroDatesRow}>
-            <View style={styles.heroDateItem}>
-              <Text style={styles.heroDateLabel}>تاريخ البداية</Text>
-              <Text style={styles.heroDateValue}>
-                {currentProfile?.subscription_end_date 
-                  ? formatDateShort(new Date(new Date(currentProfile.subscription_end_date).getTime() - 30 * 24 * 60 * 60 * 1000).toISOString())
-                  : '—'}
+            {/* Dates */}
+            <View style={styles.heroDatesRow}>
+              <View style={styles.heroDateItem}>
+                <Text style={styles.heroDateLabel}>تاريخ البداية</Text>
+                <Text style={styles.heroDateValue}>
+                  {currentProfile?.subscription_end_date 
+                    ? formatDateShort(new Date(new Date(currentProfile.subscription_end_date).getTime() - 30 * 24 * 60 * 60 * 1000).toISOString())
+                    : '—'}
+                </Text>
+              </View>
+              <View style={styles.heroDateItem}>
+                <Text style={styles.heroDateLabel}>تاريخ الانتهاء</Text>
+                <Text style={styles.heroDateValue}>{formatDateShort(currentProfile?.subscription_end_date)}</Text>
+              </View>
+            </View>
+
+            {/* Progress bar */}
+            {isActive && (
+              <View style={styles.heroProgressSection}>
+                <View style={styles.heroProgressTextRow}>
+                  <Text style={styles.heroProgressDays}>{remainingDays} يوم متبقي</Text>
+                  <Text style={styles.heroProgressExpiry}>انقضاء: {formatDateShort(currentProfile?.subscription_end_date)}</Text>
+                </View>
+                <View style={styles.heroProgressBarBg}>
+                  <View style={[
+                    styles.heroProgressBarFill,
+                    { width: `${progressPercent}%` },
+                    isExpiringSoon && { backgroundColor: '#D97706' }
+                  ]} />
+                </View>
+              </View>
+            )}
+
+            {/* Plan cost */}
+            <View style={styles.heroCostSection}>
+              <Text style={styles.heroCostLabel}>قيمة الاشتراك</Text>
+              <Text style={styles.heroCostValue}>
+                {SubscriptionConfig.formatPrice(displayedTotalPrice)}
+                <Text style={styles.heroCostPeriod}> / شهرياً</Text>
               </Text>
             </View>
-            <View style={styles.heroDateItem}>
-              <Text style={styles.heroDateLabel}>تاريخ الانتهاء</Text>
-              <Text style={styles.heroDateValue}>{formatDateShort(currentProfile?.subscription_end_date)}</Text>
-            </View>
-          </View>
-
-          {/* Progress bar */}
-          {isActive && (
-            <View style={styles.heroProgressSection}>
-              <View style={styles.heroProgressTextRow}>
-                <Text style={styles.heroProgressDays}>{remainingDays} يوم متبقي</Text>
-                <Text style={styles.heroProgressExpiry}>انقضاء: {formatDateShort(currentProfile?.subscription_end_date)}</Text>
-              </View>
-              <View style={styles.heroProgressBarBg}>
-                <View style={[styles.heroProgressBarFill, { width: `${progressPercent}%` }]} />
-              </View>
-            </View>
-          )}
-
-          {/* Plan cost */}
-          <View style={styles.heroCostSection}>
-            <Text style={styles.heroCostLabel}>قيمة الاشتراك</Text>
-            <Text style={styles.heroCostValue}>
-              {SubscriptionConfig.formatPrice(displayedTotalPrice)}
-              <Text style={styles.heroCostPeriod}> / شهرياً</Text>
-            </Text>
-          </View>
+          </FadeInView>
         </View>
 
         {/* ─── Pending Payment Card ─── */}
@@ -258,16 +303,17 @@ export default function SubscriptionsScreen() {
                 <Ionicons name="time" size={28} color={C.warningText} />
               </View>
             </View>
-            <Text style={styles.pendingTitle}>طلبك الحالي تحت المراجعة</Text>
+            <Text style={styles.pendingTitle}>طلبك الحالي قيد المراجعة</Text>
+            <Text style={styles.pendingType}>نوع العملية: {paymentTypeLabel[pendingRequest.payment_type || ''] || 'تفعيل'}</Text>
             <Text style={styles.pendingDate}>تم الإرسال: {formatDate(pendingRequest.created_at)}</Text>
             <View style={styles.pendingWarningBox}>
               <Ionicons name="alert-circle" size={16} color={C.warningText} />
               <Text style={styles.pendingWarningText}>لا يمكن إرسال طلب جديد حتى يتم مراجعة الطلب الحالي</Text>
             </View>
-            <TouchableOpacity style={styles.pendingDetailsBtn} onPress={() => setInvoiceModalVisible(true)}>
+            <AnimatedButton style={styles.pendingDetailsBtn} onPress={() => setInvoiceModalVisible(true)}>
               <Text style={styles.pendingDetailsBtnText}>عرض التفاصيل</Text>
               <Ionicons name="chevron-forward" size={18} color={C.primaryContainer} />
-            </TouchableOpacity>
+            </AnimatedButton>
           </View>
         )}
 
@@ -275,69 +321,43 @@ export default function SubscriptionsScreen() {
         <View style={styles.bentoGrid}>
           {/* Manage Subscription — hidden if pending */}
           {!pendingRequest && (
-          <TouchableOpacity 
-              style={[styles.bentoCard, isActive && styles.bentoCardDisabled,
-                !isActive && isActuallyNew && { borderWidth: 1.5, borderColor: C.success }]} 
-              onPress={() => !isActive && router.push('/subscription-management')}
-              disabled={isActive}
-              activeOpacity={0.7}
+            <AnimatedButton 
+              style={styles.manageBtn} 
+              onPress={() => router.push('/subscription-management')}
             >
-              <View style={styles.bentoTopRow}>
-                <View style={[styles.bentoIconBox, 
-                  isActive && { backgroundColor: C.outlineVariant + '33' },
-                  !isActive && isActuallyNew && { backgroundColor: '#ECFDF5' }
-                ]}>
-                  <Ionicons 
-                    name={isActive ? "lock-closed-outline" : (isActuallyNew ? "rocket-outline" : "settings-outline")} 
-                    size={24} 
-                    color={isActive ? C.outline : (isActuallyNew ? C.success : C.primary)} 
-                  />
+              <View style={styles.manageBtnContent}>
+                <View style={styles.manageIconBox}>
+                  <Ionicons name="options-outline" size={22} color={C.primary} />
                 </View>
-                {isActive ? (
-                  <View style={styles.lockBadge}>
-                    <Text style={styles.lockBadgeText}>مغلق</Text>
-                  </View>
-                ) : (
-                  <Ionicons name="chevron-forward" size={20} color={isActuallyNew ? C.success : C.outlineVariant} />
-                )}
+                <View style={styles.manageTextCol}>
+                  <Text style={styles.manageBtnTitle}>
+                    {isNew ? 'اختر عدد الأفراد وابدأ رحلتك مع هيليكس' : 'إدارة الحسابات وتجديد الباقة'}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.bentoTextBox}>
-                <Text style={[styles.bentoTitle, isActive && { color: C.outline }, !isActive && isActuallyNew && { color: C.success }]}>
-                  {isActuallyNew ? 'تفعيل الباقة' : 'إدارة الاشتراك'}
-                </Text>
-                <Text style={styles.bentoDesc}>
-                  {isActive 
-                    ? 'التعديل والتجديد متاح عند انتهاء الاشتراك فقط' 
-                    : (isActuallyNew ? 'اختر عدد الأفراد وابدأ رحلتك مع هيليكس' : 'إضافة أو حذف الحسابات وتجديد الباقة')}
-                </Text>
-              </View>
-            </TouchableOpacity>
+            </AnimatedButton>
           )}
 
           {/* Financial History — always visible */}
-          <TouchableOpacity 
-            style={styles.bentoCard} 
-            onPress={() => router.push('/financial-history')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.bentoTopRow}>
-              <View style={styles.bentoIconBox}>
-                <Ionicons name="receipt-outline" size={24} color={C.primary} />
+          <FadeInView>
+            <AnimatedButton 
+              style={styles.bentoCard} 
+              onPress={() => router.push('/financial-history')}
+            >
+              <View style={styles.bentoIconBg}>
+                <Ionicons name="receipt-outline" size={24} color={C.brandOrange} />
               </View>
-              <Ionicons name="chevron-forward" size={20} color={C.outlineVariant} />
-            </View>
-            <View style={styles.bentoTextBox}>
-              <Text style={styles.bentoTitle}>السجل المالي</Text>
-              <Text style={styles.bentoDesc}>عرض جميع المدفوعات والفواتير السابقة</Text>
-            </View>
-          </TouchableOpacity>
+              <View style={styles.bentoTexts}>
+                <Text style={styles.bentoTitle}>السجل المالي</Text>
+                <Text style={styles.bentoDesc}>عرض جميع المدفوعات والفواتير السابقة</Text>
+              </View>
+            </AnimatedButton>
+          </FadeInView>
         </View>
 
         {/* ─── Subscription Details Card ─── */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>تفاصيل الاشتراك</Text>
-        </View>
-        <View style={styles.detailsCard}>
+        <SlideInView direction="up" delay={300} style={styles.detailsCard}>
+          <Text style={styles.detailsSectionTitle}>تفاصيل الاشتراك</Text>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>اسم الباقة</Text>
             <Text style={styles.detailValue}>{SubscriptionConfig.PLAN_NAME}</Text>
@@ -349,8 +369,13 @@ export default function SubscriptionsScreen() {
           </View>
           <View style={styles.detailDivider} />
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>الحسابات الإضافية</Text>
-            <Text style={styles.detailValue}>{displayedSubAccountsCount} أفراد</Text>
+            <Text style={styles.detailLabel}>مقاعد العائلة المدفوعة</Text>
+            <Text style={styles.detailValue}>{familyQuota} مقاعد</Text>
+          </View>
+          <View style={styles.detailDivider} />
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>المقاعد النشطة حالياً</Text>
+            <Text style={styles.detailValue}>{activeMemberCount} أفراد</Text>
           </View>
           <View style={styles.detailDivider} />
           <View style={styles.detailRowTotal}>
@@ -362,13 +387,13 @@ export default function SubscriptionsScreen() {
               <Text style={styles.detailTotalSub}>التجديد القادم: {formatDateShort(currentProfile?.subscription_end_date)}</Text>
             </View>
           </View>
-        </View>
+        </SlideInView>
 
         {/* ─── Included Features ─── */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>ميزات الباقة</Text>
         </View>
-        <View style={styles.featuresCard}>
+        <SlideInView direction="up" delay={400} style={styles.featuresCard}>
           {[
             { title: 'متابعة طبية مباشرة', desc: 'متابعة مستمرة ويومية من الطبيب والكوتش المخصص لك.' },
             { title: 'أنظمة غذائية تفصيلية', desc: 'وجبات محسوبة السعرات والمكونات متطابقة مع أهدافك الصحية.' },
@@ -385,7 +410,7 @@ export default function SubscriptionsScreen() {
               </View>
             </View>
           ))}
-        </View>
+        </SlideInView>
       </ScrollView>
 
       {/* ─── Pending Invoice Bottom Sheet Modal ─── */}
@@ -417,6 +442,16 @@ export default function SubscriptionsScreen() {
               </View>
               <View style={styles.modalDivider} />
               <View style={styles.modalRow}>
+                <Text style={styles.modalLabel}>نوع الطلب</Text>
+                <Text style={styles.modalValue}>{paymentTypeLabel[pendingRequest.payment_type || ''] || 'تفعيل جديد'}</Text>
+              </View>
+              <View style={styles.modalDivider} />
+              <View style={styles.modalRow}>
+                <Text style={styles.modalLabel}>الحسابات المطلوبة</Text>
+                <Text style={styles.modalValue}>{pendingRequest.requested_family_quota} حسابات</Text>
+              </View>
+              <View style={styles.modalDivider} />
+              <View style={styles.modalRow}>
                 <Text style={styles.modalLabel}>تاريخ الإرسال</Text>
                 <Text style={styles.modalValue}>{formatDate(pendingRequest.created_at)}</Text>
               </View>
@@ -428,9 +463,9 @@ export default function SubscriptionsScreen() {
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setInvoiceModalVisible(false)}>
+              <AnimatedButton style={styles.modalCloseBtn} onPress={() => setInvoiceModalVisible(false)}>
                 <Text style={styles.modalCloseBtnText}>إغلاق</Text>
-              </TouchableOpacity>
+              </AnimatedButton>
             </Pressable>
           </Pressable>
         </Modal>
@@ -439,7 +474,6 @@ export default function SubscriptionsScreen() {
   );
 }
 
-// ─── Styles ───
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.background },
   scrollContent: { padding: 20 },
@@ -456,6 +490,21 @@ const styles = StyleSheet.create({
   headerBackBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.cardSurface, justifyContent: 'center', alignItems: 'center', ...CARD_SHADOW },
   headerTitle: { fontSize: 20, fontWeight: '700', color: C.primary },
   crownBadge: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.primaryContainer, justifyContent: 'center', alignItems: 'center' },
+
+  // Expired/Expiring Banner
+  expiredBanner: {
+    flexDirection: 'row',
+    backgroundColor: C.brandOrange,
+    borderRadius: 16,
+    padding: 14,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    ...CARD_SHADOW,
+  },
+  expiredBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  expiredBannerText: { fontSize: 13, fontWeight: '700', color: '#FFF', textAlign: 'left', flex: 1, lineHeight: 18 },
+  expiredBadge: { backgroundColor: '#FFF', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 99 },
+  expiredBadgeText: { fontSize: 11, fontWeight: '800', color: C.brandOrange },
 
   // Quick Status Card
   quickStatusCard: {
@@ -486,22 +535,21 @@ const styles = StyleSheet.create({
   quickStatusDivider: { width: 1, height: 28, backgroundColor: C.outlineVariant },
 
   // Hero Card
-  heroCard: { borderRadius: 24, padding: 24, marginBottom: 16, overflow: 'hidden', position: 'relative', ...CARD_SHADOW },
-  heroCardActive: { backgroundColor: C.primaryContainer },
-  heroCardExpired: { backgroundColor: C.primaryContainer },
+  heroCard: { backgroundColor: C.primaryContainer, borderRadius: 24, padding: 24, marginBottom: 16, overflow: 'hidden', position: 'relative', ...CARD_SHADOW },
   heroDecorativeCircle: { position: 'absolute', top: -50, right: -50, width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(255,255,255,0.04)' },
-  heroTopRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 20 },
+  subCard: { gap: 16 },
+  heroTopRow: { flexDirection: 'row', alignItems: 'flex-start' },
   heroPlanName: { fontSize: 22, fontWeight: '800', color: '#FFF', textAlign: 'left', marginBottom: 8 },
-  heroBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 99, gap: 6 },
-  heroBadgeActive: { backgroundColor: 'rgba(111, 251, 190, 0.2)' },
-  heroBadgeExpired: { backgroundColor: 'rgba(186, 26, 26, 0.15)' },
-  heroBadgeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#EF4444' },
+  heroBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 99, gap: 6, backgroundColor: 'rgba(255,255,255,0.1)' },
+  heroBadgeActive: { backgroundColor: 'rgba(16, 185, 129, 0.2)' },
+  heroBadgeExpired: { backgroundColor: 'rgba(186, 26, 26, 0.2)' },
+  heroBadgeDot: { width: 7, height: 7, borderRadius: 4 },
   heroBadgeText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
-  heroDatesRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
+  heroDatesRow: { flexDirection: 'row', justifyContent: 'space-between' },
   heroDateItem: { alignItems: 'flex-start' },
   heroDateLabel: { fontSize: 10, fontWeight: '600', color: C.onPrimaryContainer, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 },
   heroDateValue: { fontSize: 15, fontWeight: '700', color: '#FFF' },
-  heroProgressSection: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 16, marginBottom: 16 },
+  heroProgressSection: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 16 },
   heroProgressTextRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   heroProgressDays: { fontSize: 12, fontWeight: '800', color: '#FFF' },
   heroProgressExpiry: { fontSize: 11, fontWeight: '600', color: C.inversePrimary },
@@ -517,6 +565,7 @@ const styles = StyleSheet.create({
   pendingIconRow: { marginBottom: 12 },
   pendingIconCircle: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#FDE68A', justifyContent: 'center', alignItems: 'center' },
   pendingTitle: { fontSize: 16, fontWeight: '800', color: C.warningText, marginBottom: 4 },
+  pendingType: { fontSize: 13, fontWeight: '700', color: C.warningText, marginBottom: 4 },
   pendingDate: { fontSize: 12, fontWeight: '600', color: '#B45309', marginBottom: 12 },
   pendingWarningBox: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(146, 64, 14, 0.08)', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, marginBottom: 16, width: '100%' },
   pendingWarningText: { flex: 1, fontSize: 11, fontWeight: '700', color: C.warningText, textAlign: 'left', lineHeight: 16 },
@@ -525,27 +574,37 @@ const styles = StyleSheet.create({
 
   // Bento Grid
   bentoGrid: { gap: 12, marginBottom: 16 },
-  bentoCard: {
+  manageBtn: {
     backgroundColor: C.cardSurface,
     borderRadius: 24,
     padding: 20,
     ...CARD_SHADOW,
   },
-  bentoCardDisabled: { opacity: 0.65 },
-  lockBadge: { backgroundColor: '#F3F4F6', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  lockBadgeText: { fontSize: 10, fontWeight: '700', color: C.outline },
-  bentoTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
-  bentoIconBox: { width: 48, height: 48, borderRadius: 14, backgroundColor: C.surfaceContainerLow, justifyContent: 'center', alignItems: 'center' },
-  bentoTextBox: { alignItems: 'flex-start' },
-  bentoTitle: { fontSize: 17, fontWeight: '700', color: C.primary, marginBottom: 4 },
+  manageBtnContent: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  manageIconBox: { width: 48, height: 48, borderRadius: 14, backgroundColor: C.surfaceContainerLow, justifyContent: 'center', alignItems: 'center' },
+  manageTextCol: { flex: 1, alignItems: 'flex-start' },
+  manageBtnTitle: { fontSize: 15, fontWeight: '800', color: C.primary, textAlign: 'left', lineHeight: 20 },
+  bentoCard: {
+    backgroundColor: C.cardSurface,
+    borderRadius: 24,
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    ...CARD_SHADOW,
+  },
+  bentoIconBg: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#FFF7ED', justifyContent: 'center', alignItems: 'center' },
+  bentoTexts: { flex: 1, alignItems: 'flex-start' },
+  bentoTitle: { fontSize: 15, fontWeight: '800', color: C.primary, marginBottom: 2 },
   bentoDesc: { fontSize: 12, fontWeight: '500', color: C.onSurfaceVariant, textAlign: 'left' },
 
   // Section Header
   sectionHeader: { marginBottom: 10 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: C.primary, textAlign: 'left', marginLeft: 4 },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: C.primary, textAlign: 'left', marginEnd: 4 },
 
   // Details Card
   detailsCard: { backgroundColor: C.cardSurface, borderRadius: 24, padding: 20, marginBottom: 16, ...CARD_SHADOW },
+  detailsSectionTitle: { fontSize: 15, fontWeight: '800', color: C.primary, textAlign: 'left', marginBottom: 12 },
   detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 },
   detailLabel: { fontSize: 14, fontWeight: '500', color: C.onSurfaceVariant },
   detailValue: { fontSize: 15, fontWeight: '700', color: C.primary },
@@ -587,4 +646,4 @@ const styles = StyleSheet.create({
   pendingStatusText: { fontSize: 11, fontWeight: '700', color: C.warningText },
   modalCloseBtn: { marginTop: 24, backgroundColor: C.surfaceContainerLow, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
   modalCloseBtnText: { fontSize: 14, fontWeight: '700', color: C.primary },
-}) as any;
+});

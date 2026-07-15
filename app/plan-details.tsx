@@ -1,5 +1,7 @@
+import { AppFontFamily } from '@/constants/AppTheme';
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Pressable, LayoutAnimation, Platform, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Pressable, LayoutAnimation, Platform, useWindowDimensions } from 'react-native';
+import { Text } from '@/components/AppText';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../src/lib/supabase';
@@ -11,6 +13,10 @@ import { useSubscriptionGuard } from '../hooks/useSubscriptionGuard';
 import { useFamily } from '../src/context/FamilyContext';
 import { showToast } from '../components/AppToast';
 import type { PlanTask } from '../src/types';
+import { AnimatedButton } from '../components/animations/AnimatedButton';
+import { FadeInView } from '../components/animations/FadeInView';
+import { SlideInView } from '../components/animations/SlideInView';
+import { AnimatedCard } from '../components/animations/AnimatedCard';
 
 type TaskWithLog = PlanTask & { todayDone: boolean; logId: string | null };
 
@@ -293,17 +299,17 @@ export default function PlanDetailsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header (Top App Bar) */}
-      <View style={[styles.header, { flexDirection: 'row', alignItems: 'center', gap: 12, justifyContent: 'flex-start' }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+      <FadeInView delay={100} style={[styles.header, { flexDirection: 'row', alignItems: 'center', gap: 12, justifyContent: 'flex-start' }]}>
+        <AnimatedButton onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-forward" size={24} color="#2A4D44" />
-        </TouchableOpacity>
+        </AnimatedButton>
         <View style={styles.headerTitleBox}>
           <Text style={styles.headerTitle}>{planTitle}</Text>
           <Text style={styles.headerSubtitle}>
             مدة البرنامج: {dayNames.length} يوم • {mealsCountPerDay} وجبات يومياً
           </Text>
         </View>
-      </View>
+      </FadeInView>
 
       {dayNames.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -347,7 +353,7 @@ export default function PlanDetailsScreen() {
           </View>
 
           {/* Search Section */}
-          <View style={styles.searchSection}>
+          <SlideInView direction="down" delay={200} style={styles.searchSection}>
             <View style={[
               styles.searchInputWrapper,
               isSearchFocused && styles.searchInputWrapperFocused
@@ -363,7 +369,7 @@ export default function PlanDetailsScreen() {
                 onBlur={() => setIsSearchFocused(false)}
               />
             </View>
-          </View>
+          </SlideInView>
 
           {/* Days List */}
           <View style={styles.daysListContainer}>
@@ -385,14 +391,13 @@ export default function PlanDetailsScreen() {
                 const isCurrent = currentDayNum !== null && dayNum === currentDayNum;
 
                 return (
-                  <TouchableOpacity
-                    key={dayName}
+                  <FadeInView delay={(dayNum || 0) * 50} key={dayName}>
+                  <AnimatedCard
                     style={[
                       styles.dayCard,
                       isCurrent && styles.dayCardCurrent,
                     ]}
                     onPress={() => setSelectedDayForModal(dayName)}
-                    activeOpacity={0.9}
                   >
                     <View style={styles.dayCardRightSide}>
                       <View style={[
@@ -437,7 +442,8 @@ export default function PlanDetailsScreen() {
                       size={20}
                       color="#717975"
                     />
-                  </TouchableOpacity>
+                  </AnimatedCard>
+                  </FadeInView>
                 );
               })
             )}
@@ -464,12 +470,12 @@ export default function PlanDetailsScreen() {
               <View style={styles.modalDragHandle} />
 
               <View style={styles.modalHeader}>
-                <TouchableOpacity
+                <AnimatedButton
                   onPress={() => setSelectedDayForModal(null)}
                   style={styles.modalCloseButton}
                 >
                   <Ionicons name="close" size={24} color="#2A4D44" />
-                </TouchableOpacity>
+                </AnimatedButton>
                 <Text style={styles.modalTitle}>تفاصيل التغذية - {selectedDayForModal}</Text>
                 <View style={{ width: 40 }} />
               </View>
@@ -535,7 +541,7 @@ export default function PlanDetailsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9F8F3' },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9F8F3' },
-  emptyText: { marginTop: 16, color: '#717975', fontSize: 16, fontWeight: '600', fontFamily: 'Tajawal-Bold' },
+  emptyText: { marginTop: 16, color: '#717975', fontSize: 16, fontWeight: '600', fontFamily: AppFontFamily.bold },
 
   // Header
   header: {
@@ -555,8 +561,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitleBox: { flexDirection: 'column', alignItems: 'flex-start', flex: 1 },
-  headerTitle: { color: '#2A4D44', fontSize: 20, fontWeight: '600', fontFamily: 'Tajawal-Bold', textAlign: 'right' },
-  headerSubtitle: { color: '#717975', fontSize: 12, marginTop: 4, fontWeight: '600', fontFamily: 'Tajawal-Medium', textAlign: 'right' },
+  headerTitle: { color: '#2A4D44', fontSize: 20, fontWeight: '600', fontFamily: AppFontFamily.bold, textAlign: 'right' },
+  headerSubtitle: { color: '#717975', fontSize: 12, marginTop: 4, fontWeight: '600', fontFamily: AppFontFamily.medium, textAlign: 'right' },
 
   scrollContent: { paddingHorizontal: 24, paddingVertical: 24, gap: 32 },
 
@@ -579,8 +585,8 @@ const styles = StyleSheet.create({
     shadowRadius: 40,
     elevation: 2,
   },
-  statsLabel: { fontSize: 12, color: '#717975', fontWeight: '600', marginBottom: 4, fontFamily: 'Tajawal-Medium' },
-  statsValue: { fontSize: 24, fontWeight: '600', fontFamily: 'Tajawal-Bold' },
+  statsLabel: { fontSize: 12, color: '#717975', fontWeight: '600', marginBottom: 4, fontFamily: AppFontFamily.medium },
+  statsValue: { fontSize: 24, fontWeight: '600', fontFamily: AppFontFamily.bold },
 
   // Progress Card
   progressCard: {
@@ -594,8 +600,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  progressTitle: { fontSize: 20, fontWeight: '600', color: '#2A4D44', fontFamily: 'Tajawal-Bold' },
-  progressInfo: { fontSize: 14, fontWeight: '500', color: '#F26E11', fontFamily: 'Tajawal-Medium' },
+  progressTitle: { fontSize: 20, fontWeight: '600', color: '#2A4D44', fontFamily: AppFontFamily.bold },
+  progressInfo: { fontSize: 14, fontWeight: '500', color: '#F26E11', fontFamily: AppFontFamily.medium },
   progressBarBg: { height: 12, backgroundColor: '#d9e3f6', borderRadius: 9999, overflow: 'hidden' },
   progressBarFill: { height: 12, backgroundColor: '#F26E11', borderRadius: 9999 },
 
@@ -614,7 +620,7 @@ const styles = StyleSheet.create({
   searchInputWrapperFocused: {
     borderColor: '#2A4D44',
   },
-  searchInput: { flex: 1, height: '100%', fontSize: 16, color: '#121c2a', textAlign: 'right', fontFamily: 'Tajawal-Regular' },
+  searchInput: { flex: 1, height: '100%', fontSize: 16, color: '#121c2a', textAlign: 'right', fontFamily: AppFontFamily.regular },
   searchIcon: { marginLeft: 12 },
 
   // Search Empty State
@@ -639,7 +645,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  searchEmptyText: { fontSize: 14, color: '#717975', fontWeight: '600', fontFamily: 'Tajawal-Bold' },
+  searchEmptyText: { fontSize: 14, color: '#717975', fontWeight: '600', fontFamily: AppFontFamily.bold },
 
   // Days List
   daysListContainer: { gap: 16 },
@@ -673,16 +679,16 @@ const styles = StyleSheet.create({
   calendarIconContainerNotStarted: { backgroundColor: '#eff4ff' },
   dayTextContainer: { alignItems: 'flex-start', flex: 1 },
   dayTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  dayTitleText: { fontSize: 20, fontWeight: '600', color: '#2A4D44', fontFamily: 'Tajawal-Bold' },
+  dayTitleText: { fontSize: 20, fontWeight: '600', color: '#2A4D44', fontFamily: AppFontFamily.bold },
 
   // Badges
   currentBadge: { backgroundColor: '#F26E11', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9999 },
-  currentBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '600', fontFamily: 'Tajawal-Bold' },
+  currentBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '600', fontFamily: AppFontFamily.bold },
   completedBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16, 185, 129, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9999 },
-  completedBadgeText: { color: '#002113', fontSize: 10, fontWeight: '600', fontFamily: 'Tajawal-Bold' },
+  completedBadgeText: { color: '#002113', fontSize: 10, fontWeight: '600', fontFamily: AppFontFamily.bold },
   notStartedBadge: { backgroundColor: 'rgba(193, 200, 196, 0.3)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9999 },
-  notStartedBadgeText: { color: '#717975', fontSize: 10, fontWeight: '600', fontFamily: 'Tajawal-Bold' },
-  daySubtitleText: { fontSize: 16, color: '#717975', fontWeight: '400', fontFamily: 'Tajawal-Medium', marginTop: 4, textAlign: 'right' },
+  notStartedBadgeText: { color: '#717975', fontSize: 10, fontWeight: '600', fontFamily: AppFontFamily.bold },
+  daySubtitleText: { fontSize: 16, color: '#717975', fontWeight: '400', fontFamily: AppFontFamily.medium, marginTop: 4, textAlign: 'right' },
 
   // Bottom Sheet Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(18, 28, 42, 0.4)', justifyContent: 'flex-end' },
@@ -708,7 +714,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   modalCloseButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3 },
-  modalTitle: { fontSize: 20, fontWeight: '600', color: '#2A4D44', fontFamily: 'Tajawal-Bold' },
+  modalTitle: { fontSize: 20, fontWeight: '600', color: '#2A4D44', fontFamily: AppFontFamily.bold },
   modalScrollView: { paddingHorizontal: 24 },
   modalScrollContent: { paddingVertical: 20, gap: 16 },
 
@@ -725,7 +731,7 @@ const styles = StyleSheet.create({
     shadowRadius: 40,
     elevation: 2,
   },
-  emptyDayText: { fontSize: 14, color: '#717975', fontWeight: '600', fontFamily: 'Tajawal-Bold' },
+  emptyDayText: { fontSize: 14, color: '#717975', fontWeight: '600', fontFamily: AppFontFamily.bold },
 
   // Meal Cards Inside Bottom Sheet
   mealCard: {
@@ -744,7 +750,7 @@ const styles = StyleSheet.create({
   },
   mealCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
   mealIconBox: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  mealTitle: { fontSize: 16, fontWeight: '600', fontFamily: 'Tajawal-Bold', textAlign: 'right' },
+  mealTitle: { fontSize: 16, fontWeight: '600', fontFamily: AppFontFamily.bold, textAlign: 'right' },
   mealComponentsWrapper: { gap: 8, paddingRight: 4, alignItems: 'flex-start' },
-  componentBulletItem: { fontSize: 14, color: '#414846', textAlign: 'right', fontFamily: 'Tajawal-Regular', lineHeight: 22 },
+  componentBulletItem: { fontSize: 14, color: '#414846', textAlign: 'right', fontFamily: AppFontFamily.regular, lineHeight: 22 },
 });

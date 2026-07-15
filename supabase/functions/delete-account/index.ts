@@ -1,3 +1,4 @@
+// @ts-nocheck
 // delete-account — Supabase Edge Function
 // deletes the authenticated user's account using the service role key
 

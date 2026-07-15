@@ -1,11 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { Text } from '@/components/AppText';
+import React from 'react';
+import { View, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFamily } from '../src/context/FamilyContext';
-import { useSubscriptionData } from '../src/features/subscriptions/hooks/useSubscriptionData';
+import { useFamilySelection, useBackendPrice, useSubscriptionDetails } from '../src/features/subscriptions/hooks/useSubscriptionData';
 import { SubscriptionConfig } from '../constants/subscriptionConfig';
+import { resolveSubscriptionState, paymentTypeLabel } from '../src/features/subscriptions/resolveSubscriptionState';
+import { AnimatedButton } from '../components/animations/AnimatedButton';
+import { FadeInView } from '../components/animations/FadeInView';
+import { SlideInView } from '../components/animations/SlideInView';
+import type { PaymentType } from '../src/features/subscriptions/subscription.types';
 
 const C = {
   primary: '#12362e',
@@ -37,64 +43,66 @@ const CARD_SHADOW = {
 export default function SubscriptionManagementScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { currentProfile, familyMembers } = useFamily();
-  const userId = currentProfile?.id;
+  const { currentProfile, familyMembers, accountProfileId } = useFamily();
+  const userId = accountProfileId;
   const subMembers = familyMembers.filter(m => m.manager_id === userId);
   const subAccountsCount = subMembers.length;
 
+  // Decomposed hooks
+  const { details, loading: detailsLoading } = useSubscriptionDetails(userId);
   const {
-    loading,
-    newSubCount,
-    setNewSubCount,
+    newSubCount, setNewSubCount,
     selectedMembersToKeep,
-    setSelectedMembersToKeep,
+    requiresSelection,
     toggleMemberSelection,
-    totalPrice,
-  } = useSubscriptionData(userId, subAccountsCount, subMembers);
+    determinePaymentType,
+  } = useFamilySelection(subMembers);
+  const { price: totalPrice } = useBackendPrice(newSubCount);
 
-  const isActive = currentProfile?.subscription_status === 'active' && 
-                   currentProfile?.subscription_end_date && 
-                   new Date(currentProfile.subscription_end_date) > new Date();
+  // Determine subscription state from backend or fallback
+  const subscriptionState = resolveSubscriptionState(currentProfile, null, currentProfile?.entitlement);
 
-  const isActuallyNew = currentProfile?.subscription_status === 'new' || 
-                        (!currentProfile?.subscription_end_date && 
-                         !currentProfile?.is_onboarded && 
-                         currentProfile?.subscription_status === 'expired');
+  const isActive = subscriptionState === 'active' || subscriptionState === 'expiring_soon';
+  const isExpiringSoon = subscriptionState === 'expiring_soon';
+  const isNew = subscriptionState === 'no_subscription';
+  const isExpired = subscriptionState === 'expired' || subscriptionState === 'cancelled';
 
-  // If sub count is less than current members, we need user to select who to keep
-  const requiresSelection = newSubCount < subAccountsCount;
-
-  // Set default selected members when newSubCount is equal or larger
-  useEffect(() => {
-    if (newSubCount >= subAccountsCount) {
-      setSelectedMembersToKeep(subMembers.map(m => m.id));
-    }
-  }, [newSubCount, subAccountsCount]);
+  // Determine payment type from current state
+  const currentQuota = details?.family_quota ?? subAccountsCount;
+  const paymentType: PaymentType = determinePaymentType(isActive || isExpired, currentQuota);
 
   const handleContinue = () => {
-    // Check if there are changes
-    const countChanged = newSubCount !== subAccountsCount;
-    
-    // If not expired and no count changes, guard
-    if (isActive && !countChanged) {
-      Alert.alert("تنبيه", "لم يتم إجراء أي تغييرات على الاشتراك.");
+    // If active and same count (renewal), allow
+    const countChanged = newSubCount !== currentQuota;
+
+    // If active and no changes at all, it's a renewal — still allow if expiring
+    if (isActive && !countChanged && !isExpiringSoon) {
+      Alert.alert("تنبيه", "لم يتم إجراء أي تغييرات على الاشتراك. يمكنك التجديد عندما يقترب موعد الانتهاء.");
       return;
     }
 
-    // If selection is required, make sure the user chose exactly newSubCount members
+    // If downgrade, must select exact members to keep
     if (requiresSelection && selectedMembersToKeep.length !== newSubCount) {
       Alert.alert(
-        "تنبيه", 
+        "تنبيه",
         `يرجى اختيار ${newSubCount} أفراد للإبقاء عليهم في الباقة الجديدة.`
       );
       return;
     }
 
-    // Proceed to Payment screen
-    router.push('/subscription-payment');
+    // Navigate to payment with all params
+    router.push({
+      pathname: '/subscription-payment',
+      params: {
+        newSubCount: String(newSubCount),
+        selectedMembersToKeep: JSON.stringify(selectedMembersToKeep),
+        paymentType,
+        totalPrice: String(totalPrice),
+      },
+    });
   };
 
-  if (loading) {
+  if (detailsLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
@@ -107,23 +115,36 @@ export default function SubscriptionManagementScreen() {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
+      <FadeInView delay={50} style={styles.header}>
+        <AnimatedButton onPress={() => router.back()} style={styles.headerBackBtn}>
           <Ionicons name="arrow-forward" size={24} color={C.primary} />
-        </TouchableOpacity>
+        </AnimatedButton>
         <Text style={styles.headerTitle}>إدارة الاشتراك</Text>
         <View style={styles.crownBadge}>
           <Ionicons name="star" size={18} color="#D4AF37" />
         </View>
-      </View>
+      </FadeInView>
 
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 20) + 80 }]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Expiring Soon Banner */}
+        {isExpiringSoon && (
+          <SlideInView delay={100} direction="up" style={[styles.expiredBanner, { backgroundColor: '#D97706' }]}>
+            <View style={styles.expiredBannerLeft}>
+              <Ionicons name="time-outline" size={20} color="#FFF" />
+              <Text style={styles.expiredBannerText}>اشتراكك ينتهي قريباً — جدّد الآن</Text>
+            </View>
+            <View style={[styles.expiredBadge, { backgroundColor: '#FEF3C7' }]}>
+              <Text style={[styles.expiredBadgeText, { color: '#92400E' }]}>تجديد</Text>
+            </View>
+          </SlideInView>
+        )}
+
         {/* Expired Banner */}
-        {!isActive && !isActuallyNew && (
-          <View style={styles.expiredBanner}>
+        {isExpired && (
+          <SlideInView delay={100} direction="up" style={styles.expiredBanner}>
             <View style={styles.expiredBannerLeft}>
               <Ionicons name="warning" size={20} color="#FFF" />
               <Text style={styles.expiredBannerText}>الاشتراك منتهي الصلاحية</Text>
@@ -131,12 +152,12 @@ export default function SubscriptionManagementScreen() {
             <View style={styles.expiredBadge}>
               <Text style={styles.expiredBadgeText}>تجديد الآن</Text>
             </View>
-          </View>
+          </SlideInView>
         )}
 
         {/* New User Banner */}
-        {!isActive && isActuallyNew && (
-          <View style={[styles.expiredBanner, { backgroundColor: C.success }]}>
+        {isNew && (
+          <SlideInView delay={100} direction="up" style={[styles.expiredBanner, { backgroundColor: C.success }]}>
             <View style={styles.expiredBannerLeft}>
               <Ionicons name="sparkles" size={20} color="#FFF" />
               <Text style={styles.expiredBannerText}>مرحباً بك في هيليكس!</Text>
@@ -144,11 +165,11 @@ export default function SubscriptionManagementScreen() {
             <View style={[styles.expiredBadge, { backgroundColor: '#ECFDF5' }]}>
               <Text style={[styles.expiredBadgeText, { color: C.success }]}>تفعيل الباقة</Text>
             </View>
-          </View>
+          </SlideInView>
         )}
 
         {/* Current Plan Card */}
-        <View style={styles.planCard}>
+        <SlideInView delay={150} direction="up" style={styles.planCard}>
           <View style={styles.planCardDecorativeCircle} />
           <View style={styles.planCardHeader}>
             <View>
@@ -157,7 +178,7 @@ export default function SubscriptionManagementScreen() {
             </View>
             <View style={[styles.statusBadge, isActive ? styles.statusBadgeActive : styles.statusBadgeExpired]}>
               <Text style={[styles.statusBadgeText, isActive ? styles.statusBadgeTextActive : styles.statusBadgeTextExpired]}>
-                {isActive ? 'نشط' : (isActuallyNew ? 'جديد' : 'منتهي')}
+                {isActive ? (isExpiringSoon ? 'ينتهي قريباً' : 'نشط') : (isNew ? 'جديد' : 'منتهي')}
               </Text>
             </View>
           </View>
@@ -169,12 +190,31 @@ export default function SubscriptionManagementScreen() {
           </View>
           <View style={styles.planCardFooter}>
             <Ionicons name="people" size={16} color="#FFF" />
-            <Text style={styles.planCardFooterText}>تتضمن الباقة {subAccountsCount} أفراد إضافيين حالياً</Text>
+            <Text style={styles.planCardFooterText}>
+              {details
+                ? `الباقة تتضمن ${details.included_member_count} من ${details.family_quota} مقاعد`
+                : `تتضمن الباقة ${subAccountsCount} أفراد إضافيين حالياً`
+              }
+            </Text>
           </View>
-        </View>
+        </SlideInView>
+
+        {/* Payment Type Indicator */}
+        {!isNew && (
+          <SlideInView delay={175} direction="up" style={styles.paymentTypeIndicator}>
+            <Ionicons
+              name={paymentType === 'upgrade' ? 'arrow-up-circle' : paymentType === 'downgrade' ? 'arrow-down-circle' : 'refresh-circle'}
+              size={20}
+              color={paymentType === 'upgrade' ? C.success : paymentType === 'downgrade' ? C.brandOrange : C.primary}
+            />
+            <Text style={styles.paymentTypeText}>
+              نوع العملية: {paymentTypeLabel[paymentType]}
+            </Text>
+          </SlideInView>
+        )}
 
         {/* Additional Accounts Counter */}
-        <View style={styles.counterSection}>
+        <SlideInView delay={200} direction="up" style={styles.counterSection}>
           <View style={styles.counterHeader}>
             <Text style={styles.counterTitle}>الحسابات الإضافية بالباقة</Text>
             <Text style={styles.counterDesc}>
@@ -182,25 +222,25 @@ export default function SubscriptionManagementScreen() {
             </Text>
           </View>
           <View style={styles.counterControls}>
-            <TouchableOpacity 
-              onPress={() => setNewSubCount(Math.max(0, newSubCount - 1))} 
+            <AnimatedButton
+              onPress={() => setNewSubCount(Math.max(0, newSubCount - 1))}
               style={styles.counterBtn}
             >
               <Text style={styles.counterBtnText}>-</Text>
-            </TouchableOpacity>
+            </AnimatedButton>
             <Text style={styles.counterValue}>{newSubCount}</Text>
-            <TouchableOpacity 
-              onPress={() => setNewSubCount(newSubCount + 1)} 
+            <AnimatedButton
+              onPress={() => setNewSubCount(Math.min(SubscriptionConfig.MAX_FAMILY_MEMBERS, newSubCount + 1))}
               style={styles.counterBtn}
             >
               <Text style={styles.counterBtnText}>+</Text>
-            </TouchableOpacity>
+            </AnimatedButton>
           </View>
-        </View>
+        </SlideInView>
 
-        {/* Member Selection List (if count decreased) */}
+        {/* Member Selection List (if downgrade) */}
         {requiresSelection && (
-          <View style={styles.selectionSection}>
+          <SlideInView delay={250} direction="up" style={styles.selectionSection}>
             <View style={styles.infoAlert}>
               <Ionicons name="alert-circle" size={18} color={C.warningText} />
               <Text style={styles.infoAlertText}>
@@ -208,14 +248,13 @@ export default function SubscriptionManagementScreen() {
               </Text>
             </View>
             <View style={styles.selectionList}>
-              {subMembers.map(member => {
+              {subMembers.map((member, index) => {
                 const isSelected = selectedMembersToKeep.includes(member.id);
                 return (
-                  <TouchableOpacity
-                    key={member.id}
+                  <FadeInView key={member.id} delay={300 + index * 50}>
+                  <AnimatedButton
                     style={[styles.memberCard, isSelected && styles.memberCardActive]}
                     onPress={() => toggleMemberSelection(member.id)}
-                    activeOpacity={0.8}
                   >
                     <View style={[styles.checkbox, isSelected && styles.checkboxActive]}>
                       {isSelected && <Ionicons name="checkmark" size={14} color="#FFF" />}
@@ -234,11 +273,12 @@ export default function SubscriptionManagementScreen() {
                         </View>
                       )}
                     </View>
-                  </TouchableOpacity>
+                  </AnimatedButton>
+                  </FadeInView>
                 );
               })}
             </View>
-          </View>
+          </SlideInView>
         )}
 
         {/* Live Price Summary */}
@@ -269,16 +309,15 @@ export default function SubscriptionManagementScreen() {
 
       {/* Sticky Bottom Action */}
       <View style={[styles.bottomAction, { paddingBottom: Math.max(insets.bottom, 12) + 12 }]}>
-        <TouchableOpacity 
-          style={styles.continueBtn} 
+        <AnimatedButton
+          style={styles.continueBtn}
           onPress={handleContinue}
-          activeOpacity={0.9}
         >
           <Text style={styles.continueBtnText}>
-            {isActuallyNew ? 'متابعة لتفعيل الباقة' : 'متابعة للدفع'}
+            {isNew ? 'متابعة لتفعيل الباقة' : `متابعة ${paymentTypeLabel[paymentType] ? `لـ${paymentTypeLabel[paymentType]}` : 'للدفع'}`}
           </Text>
           <Ionicons name="chevron-back" size={18} color="#FFF" />
-        </TouchableOpacity>
+        </AnimatedButton>
       </View>
     </SafeAreaView>
   );
@@ -320,7 +359,7 @@ const styles = StyleSheet.create({
 
   // Plan Card
   planCard: { backgroundColor: C.primaryContainer, borderRadius: 24, padding: 24, marginBottom: 20, overflow: 'hidden', position: 'relative', ...CARD_SHADOW },
-  planCardDecorativeCircle: { position: 'absolute', top: -50, right: -50, width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(255,255,255,0.04)' },
+  planCardDecorativeCircle: { position: 'absolute', top: -50, end: -50, width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(255,255,255,0.04)' },
   planCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   planCardTitle: { fontSize: 18, fontWeight: '800', color: '#FFF', textAlign: 'left' },
   planCardSubtitle: { fontSize: 12, fontWeight: '600', color: C.onPrimaryContainer, marginTop: 2, textAlign: 'left' },
@@ -335,6 +374,10 @@ const styles = StyleSheet.create({
   planCardCostPeriod: { fontSize: 13, fontWeight: '500', color: C.onPrimaryContainer },
   planCardFooter: { flexDirection: 'row', alignItems: 'center', gap: 6, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 16 },
   planCardFooterText: { fontSize: 12, fontWeight: '600', color: '#FFF' },
+
+  // Payment Type Indicator
+  paymentTypeIndicator: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.surfaceContainerLow, borderRadius: 14, padding: 12, marginBottom: 20 },
+  paymentTypeText: { fontSize: 13, fontWeight: '700', color: C.primary },
 
   // Counter
   counterSection: { backgroundColor: C.cardSurface, borderRadius: 24, padding: 20, marginBottom: 20, alignItems: 'center', ...CARD_SHADOW },
@@ -355,7 +398,7 @@ const styles = StyleSheet.create({
   memberCardActive: { borderColor: C.primaryContainer, backgroundColor: '#F4FAF8' },
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: C.outlineVariant, justifyContent: 'center', alignItems: 'center' },
   checkboxActive: { backgroundColor: C.primaryContainer, borderColor: C.primaryContainer },
-  memberInfo: { alignItems: 'flex-start', flex: 1, marginLeft: 12 },
+  memberInfo: { alignItems: 'flex-start', flex: 1, marginStart: 12 },
   memberName: { fontSize: 14, fontWeight: '700', color: C.outline },
   memberNameActive: { color: C.primary },
   badgeKeep: { backgroundColor: '#E6F4EA', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginTop: 4 },
@@ -365,7 +408,7 @@ const styles = StyleSheet.create({
 
   // Price Summary
   priceSummarySection: { marginBottom: 20 },
-  summaryTitle: { fontSize: 15, fontWeight: '700', color: C.primary, textAlign: 'left', marginBottom: 10, marginRight: 4 },
+  summaryTitle: { fontSize: 15, fontWeight: '700', color: C.primary, textAlign: 'left', marginBottom: 10, marginEnd: 4 },
   summaryCard: { backgroundColor: C.cardSurface, borderRadius: 24, padding: 20, ...CARD_SHADOW },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10 },
   summaryLabel: { fontSize: 13, fontWeight: '500', color: C.onSurfaceVariant },
@@ -376,7 +419,7 @@ const styles = StyleSheet.create({
   summaryValueTotal: { fontSize: 22, fontWeight: '800', color: C.brandOrange },
 
   // Bottom Sticky Action
-  bottomAction: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(249, 248, 243, 0.95)', paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.outlineVariant },
+  bottomAction: { position: 'absolute', bottom: 0, start: 0, end: 0, backgroundColor: 'rgba(249, 248, 243, 0.95)', paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.outlineVariant },
   continueBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: C.brandOrange, paddingVertical: 16, borderRadius: 16, ...CARD_SHADOW },
   continueBtnText: { fontSize: 16, fontWeight: '800', color: '#FFF' },
 });
