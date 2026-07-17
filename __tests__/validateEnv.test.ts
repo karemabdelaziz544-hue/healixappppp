@@ -30,27 +30,27 @@ describe('validateEnv', () => {
   it('warns but does not throw in DEV when variables are missing', () => {
     delete process.env.EXPO_PUBLIC_SUPABASE_URL;
     delete process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation();
     const { validateEnv } = require('../src/lib/validateEnv');
 
     // In test env, __DEV__ is true → should warn, not throw
     const result = validateEnv();
-    expect(warnSpy).toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalled();
     expect(result.supabaseUrl).toContain('placeholder');
     expect(result.supabaseAnonKey).toContain('placeholder');
-    warnSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 
   it('includes missing variable names in the warning message', () => {
     delete process.env.EXPO_PUBLIC_SUPABASE_URL;
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'test-key';
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation();
     const { validateEnv } = require('../src/lib/validateEnv');
     validateEnv();
 
-    const warnMessage = warnSpy.mock.calls[0][0];
-    expect(warnMessage).toContain('EXPO_PUBLIC_SUPABASE_URL');
-    expect(warnMessage).not.toContain('EXPO_PUBLIC_SUPABASE_ANON_KEY');
-    warnSpy.mockRestore();
+    const errorMessage = errorSpy.mock.calls[0][0];
+    expect(errorMessage).toContain('URL: MISSING');
+    expect(errorMessage).toContain('Key: Found');
+    errorSpy.mockRestore();
   });
 });

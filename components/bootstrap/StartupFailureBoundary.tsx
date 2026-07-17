@@ -27,7 +27,7 @@ export function StartupFailureBoundary({
   const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && error && !session) {
+    if (!isLoading && error) {
       // Hide splash screen so user can see the error screen
       if (!isSplashScreenHidden) {
         isSplashScreenHidden = true;
@@ -38,9 +38,9 @@ export function StartupFailureBoundary({
         tags: { context: 'auth_bootstrap' },
       });
     }
-  }, [error, isLoading, session]);
+  }, [error, isLoading]);
 
-  if (!isLoading && error && !session) {
+  if (!isLoading && error) {
     const handleRetry = () => {
       setRetrying(true);
       onRetry();

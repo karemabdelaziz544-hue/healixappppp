@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
-import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SlideInView } from '../../components/animations/SlideInView';
 import { AnimatedButton } from '../../components/animations/AnimatedButton';
 import { handleError } from '../lib/errorHandler';
@@ -14,6 +14,9 @@ import { AuthButton } from '../../components/auth/AuthButton';
 import { AppColors, AppRadius, AppSpacing, AppFontSize , AppFontFamily } from '@/constants/AppTheme';
 
 export default function SignupScreen() {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 480;
+
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -22,7 +25,6 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
-
 
   const getPasswordStrength = (pass: string) => {
     if (!pass) return { score: 0, label: 'أدخل كلمة المرور', icon: 'key-outline', color: AppColors.textMuted };
@@ -124,6 +126,8 @@ export default function SignupScreen() {
     }
   };
 
+  const rowStyle = [styles.row, isMobile && { flexDirection: 'column' as const, gap: 0 }];
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -138,7 +142,9 @@ export default function SignupScreen() {
         <SlideInView direction="up" distance={20} style={[styles.formCard]}>
 
           <View style={styles.header}>
-            <Image source={require('../../assets/images/icon.png')} style={styles.logo} resizeMode="contain" />
+            <View style={styles.logoContainer}>
+              <Image source={require('../../assets/images/icon.png')} style={styles.logo} resizeMode="contain" />
+            </View>
             <Text style={styles.title}>انضم لعائلة هيليكس</Text>
             <Text style={styles.subtitle}>ابدأ رحلة صحية جديدة ومخصصة لك</Text>
           </View>
@@ -167,12 +173,12 @@ export default function SignupScreen() {
               
               <AuthInput label="البريد الإلكتروني" placeholder="name@example.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" isLTR={true} />
 
-              <View style={styles.row}>
-                <View style={{ flex: 1 }}>
+              <View style={rowStyle}>
+                <View style={{ flex: isMobile ? undefined : 1 }}>
                   <AuthInput label="رقم الهاتف" placeholder="01xxxxxxxxx" value={phone} onChangeText={setPhone} keyboardType="phone-pad" isLTR={true} />
                 </View>
 
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: isMobile ? undefined : 1, marginBottom: isMobile ? AppSpacing.lg : 0 }}>
                   <Text style={styles.label}>النوع</Text>
                   <View style={styles.genderToggle}>
                     <AnimatedButton style={[styles.genderBtn, gender === 'male' && styles.genderBtnActive]} onPress={() => setGender('male')}>
@@ -190,11 +196,11 @@ export default function SignupScreen() {
           ) : (
             <>
               {/* نموذج التسجيل - الخطوة الثانية */}
-              <View style={styles.row}>
-                <View style={{ flex: 1 }}>
+              <View style={rowStyle}>
+                <View style={{ flex: isMobile ? undefined : 1 }}>
                   <AuthInput label="كلمة المرور" isPassword placeholder="••••••••" value={password} onChangeText={setPassword} />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: isMobile ? undefined : 1 }}>
                   <AuthInput label="تأكيد المرور" isPassword placeholder="••••••••" value={confirmPassword} onChangeText={setConfirmPassword} />
                 </View>
               </View>
@@ -258,45 +264,64 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: AppColors.background },
   scrollContent: { flexGrow: 1, justifyContent: 'center', padding: AppSpacing.xl },
 
-  bgCircle: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.4 },
-  circleTopRight: { backgroundColor: AppColors.successLight, top: -100, end: -150 },
-  circleBottomLeft: { backgroundColor: AppColors.accentBorder, bottom: -100, start: -150 },
+  bgCircle: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.25 },
+  circleTopRight: { backgroundColor: AppColors.accentBorder, top: -120, end: -120 },
+  circleBottomLeft: { backgroundColor: AppColors.primaryLight, bottom: -150, start: -150 },
 
   formCard: { 
     backgroundColor: AppColors.surface, 
-    padding: AppSpacing.xxxl, 
+    paddingHorizontal: AppSpacing.xxl,
+    paddingVertical: AppSpacing.xxxl, 
     borderRadius: AppRadius.xxl, 
-    elevation: 10, 
+    borderWidth: 1,
+    borderColor: '#ECEFE8',
+    elevation: 8, 
     shadowColor: AppColors.primary, 
-    shadowOffset: { width: 0, height: 10 }, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 20 
+    shadowOffset: { width: 0, height: 12 }, 
+    shadowOpacity: 0.08, 
+    shadowRadius: 24 
   },
 
   header: { alignItems: 'center', marginBottom: AppSpacing.xxxl },
-  logo: { width: 70, height: 70, marginBottom: AppSpacing.lg, borderRadius: AppRadius.xl },
-  title: { fontSize: AppFontSize.title, fontWeight: '900', color: AppColors.primary, marginBottom: AppSpacing.xs, textAlign: 'center' },
-  subtitle: { fontSize: AppFontSize.md, color: AppColors.textSecondary, fontWeight: 'bold', textAlign: 'center' },
+  logoContainer: {
+    width: 84,
+    height: 84,
+    borderRadius: 22,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: AppSpacing.lg,
+    borderWidth: 1.5,
+    borderColor: '#ECEFE8',
+    shadowColor: AppColors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  logo: { width: 60, height: 60 },
+  title: { fontSize: AppFontSize.title, fontFamily: AppFontFamily.extraBold, color: AppColors.primary, marginBottom: AppSpacing.xs, textAlign: 'center' },
+  subtitle: { fontSize: AppFontSize.md, color: AppColors.textSecondary, fontFamily: AppFontFamily.medium, textAlign: 'center' },
 
   row: { flexDirection: 'row-reverse', gap: AppSpacing.lg, marginBottom: AppSpacing.lg },
-  label: { fontSize: AppFontSize.sm, fontWeight: 'bold', color: AppColors.textSecondary, textAlign: 'right', marginBottom: AppSpacing.sm },
+  label: { fontSize: AppFontSize.sm, fontFamily: AppFontFamily.bold, color: AppColors.textSecondary, textAlign: 'right', marginBottom: AppSpacing.sm },
 
   genderToggle: { flexDirection: 'row-reverse', backgroundColor: AppColors.inputBg, height: 55, borderRadius: AppRadius.lg, padding: 4 },
   genderBtn: { flex: 1, justifyContent: 'center', alignItems: 'center', borderRadius: AppRadius.md },
   genderBtnActive: { backgroundColor: AppColors.surface, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3 },
-  genderText: { fontSize: AppFontSize.md, fontWeight: 'bold', color: AppColors.textMuted },
+  genderText: { fontSize: AppFontSize.md, fontFamily: AppFontFamily.bold, color: AppColors.textMuted },
   genderTextActive: { color: AppColors.primary },
 
-  footer: { flexDirection: 'row-reverse', justifyContent: 'center', marginTop: AppSpacing.xxl },
-  footerText: { color: AppColors.textSecondary, fontSize: AppFontSize.md, fontWeight: 'bold' },
-  loginLink: { color: AppColors.accent, fontSize: AppFontSize.md, fontWeight: '900' },
+  footer: { flexDirection: 'row-reverse', justifyContent: 'center', marginTop: AppSpacing.xxl, alignItems: 'center' },
+  footerText: { color: AppColors.textSecondary, fontSize: AppFontSize.md, fontFamily: AppFontFamily.medium },
+  loginLink: { color: AppColors.accent, fontSize: AppFontSize.md, fontFamily: AppFontFamily.bold },
 
   // Stepper Styles
   stepperContainer: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', marginBottom: AppSpacing.xxxl, gap: 10 },
   stepIndicator: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
   stepCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: AppColors.inputBg, justifyContent: 'center', alignItems: 'center' },
   stepCircleActive: { backgroundColor: AppColors.primary },
-  stepCircleText: { fontSize: 12, fontWeight: 'bold', color: AppColors.textMuted, fontFamily: AppFontFamily.bold },
+  stepCircleText: { fontSize: 12, color: AppColors.textMuted, fontFamily: AppFontFamily.bold },
   stepCircleTextActive: { color: '#FFF' },
   stepLabel: { fontSize: 13, color: AppColors.textMuted, fontFamily: AppFontFamily.bold },
   stepLabelActive: { color: AppColors.primary },
@@ -312,7 +337,7 @@ const styles = StyleSheet.create({
   // Back Button
   backStepBtn: { marginTop: 15, paddingVertical: 12, alignItems: 'center', width: '100%' },
   backStepBtnText: { color: AppColors.textSecondary, fontSize: 14, fontFamily: AppFontFamily.bold },
-  legalFooter: { flexDirection: 'row-reverse', justifyContent: 'center', alignItems: 'center', marginTop: AppSpacing.xl, gap: 5 },
-  legalLink: { color: AppColors.textSecondary, fontSize: AppFontSize.sm, textDecorationLine: 'underline', fontWeight: 'bold' },
+  legalFooter: { flexDirection: 'row-reverse', justifyContent: 'center', alignItems: 'center', marginTop: AppSpacing.xxl, gap: 6 },
+  legalLink: { color: AppColors.textMuted, fontSize: AppFontSize.sm, fontFamily: AppFontFamily.medium },
   legalSeparator: { color: AppColors.textMuted, fontSize: AppFontSize.sm },
 });

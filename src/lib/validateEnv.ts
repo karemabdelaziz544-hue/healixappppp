@@ -1,50 +1,34 @@
-/**
- * validateEnv — Runtime config preflight validator
- * =================================================
- * Called once before Supabase client creation.
- * In production (non-DEV): throws a fatal error if required vars are missing.
- * In DEV: logs a clear warning but does not crash.
- *
- * This prevents the app from silently operating in a broken network state
- * where Supabase calls all fail silently with no actionable feedback.
- */
+// src/lib/validateEnv.ts
 
-interface EnvConfig {
-  supabaseUrl: string;
-  supabaseAnonKey: string;
-}
-
-export function validateEnv(): EnvConfig {
+export function validateEnv() {
+  // في Expo، المتغيرات التي تبدأ بـ EXPO_PUBLIC_ يتم حقنها في process.env 
+  // ولكن Metro Bundler يتطلب أحياناً استدعاءً صريحاً.
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-  const missing: string[] = [];
-  if (!supabaseUrl) missing.push('EXPO_PUBLIC_SUPABASE_URL');
-  if (!supabaseAnonKey) missing.push('EXPO_PUBLIC_SUPABASE_ANON_KEY');
+  console.log("[EnvCheck] URL:", supabaseUrl); // أضفنا هذا للتأكد في الـ Terminal
+  console.log("[EnvCheck] Key exists:", !!supabaseAnonKey);
 
-  if (missing.length > 0) {
-    const msg = `[Healix] Missing required environment variables: ${missing.join(', ')}\n` +
-      `Ensure your .env file is set up correctly. See README for setup instructions.`;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    const errorMsg = `[Healix Critical] Environment variables missing! 
+      URL: ${supabaseUrl ? 'Found' : 'MISSING'} 
+      Key: ${supabaseAnonKey ? 'Found' : 'MISSING'}`;
 
-    if (__DEV__) {
-      // In development: warn loudly but continue so developers can see the error
-      console.warn(msg);
-      // Return placeholder values so TS doesn't complain — Supabase will fail gracefully
-      return {
-        supabaseUrl: supabaseUrl ?? 'https://placeholder.supabase.co',
-        supabaseAnonKey: supabaseAnonKey ?? 'placeholder-anon-key',
-      };
-    } else {
-      // In production: FAIL FAST — do not silently operate in broken state
-      throw new Error(msg);
+    console.error(errorMsg);
+
+    // بدلاً من الـ Throw فقط، سنقوم بإظهار تنبيه يمنع التطبيق من المضي قدماً
+    if (!__DEV__) {
+      throw new Error(errorMsg);
     }
+
+    return {
+      supabaseUrl: supabaseUrl || 'https://placeholder.supabase.co',
+      supabaseAnonKey: supabaseAnonKey || 'placeholder',
+    };
   }
 
-  // At this point TypeScript still sees supabaseUrl/supabaseAnonKey as string | undefined
-  // because it can't prove the if/throw above exhausts all undefined cases.
-  // The non-null assertions are safe: we verified both exist via `missing` array above.
   return {
-    supabaseUrl: supabaseUrl!,
-    supabaseAnonKey: supabaseAnonKey!,
+    supabaseUrl,
+    supabaseAnonKey,
   };
 }

@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, ScrollView, Image, LayoutAnimation, Platform, RefreshControl, StyleSheet, UIManager, View, Modal, TouchableOpacity } from 'react-native';
 import { Text } from '@/components/AppText';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { AnimatedButton } from '../animations/AnimatedButton';
 
 // 🔴 AUDIT FIX: تفعيل LayoutAnimation على أندرويد
@@ -13,7 +13,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import NotificationBell from '../NotificationBell';
 import Skeleton from '../Skeleton';
-import { AppColors, NutritionalColors } from '../../constants/AppTheme';
+import { AppColors, NutritionalColors, AppFontFamily } from '../../constants/AppTheme';
 import { Strings } from '../../constants/strings';
 import { useFamily } from '../../src/context/FamilyContext';
 import { supabase } from '../../src/lib/supabase';
@@ -40,13 +40,13 @@ const getFormattedDate = () => {
 // 🔴 AUDIT FIX: دالة لتحديد نوع المهمة — تستخدم NutritionalColors و Strings بدل hex و نصوص مباشرة
 const getTaskMeta = (task: PlanTask) => {
   const type = task.task_type;
-  
+
   if (type === 'workout') return { title: Strings.dashboard.tasks.workout, icon: 'barbell', color: NutritionalColors.workout.main, bg: NutritionalColors.workout.bg };
   if (type === 'breakfast') return { title: Strings.dashboard.tasks.breakfast, icon: 'cafe', color: NutritionalColors.breakfast.main, bg: NutritionalColors.breakfast.bg };
   if (type === 'lunch') return { title: Strings.dashboard.tasks.lunch, icon: 'restaurant', color: NutritionalColors.lunch.main, bg: NutritionalColors.lunch.bg };
   if (type === 'dinner') return { title: Strings.dashboard.tasks.dinner, icon: 'moon', color: NutritionalColors.dinner.main, bg: NutritionalColors.dinner.bg };
   if (type === 'snack') return { title: Strings.dashboard.tasks.snack, icon: 'apple', color: NutritionalColors.snack.main, bg: NutritionalColors.snack.bg };
-  
+
   // 🔴 AUDIT FIX: Narrow the fallback to return fallback styling instead of guessing from content
   if (__DEV__ && !type) {
     logger.warn(`Task ${task.id} missing task_type — needs database backfill migration`);
@@ -75,11 +75,11 @@ const parseMealComponents = (content: string): string[] => {
   return items;
 };
 
-const AccountSwitcherHeader = React.memo(({ 
-  currentProfile, 
-  familyMembers, 
-  switchProfile, 
-  userName 
+const AccountSwitcherHeader = React.memo(({
+  currentProfile,
+  familyMembers,
+  switchProfile,
+  userName
 }: any) => {
   const [isOpen, setIsOpen] = useState(false);
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -176,7 +176,7 @@ const AccountSwitcherHeader = React.memo(({
           <Text style={styles.subGreeting}>لنكمل رحلتك الغذائية اليوم.</Text>
         </Animated.View>
 
-        <AnimatedButton 
+        <AnimatedButton
           activeOpacity={hasSubAccounts ? 0.7 : 1}
           onPress={openDropdown}
           style={[styles.avatarButton, !hasSubAccounts && { opacity: 0.6 }]}
@@ -208,18 +208,18 @@ const AccountSwitcherHeader = React.memo(({
               const isMain = !member.manager_id;
               const roleText = isMain ? "الحساب الرئيسي" : "حساب تابع";
               return (
-                <AnimatedButton 
-                  key={member.id} 
+                <AnimatedButton
+                  key={member.id}
                   style={[styles.dropdownItem, isActive && styles.dropdownItemActive]}
                   onPress={() => handleSwitch(member.id)}
                 >
                   <View style={styles.dropdownAvatarWrap}>
                     {avatarUrls[member.id] ? (
-                       <Image source={{ uri: avatarUrls[member.id] }} style={styles.dropdownAvatar} />
+                      <Image source={{ uri: avatarUrls[member.id] }} style={styles.dropdownAvatar} />
                     ) : (
-                       <View style={styles.dropdownAvatarPlaceholder}>
-                         <Text style={styles.dropdownAvatarInitial}>{member.full_name?.charAt(0)}</Text>
-                       </View>
+                      <View style={styles.dropdownAvatarPlaceholder}>
+                        <Text style={styles.dropdownAvatarInitial}>{member.full_name?.charAt(0)}</Text>
+                      </View>
                     )}
                   </View>
                   <View style={styles.dropdownItemContent}>
@@ -238,6 +238,7 @@ const AccountSwitcherHeader = React.memo(({
 });
 
 export default function MainDashboardView() {
+  const router = useRouter();
   const { currentProfile, familyMembers, switchProfile } = useFamily();
   const userId = currentProfile?.id;
   const insets = useSafeAreaInsets();
@@ -288,7 +289,7 @@ export default function MainDashboardView() {
 
       if (activePlan) {
         setPlan(activePlan as Plan);
-        
+
         // 🚀 Parallelize Tasks & Logs fetching
         // daily_task_logs uses raw Supabase (no timeout wrapper) — executeQuery's 15s timeout
         // causes false empty results on slow Expo Go / debug network connections.
@@ -321,7 +322,7 @@ export default function MainDashboardView() {
 
             const name = t.day_name || "";
             if (currentDayNum === 1 && /اليوم\s*(الأول|1($|\D))/.test(name)) return true;
-            
+
             // Extract the first number found in the day name string
             const match = name.match(/\d+/);
             if (match) {
@@ -329,7 +330,7 @@ export default function MainDashboardView() {
             }
             return false;
           });
-          
+
           const logsMap = new Map();
           if (logData) {
             logData.forEach(log => logsMap.set(log.task_id, log.is_completed));
@@ -337,8 +338,8 @@ export default function MainDashboardView() {
 
           // Override is_completed with user-specific progress
           const tasksWithProgress = filtered.map(t => ({
-             ...t,
-             is_completed: logsMap.has(t.id) ? logsMap.get(t.id) : false
+            ...t,
+            is_completed: logsMap.has(t.id) ? logsMap.get(t.id) : false
           }));
 
           finalTasks = tasksWithProgress;
@@ -499,6 +500,45 @@ export default function MainDashboardView() {
   const currentMealTask = uncompletedTasks.length > 0 ? uncompletedTasks[0] : null;
   const nextMealTask = uncompletedTasks.length > 1 ? uncompletedTasks[1] : null;
 
+  const renderAICard = () => (
+    <View style={styles.aiCard}>
+      <View style={styles.aiCardHeader}>
+        <View style={styles.aiCardTitleRow}>
+          <Ionicons name="sparkles" size={20} color={AppColors.accent} style={{ marginLeft: 6 }} />
+          <Text style={styles.aiCardTitle}>Healix AI</Text>
+        </View>
+        <Text style={styles.aiCardSubtitle}>اسأل عن التغذية، السعرات الحرارية، أو أي استفسار صحي عام.</Text>
+      </View>
+
+      <View style={styles.aiBulletsContainer}>
+        <View style={styles.aiBulletRow}>
+          <View style={styles.aiBulletDot} />
+          <Text style={styles.aiBulletText}>التغذية والسعرات الحرارية</Text>
+        </View>
+        <View style={styles.aiBulletRow}>
+          <View style={styles.aiBulletDot} />
+          <Text style={styles.aiBulletText}>الأنظمة الغذائية والأكل الصحي</Text>
+        </View>
+        <View style={styles.aiBulletRow}>
+          <View style={styles.aiBulletDot} />
+          <Text style={styles.aiBulletText}>العادات الصحية اليومية</Text>
+        </View>
+      </View>
+
+      <TouchableOpacity
+        activeOpacity={0.9}
+        style={styles.aiCardButton}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          router.push('/healix-ai' as any);
+        }}
+      >
+        <Ionicons name="chatbubble-ellipses" size={20} color="#FFF" style={{ marginLeft: 8 }} />
+        <Text style={styles.aiCardButtonText}>ابدأ المحادثة</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       {/* sub-account banner */}
@@ -515,7 +555,7 @@ export default function MainDashboardView() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[AppColors.primary]} />}
       >
         {/* 1. Header with Account Switcher */}
-        <AccountSwitcherHeader 
+        <AccountSwitcherHeader
           currentProfile={currentProfile}
           familyMembers={familyMembers}
           switchProfile={switchProfile}
@@ -684,6 +724,9 @@ export default function MainDashboardView() {
             <Text style={styles.emptySub}>{randomQuote}</Text>
           </View>
         )}
+
+        {/* Healix AI Premium Entry Card */}
+        {renderAICard()}
       </ScrollView>
     </SafeAreaView>
   );
@@ -1194,6 +1237,79 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  aiCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(42, 75, 70, 0.08)',
+    shadowColor: '#2A4B46',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    elevation: 3,
+  },
+  aiCardHeader: {
+    marginBottom: 16,
+    alignItems: 'flex-start',
+  },
+  aiCardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  aiCardTitle: {
+    fontSize: 18,
+    fontFamily: AppFontFamily.bold,
+    color: AppColors.primary,
+  },
+  aiCardSubtitle: {
+    fontSize: 14,
+    fontFamily: AppFontFamily.medium,
+    color: AppColors.textSecondary,
+    textAlign: 'left',
+  },
+  aiBulletsContainer: {
+    marginBottom: 24,
+    gap: 10,
+  },
+  aiBulletRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  aiBulletDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: AppColors.accent,
+  },
+  aiBulletText: {
+    fontSize: 14,
+    fontFamily: AppFontFamily.regular,
+    color: AppColors.textPrimary,
+    flex: 1,
+    textAlign: 'left',
+  },
+  aiCardButton: {
+    height: 52,
+    borderRadius: 20,
+    backgroundColor: AppColors.primary,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#2A4B46',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  aiCardButtonText: {
+    fontSize: 15,
+    fontFamily: AppFontFamily.bold,
+    color: '#FFFFFF',
   },
 });
 

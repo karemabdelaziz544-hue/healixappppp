@@ -39,7 +39,7 @@ export type UserLifecycleState =
   | 'sub_excluded';
 
 export function useSubscriptionGuard() {
-  const { currentProfile, accountProfileId } = useFamily();
+  const { currentProfile, accountProfileId, loadingFamily } = useFamily();
   const [userLifecycleState, setUserLifecycleState] = useState<UserLifecycleState>('loading');
   const [isGuardLoading, setIsGuardLoading] = useState(true);
   const [latestRequest, setLatestRequest] = useState<PaymentRequest | null>(null);
@@ -56,11 +56,27 @@ export function useSubscriptionGuard() {
   }, [accountProfileId, currentProfile?.manager_id]);
 
   useEffect(() => {
-    if (!currentProfile) {
-      // ✅ BUG-02: فقط أظهر loading في التحميل الأولي، مش في كل تغيير
+    if (!accountProfileId) {
+      setUserLifecycleState('loading');
+      setIsGuardLoading(false);
+      initialized.current = false;
+      return;
+    }
+
+    if (loadingFamily) {
       if (!initialized.current) {
         setUserLifecycleState('loading');
         setIsGuardLoading(true);
+      }
+      return;
+    }
+
+    if (!currentProfile) {
+      // ✅ BUG-02: فقط أظهر loading في التحميل الأولي، مش في كل تغيير
+      if (!initialized.current) {
+        setUserLifecycleState('lead');
+        setIsGuardLoading(false);
+        initialized.current = true;
       }
       return;
     }
@@ -163,7 +179,7 @@ export function useSubscriptionGuard() {
 
     setIsGuardLoading(false);
     initialized.current = true;
-  }, [currentProfile, latestRequest]);
+  }, [currentProfile, latestRequest, accountProfileId, loadingFamily]);
 
   // Check if current user period is active
   const isPeriodActive = currentProfile?.subscription_status === 'active' &&

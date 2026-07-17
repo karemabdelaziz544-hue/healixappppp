@@ -2,7 +2,7 @@ import React from 'react';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
-import { FamilyProvider } from '../src/context/FamilyContext';
+import { FamilyProvider, useFamily } from '../src/context/FamilyContext';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { AppToastProvider } from '../components/AppToast';
 import * as Sentry from '@sentry/react-native';
@@ -27,28 +27,30 @@ if (!I18nManager.isRTL) {
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 const isStaging = process.env.EXPO_PUBLIC_APP_VARIANT === 'staging';
 
-if (sentryDsn) {
-  Sentry.init({
-    dsn: sentryDsn,
-    environment: isStaging ? 'staging' : __DEV__ ? 'development' : 'production',
-    debug: __DEV__,
-    tracesSampleRate: isStaging ? 1.0 : 0.1,
-    enabled: !__DEV__,
-  });
-}
+Sentry.init({
+  dsn: sentryDsn,
+  environment: isStaging ? 'staging' : __DEV__ ? 'development' : 'production',
+  debug: __DEV__,
+  tracesSampleRate: isStaging ? 1.0 : 0.1,
+  enabled: !!sentryDsn && !__DEV__,
+});
 
 // 🛑 prevent auto-hiding of SplashScreen - handled in AuthRoutingLogic / StartupFailureBoundary
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function AppLayoutContent() {
   const { session, isLoading, authError, retryAuth } = useAuth();
+  const { familyError, refreshFamily, loadingFamily } = useFamily();
+
+  const combinedError = authError || familyError;
+  const combinedLoading = isLoading || loadingFamily;
 
   return (
     <StartupFailureBoundary
-      error={authError}
+      error={combinedError}
       session={session}
-      isLoading={isLoading}
-      onRetry={retryAuth}
+      isLoading={combinedLoading}
+      onRetry={familyError ? refreshFamily : retryAuth}
     >
       <AuthRoutingLogic />
       <PushNotificationManager />

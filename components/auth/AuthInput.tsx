@@ -14,6 +14,7 @@ interface AuthInputProps extends TextInputProps {
 
 export const AuthInput: React.FC<AuthInputProps> = ({ label, isPassword, hint, headerRight, isLTR, ...props }) => {
   const [showPassword, setShowPassword] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
 
   return (
     <View style={styles.inputGroup}>
@@ -23,11 +24,23 @@ export const AuthInput: React.FC<AuthInputProps> = ({ label, isPassword, hint, h
       </View>
       
       {isPassword ? (
-        <View style={styles.passwordContainer}>
+        <View style={[styles.passwordContainer, isFocused && styles.inputFocused]}>
           <TextInput
             {...props}
-            style={[styles.input, { flex: 1, height: '100%', textAlign: isLTR || isPassword ? 'left' : 'right' }, props.style]}
+            style={[
+              styles.input,
+              { flex: 1, height: '100%', backgroundColor: 'transparent', borderWidth: 0, borderColor: 'transparent', textAlign: isLTR || isPassword ? 'left' : 'right' },
+              props.style
+            ]}
             secureTextEntry={!showPassword}
+            onFocus={(e) => {
+              setIsFocused(true);
+              props.onFocus?.(e);
+            }}
+            onBlur={(e) => {
+              setIsFocused(false);
+              props.onBlur?.(e);
+            }}
             accessibilityLabel={label}
           />
           <TouchableOpacity 
@@ -42,7 +55,20 @@ export const AuthInput: React.FC<AuthInputProps> = ({ label, isPassword, hint, h
       ) : (
         <TextInput
           {...props}
-          style={[styles.input, { textAlign: isLTR ? 'left' : 'right' }, props.style]}
+          style={[
+            styles.input,
+            isFocused && styles.inputFocused,
+            { textAlign: isLTR ? 'left' : 'right' },
+            props.style
+          ]}
+          onFocus={(e) => {
+            setIsFocused(true);
+            props.onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setIsFocused(false);
+            props.onBlur?.(e);
+          }}
           accessibilityLabel={label}
         />
       )}
@@ -63,14 +89,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: AppSpacing.lg, 
     textAlign: 'right', // overridden by inline styles if isLTR is true
     fontSize: AppFontSize.md, 
-    color: AppColors.textPrimary 
+    color: AppColors.textPrimary,
+    borderWidth: 1.5,
+    borderColor: 'transparent'
   },
   passwordContainer: { 
     flexDirection: 'row-reverse', 
     alignItems: 'center', 
     backgroundColor: AppColors.inputBg, 
     height: 55, 
-    borderRadius: AppRadius.lg 
+    borderRadius: AppRadius.lg,
+    borderWidth: 1.5,
+    borderColor: 'transparent'
+  },
+  inputFocused: {
+    borderColor: AppColors.primary,
+    backgroundColor: AppColors.surface
   },
   eyeIcon: { padding: AppSpacing.md },
   hint: { fontSize: AppFontSize.xs, color: AppColors.textMuted, textAlign: 'right', marginTop: AppSpacing.xs, fontWeight: 'bold' },
