@@ -38,10 +38,12 @@ export interface PlanTask {
   plan_id: string;
   day_name: string | null;
   day_number?: number | null;
+  title?: string | null;
   content: string;
-  task_type: 'workout' | 'nutrition' | string;
+  task_type: 'workout' | 'nutrition' | 'breakfast' | 'lunch' | 'dinner' | 'snack' | string;
   is_completed: boolean;
   order_index: number;
+  scheduled_time?: string | null;
   metadata?: any;
   created_at?: string;
 }

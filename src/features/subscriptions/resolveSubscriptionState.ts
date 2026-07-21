@@ -63,7 +63,13 @@ export function resolveSubscriptionState(
   }
 
   // ─── Expired: had subscription before ───
-  if (profile.subscription_status === 'expired' || profile.subscription_end_date) {
+  // IMPORTANT: Only treat as 'expired' if they actually had a prior subscription
+  // (subscription_end_date is not null). Users with status='expired' but no
+  // end_date have never subscribed and must be treated as 'no_subscription'.
+  if (profile.subscription_status === 'expired' && profile.subscription_end_date) {
+    return 'expired';
+  }
+  if (profile.subscription_end_date) {
     return 'expired';
   }
 

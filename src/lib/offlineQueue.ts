@@ -8,7 +8,7 @@ const OFFLINE_QUEUE_KEY = 'healix_offline_queue';
 
 export interface OfflineMutation {
   id: string;
-  type: 'task_toggle' | 'chat_send';
+  type: 'task_toggle' | 'chat_send' | 'health_log' | 'health_undo';
   userId: string;
   payload: any;
   timestamp: number;
@@ -42,7 +42,7 @@ export const OfflineQueue = {
   /**
    * Adds a new mutation to the offline queue and schedules a sync if online.
    */
-  async addMutation(type: 'task_toggle' | 'chat_send', userId: string, payload: any): Promise<void> {
+  async addMutation(type: 'task_toggle' | 'chat_send' | 'health_log' | 'health_undo', userId: string, payload: any): Promise<void> {
     try {
       const queue = await this.getQueue();
       const newMutation: OfflineMutation = {
@@ -188,6 +188,74 @@ export const OfflineQueue = {
         { retries: 2, isIdempotent: false }
       );
       return !error;
+    }
+
+    if (mutation.type === 'health_log') {
+      const { metric, value, recordedAt } = mutation.payload;
+      if (metric === 'water') {
+        const { error } = await supabase.from('water_tracking').insert({
+          user_id: mutation.userId,
+          amount: Number(value),
+          recorded_at: recordedAt
+        });
+        if (error) {
+          logger.error('[OfflineQueue] water log failed:', JSON.stringify(error));
+          return false;
+        }
+      } else if (metric === 'sleep') {
+        const { error } = await supabase.from('lifestyle_profile').upsert({
+          user_id: mutation.userId,
+          sleep_hours: Number(value.hours),
+          sleep_quality: value.quality
+        }, { onConflict: 'user_id' });
+        if (error) {
+          logger.error('[OfflineQueue] sleep log failed:', JSON.stringify(error));
+          return false;
+        }
+      } else if (metric === 'weight') {
+        const { error } = await supabase.from('inbody_records').insert({
+          user_id: mutation.userId,
+          weight: Number(value),
+          record_date: recordedAt
+        });
+        if (error) {
+          logger.error('[OfflineQueue] weight log failed:', JSON.stringify(error));
+          return false;
+        }
+      }
+      return true;
+    }
+
+    if (mutation.type === 'health_undo') {
+      const { metric } = mutation.payload;
+      if (metric === 'water') {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const { data, error: fetchErr } = await supabase
+          .from('water_tracking')
+          .select('id')
+          .eq('user_id', mutation.userId)
+          .gte('recorded_at', today.toISOString())
+          .order('recorded_at', { ascending: false })
+          .limit(1);
+
+        if (fetchErr) {
+          logger.error('[OfflineQueue] water undo fetch failed:', JSON.stringify(fetchErr));
+          return false;
+        }
+
+        if (data && data.length > 0) {
+          const { error: deleteErr } = await supabase
+            .from('water_tracking')
+            .delete()
+            .eq('id', data[0].id);
+
+          if (deleteErr) {
+            logger.error('[OfflineQueue] water undo delete failed:', JSON.stringify(deleteErr));
+            return false;
+          }
+        }
+      }
+      return true;
     }
 
     return true;
