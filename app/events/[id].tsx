@@ -110,7 +110,7 @@ export default function EventDetailsScreen() {
           .from('events')
           .select('*')
           .eq('id', id)
-          .single();
+          .maybeSingle();
 
         if (evErr) throw evErr;
         setEvent(evData);

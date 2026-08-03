@@ -11,7 +11,7 @@ import { Strings } from '../constants/strings';
 import { AppCache } from '../src/lib/cache';
 import * as Haptics from 'expo-haptics';
 
-const CIRCLE_SIZE = 160; // كبرنا الدايرة شوية
+const CIRCLE_SIZE = 160;
 
 export default function WaterTracker() {
   const { currentProfile } = useFamily();
@@ -21,9 +21,8 @@ export default function WaterTracker() {
   const [consumedGlasses, setConsumedGlasses] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // أنيميشن الموجة الانسيابية
   const fillAnim = useRef(new Animated.Value(0)).current;
-  const shakeAnim = useRef(new Animated.Value(0)).current; // هزة خفيفة عند الإضافة
+  const shakeAnim = useRef(new Animated.Value(0)).current;
 
   const loadCachedData = async () => {
     if (!userId) return;
@@ -51,12 +50,10 @@ export default function WaterTracker() {
 
   const fetchWaterData = async () => {
     try {
-      // 🔴 P-01 FIX: Parallel queries (was sequential — doubled loading time)
-      // 🔴 CF-01 FIX: All calls through executeQuery for timeout/retry
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const [lifeRes, waterRes] = await Promise.all([
         executeQuery<{ water_liters: number } | null>(
-          supabase.from('lifestyle_profile').select('water_liters').eq('user_id', userId).single(),
+          supabase.from('lifestyle_profile').select('water_liters').eq('user_id', userId).maybeSingle(),
           { isIdempotent: true }
         ),
         executeQuery<{ amount: number }[]>(
@@ -78,14 +75,12 @@ export default function WaterTracker() {
         animateWater(totalConsumed, target);
       }
 
-      // Save to cache
       await AppCache.set(`water_${userId}`, { consumed: totalConsumed, target });
     } catch (error) { logger.error('Error water data:', error); } finally { setLoading(false); }
   };
 
   const animateWater = (consumed: number, target: number) => {
     const percentage = Math.min((consumed / target) * 100, 100);
-    // 🌟 أنيميشن انسيابي ناعم جداً
     Animated.timing(fillAnim, {
       toValue: percentage,
       duration: 1000,
@@ -95,7 +90,6 @@ export default function WaterTracker() {
   };
 
   const shakeWater = () => {
-    // أنيميشن هزة خفيفة للمياه كأنك حطيت فيها حاجة
     Animated.sequence([
         Animated.timing(shakeAnim, { toValue: 5, duration: 100, useNativeDriver: false }),
         Animated.timing(shakeAnim, { toValue: -5, duration: 100, useNativeDriver: false }),
@@ -107,10 +101,9 @@ export default function WaterTracker() {
     const newAmount = consumedGlasses + 1;
     setConsumedGlasses(newAmount);
     animateWater(newAmount, targetGlasses);
-    shakeWater(); // تشغيل الهزة البصرية
+    shakeWater();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Save to cache immediately (optimistic UI)
     await AppCache.set(`water_${userId}`, { consumed: newAmount, target: targetGlasses });
 
     try {
@@ -121,7 +114,6 @@ export default function WaterTracker() {
       if (error) throw error;
     } catch (err) {
       logger.error('Error adding water:', err);
-      // Rollback on error
       setConsumedGlasses(consumedGlasses);
       animateWater(consumedGlasses, targetGlasses);
       await AppCache.set(`water_${userId}`, { consumed: consumedGlasses, target: targetGlasses });
@@ -135,7 +127,6 @@ export default function WaterTracker() {
     animateWater(newAmount, targetGlasses);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Save to cache immediately (optimistic UI)
     await AppCache.set(`water_${userId}`, { consumed: newAmount, target: targetGlasses });
 
     try {
@@ -155,7 +146,6 @@ export default function WaterTracker() {
       }
     } catch (err) {
       logger.error('Error removing water:', err);
-      // Rollback on error
       setConsumedGlasses(consumedGlasses);
       animateWater(consumedGlasses, targetGlasses);
       await AppCache.set(`water_${userId}`, { consumed: consumedGlasses, target: targetGlasses });
@@ -164,7 +154,7 @@ export default function WaterTracker() {
 
   const waterHeight = fillAnim.interpolate({
     inputRange: [0, 100],
-    outputRange: [CIRCLE_SIZE, 0] // بنقلل الـ top عشان الميه تطلع لفوق
+    outputRange: [CIRCLE_SIZE, 0]
   });
 
   const percentage = Math.min(Math.round((consumedGlasses / targetGlasses) * 100), 100);
@@ -173,23 +163,19 @@ export default function WaterTracker() {
 
   return (
     <View style={styles.container}>
-      {/* هيدر ناعم ومدمج */}
       <View style={styles.header}>
         <Text style={styles.motivationText}>{Strings.water.motivation}</Text>
         <Text style={styles.cardTitle}>{Strings.water.title}</Text>
       </View>
 
       <View style={styles.mainContent}>
-        {/* 🌟 زرار التقليل الجانبي الأنيق */}
         <TouchableOpacity style={styles.sideBtn} onPress={handleRemoveGlass} activeOpacity={0.7}>
           <Ionicons name="remove" size={20} color={AppColors.textMuted} />
         </TouchableOpacity>
 
-        {/* 🌟 الفقاعة المائية المجسمة (The Fluid Bubble) */}
         <View style={styles.glassContainer}>
             <View style={styles.circleOuter}>
                 <Animated.View style={[styles.waveFill, { top: waterHeight, transform: [{ translateX: shakeAnim }] }]}>
-                    {/* عملنا طبقتين لون عشان شكل الموجة يبان */}
                     <View style={styles.waveTop} />
                     <View style={styles.waveBody} />
                 </Animated.View>
@@ -202,12 +188,10 @@ export default function WaterTracker() {
                     <Text style={[styles.glassTarget, { color: percentage > 60 ? 'rgba(255,255,255,0.7)' : HydrationColors.waveLight }]}>{Strings.water.glassesOf(targetGlasses)}</Text>
                 </View>
                 
-                {/* طبقة تظليل زجاجية */}
                 <View style={styles.glassShine} />
             </View>
         </View>
 
-        {/* 🌟 زرار الإضافة العائم المتوهج */}
         <TouchableOpacity 
           style={[styles.floatingAddBtn, consumedGlasses >= targetGlasses && { backgroundColor: HydrationColors.complete, shadowColor: HydrationColors.complete }]} 
           onPress={handleAddGlass} 
@@ -229,11 +213,9 @@ const styles = StyleSheet.create({
   
   mainContent: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 15 },
   
-  // تنسيقات الدايرة المائية المجسمة
   glassContainer: { elevation: 8, shadowColor: HydrationColors.waveLight, shadowOpacity: 0.3, shadowRadius: 15 },
   circleOuter: { width: CIRCLE_SIZE, height: CIRCLE_SIZE, borderRadius: CIRCLE_SIZE / 2, backgroundColor: HydrationColors.bgLight, overflow: 'hidden', borderWidth: 6, borderColor: '#FFF', justifyContent: 'center', alignItems: 'center', position: 'relative' },
   
-  // أنيميشن الموجة المائية المزدوجة
   waveFill: { position: 'absolute', start: -50, end: -50, height: CIRCLE_SIZE },
   waveTop: { height: 25, backgroundColor: HydrationColors.waveLight, borderRadius: 25, transform: [{ scaleX: 1.5 }], borderTopStartRadius: 50, borderTopEndRadius: 50 },
   waveBody: { flex: 1, backgroundColor: HydrationColors.waveDark },
@@ -243,10 +225,8 @@ const styles = StyleSheet.create({
   glassCount: { fontSize: 50, fontWeight: '900' },
   glassTarget: { fontSize: 13, fontWeight: '900', marginTop: -5 },
   
-  // طبقة التظليل الزجاجية
   glassShine: { position: 'absolute', top: 15, start: 25, width: 30, height: CIRCLE_SIZE / 2.5, backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: 15, transform: [{ rotate: '-15deg' }], zIndex: 10 },
 
-  // الأزرار الجديدة
   floatingAddBtn: { width: 70, height: 70, backgroundColor: HydrationColors.waveDark, borderRadius: 35, justifyContent: 'center', alignItems: 'center', elevation: 6, shadowColor: HydrationColors.waveDark, shadowOffset: {width: 0, height: 6}, shadowOpacity: 0.5, shadowRadius: 10 },
   sideBtn: { width: 45, height: 45, backgroundColor: '#FFF', borderRadius: 22.5, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: HydrationColors.borderSide, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 3 }
 });

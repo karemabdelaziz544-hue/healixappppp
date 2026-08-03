@@ -120,6 +120,14 @@ export const OfflineQueue = {
   async processMutation(mutation: OfflineMutation): Promise<boolean> {
     if (mutation.type === 'task_toggle') {
       const { taskId, isCompleted, logDate } = mutation.payload;
+
+      // Validate taskId is a valid UUID before sending to PostgreSQL
+      const isValidUuid = typeof taskId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId);
+      if (!isValidUuid) {
+        logger.warn(`[OfflineQueue] Dropping invalid task_toggle mutation with non-UUID taskId: "${taskId}"`);
+        return true; // Return true to purge invalid item from queue
+      }
+
       // Use raw Supabase call — bypasses executeQuery's 15s timeout which causes
       // false failures on slow Expo Go / debug connections.
       const { error } = await supabase.from('daily_task_logs').upsert(
@@ -133,6 +141,11 @@ export const OfflineQueue = {
       );
       if (error) {
         logger.error('[OfflineQueue] task_toggle upsert failed:', JSON.stringify(error));
+        // Drop invalid UUID format errors (22P02) from the persistent queue
+        if (error.code === '22P02') {
+          logger.warn(`[OfflineQueue] Purging mutation with invalid UUID syntax from queue: ${taskId}`);
+          return true;
+        }
         return false;
       }
       return true;

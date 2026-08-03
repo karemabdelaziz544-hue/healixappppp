@@ -11,6 +11,7 @@ import { handleError } from '../lib/errorHandler';
 import { supabase } from '../lib/supabase';
 import { AuthInput } from '../../components/auth/AuthInput';
 import { AuthButton } from '../../components/auth/AuthButton';
+import { Logo } from '../../components/Logo';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -66,11 +67,11 @@ export default function LoginScreen() {
         <SlideInView direction="up" distance={20} style={[styles.formCard]}>
 
           <View style={styles.header}>
-            <View style={styles.logoContainer}>
-              <Image source={require('../../assets/images/icon.png')} style={styles.logo} resizeMode="contain" />
+            <View style={{ marginBottom: AppSpacing.md, alignSelf: 'flex-start' }}>
+              <Logo width={72} height={72} color={AppColors.primary} />
             </View>
             <Text style={styles.title}>مرحباً بعودتك</Text>
-            <Text style={styles.subtitle}>سجل دخولك لمتابعة خطتك الصحية</Text>
+            <Text style={styles.subtitle}>سجل دخولك لمتابعة خطتك الحالية</Text>
           </View>
 
           <AuthInput
@@ -144,33 +145,17 @@ const styles = StyleSheet.create({
     shadowRadius: 24 
   },
 
-  header: { alignItems: 'center', marginBottom: AppSpacing.xxxl },
-  logoContainer: {
-    width: 84,
-    height: 84,
-    borderRadius: 22,
-    backgroundColor: '#FFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: AppSpacing.lg,
-    borderWidth: 1.5,
-    borderColor: '#ECEFE8',
-    shadowColor: AppColors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  logo: { width: 60, height: 60 },
-  title: { fontSize: AppFontSize.title, fontFamily: AppFontFamily.extraBold, color: AppColors.primary, marginBottom: AppSpacing.xs, textAlign: 'center' },
-  subtitle: { fontSize: AppFontSize.md, color: AppColors.textSecondary, fontFamily: AppFontFamily.medium, textAlign: 'center' },
+  header: { alignItems: 'flex-start', marginBottom: AppSpacing.xxxl, width: '100%' },
+  logo: { width: 72, height: 72, borderRadius: 16, marginBottom: AppSpacing.md },
+  title: { fontSize: AppFontSize.title, fontFamily: AppFontFamily.extraBold, color: AppColors.primary, marginBottom: AppSpacing.xs, alignSelf: 'flex-start' },
+  subtitle: { fontSize: AppFontSize.md, color: AppColors.textSecondary, fontFamily: AppFontFamily.medium, alignSelf: 'flex-start' },
 
   forgotPasswordText: { fontSize: AppFontSize.sm, color: AppColors.accent, fontFamily: AppFontFamily.bold },
 
-  footer: { flexDirection: 'row-reverse', justifyContent: 'center', marginTop: AppSpacing.xxl, alignItems: 'center' },
+  footer: { flexDirection: 'row', justifyContent: 'flex-start', marginTop: AppSpacing.xxl, alignItems: 'center' },
   footerText: { color: AppColors.textSecondary, fontSize: AppFontSize.md, fontFamily: AppFontFamily.medium },
   signupLink: { color: AppColors.accent, fontSize: AppFontSize.md, fontFamily: AppFontFamily.bold },
-  legalFooter: { flexDirection: 'row-reverse', justifyContent: 'center', alignItems: 'center', marginTop: AppSpacing.xxl, gap: 6 },
+  legalFooter: { flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', marginTop: AppSpacing.xxl, gap: 6 },
   legalLink: { color: AppColors.textMuted, fontSize: AppFontSize.sm, fontFamily: AppFontFamily.medium },
   legalSeparator: { color: AppColors.textMuted, fontSize: AppFontSize.sm },
 });

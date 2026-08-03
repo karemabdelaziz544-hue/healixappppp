@@ -1,13 +1,16 @@
+import { Platform } from 'react-native';
 import { logger } from '../../../lib/logger';
-import { ActivityProvider, PedometerActivityProvider } from './ActivityProvider';
+import { ActivityProvider, PedometerActivityProvider, AppleHealthActivityProvider } from './ActivityProvider';
 
 export class ActivityService {
   private static providers: Map<string, ActivityProvider> = new Map();
-  private static activeProviderName = 'Pedometer';
+  private static activeProviderName: ActivityProvider['name'] = 'Pedometer';
 
   static {
-    // Register the default Pedometer provider
+    // Register available providers
+    this.registerProvider(new AppleHealthActivityProvider());
     this.registerProvider(new PedometerActivityProvider());
+    this.initializeBestProvider();
   }
 
   /**
@@ -19,9 +22,32 @@ export class ActivityService {
   }
 
   /**
-   * Set the active provider.
+   * Automatically selects the best available provider (AppleHealth on iOS -> Pedometer).
    */
-  static setActiveProvider(name: string) {
+  private static async initializeBestProvider() {
+    try {
+      if (Platform.OS === 'ios') {
+        const appleHealth = this.providers.get('AppleHealth');
+        if (appleHealth) {
+          const avail = await appleHealth.isAvailable();
+          if (avail) {
+            this.activeProviderName = 'AppleHealth';
+            logger.log('[ActivityService] Automatic provider selection: AppleHealth');
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      logger.error('[ActivityService] Error in automatic provider selection:', e);
+    }
+    this.activeProviderName = 'Pedometer';
+    logger.log('[ActivityService] Automatic provider selection: Pedometer');
+  }
+
+  /**
+   * Set the active provider explicitly if needed.
+   */
+  static setActiveProvider(name: ActivityProvider['name']) {
     if (this.providers.has(name)) {
       this.activeProviderName = name;
       logger.log(`[ActivityService] Active provider set to: ${name}`);
@@ -31,12 +57,11 @@ export class ActivityService {
   }
 
   /**
-   * Get the active provider instance.
+   * Get the active provider instance with safe fallback.
    */
   private static getActiveProvider(): ActivityProvider {
     const provider = this.providers.get(this.activeProviderName);
     if (!provider) {
-      // Fallback
       return new PedometerActivityProvider();
     }
     return provider;
@@ -62,7 +87,10 @@ export class ActivityService {
 
   static async requestPermissions() {
     try {
-      return await this.getActiveProvider().requestPermissions();
+      const perm = await this.getActiveProvider().requestPermissions();
+      // Re-evaluate best provider after permission change
+      await this.initializeBestProvider();
+      return perm;
     } catch (e) {
       logger.error('[ActivityService] failed requesting permissions:', e);
       return { status: 'denied', granted: false, canAskAgain: true };
@@ -87,7 +115,27 @@ export class ActivityService {
     }
   }
 
-  static getActiveProviderName(): string {
+  static getActiveProviderName(): ActivityProvider['name'] {
     return this.activeProviderName;
+  }
+
+  /**
+   * Helper to translate DB provider enum to user-friendly Arabic/English UI string.
+   */
+  static getDisplayName(name?: string): string {
+    const provider = name || this.activeProviderName;
+    switch (provider) {
+      case 'AppleHealth':
+        return 'Apple Health';
+      case 'GoogleFit':
+        return 'Google Health';
+      case 'Garmin':
+        return 'Garmin';
+      case 'Huawei':
+        return 'Huawei Health';
+      case 'Pedometer':
+      default:
+        return 'حساس الجهاز';
+    }
   }
 }

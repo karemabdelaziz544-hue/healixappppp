@@ -1,30 +1,26 @@
 import { Text } from '@/components/AppText';
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView, Alert, RefreshControl } from 'react-native';;
+import { View, StyleSheet, TouchableOpacity, ScrollView, Alert, RefreshControl, Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { AppColors, AppRadius } from '../../constants/AppTheme';
+import { AppColors, AppRadius, AppSpacing, AppFontSize, AppFontFamily } from '../../constants/AppTheme';
 import { useFamily } from '../../src/context/FamilyContext';
 import { supabase } from '../../src/lib/supabase';
 import { logger } from '../../src/lib/logger';
 
 /**
- * AssistantOnboardingView — مساعد تهيئة العميل الجديد
- * =====================================================
- * يظهر للعميل الذي دفع ولم يكمل بياناته الطبية بعد.
- * يعرض قائمة خطوات مع حالة الإكمال لكل خطوة.
- * كل خطوة فيها زرار "تم" يدوي + كل خطوة تنقل للتاب المناسب.
- * عند إكمال كل الخطوات → يتم تحديث is_onboarded = true تلقائياً.
+ * AssistantOnboardingView — قائمة إكمال البيانات الطبية (Vitality Style)
+ * ===================================================================
+ * مصممة بدقة لتطابق الـ HTML والـ UI المعتمد للـ Onboarding.
  */
 
 interface OnboardingStep {
   id: string;
   title: string;
   subtitle: string;
-  icon: string;
-  color: string;
-  bg: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  isMandatory: boolean;
   route: string;
   checkFn: (userId: string) => Promise<boolean>;
 }
@@ -34,22 +30,22 @@ export default function AssistantOnboardingView() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const userId = currentProfile?.id;
-  const userName = currentProfile?.full_name?.split(' ')[0] || '';
+  const userName = currentProfile?.full_name?.split(' ')[0] || 'مستخدم';
+  const avatarUrl = currentProfile?.avatar_url;
 
   const [completionStatus, setCompletionStatus] = useState<Record<string, boolean>>({});
   const [manuallyCompleted, setManuallyCompleted] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // 🔴 AUDIT FIX (ARCH-05): Memoize steps array to prevent recreation on every render
+  // قائمة الخطوات الـ 4 المطابقة للتصميم
   const steps = useMemo<OnboardingStep[]>(() => [
     {
       id: 'inbody',
       title: 'قياسات InBody',
       subtitle: 'ارفع تقرير InBody أو أدخل قياساتك يدوياً',
-      icon: 'body',
-      color: '#F97316',
-      bg: '#FFF7ED',
+      icon: 'fitness',
+      isMandatory: true,
       route: '/(tabs)/medical',
       checkFn: async (uid) => {
         const { count } = await supabase.from('inbody_records').select('id', { count: 'exact', head: true }).eq('user_id', uid);
@@ -57,25 +53,11 @@ export default function AssistantOnboardingView() {
       },
     },
     {
-      id: 'docs',
-      title: 'التحاليل والمستندات',
-      subtitle: 'ارفع نتائج تحاليلك الطبية (اختياري)',
-      icon: 'document-text',
-      color: '#3B82F6',
-      bg: '#DBEAFE',
-      route: '/(tabs)/medical',
-      checkFn: async (uid) => {
-        const { count } = await supabase.from('client_documents').select('id', { count: 'exact', head: true }).eq('user_id', uid);
-        return (count ?? 0) > 0;
-      },
-    },
-    {
       id: 'health',
       title: 'الملف الصحي',
-      subtitle: 'أخبرنا عن حالتك الصحية والأمراض والحساسيات',
-      icon: 'heart-half',
-      color: '#EF4444',
-      bg: '#FEE2E2',
+      subtitle: 'لم يتم استكمال البيانات الطبية والأمراض',
+      icon: 'heart',
+      isMandatory: true,
       route: '/(tabs)/medical',
       checkFn: async (uid) => {
         const { data } = await supabase.from('health_profile').select('id').eq('user_id', uid).maybeSingle();
@@ -85,19 +67,30 @@ export default function AssistantOnboardingView() {
     {
       id: 'lifestyle',
       title: 'نمط الحياة',
-      subtitle: 'أخبرنا عن عاداتك الغذائية ونظام يومك',
-      icon: 'cafe',
-      color: '#10B981',
-      bg: '#D1FAE5',
+      subtitle: 'حدد عاداتك الغذائية والرياضية ونظامك اليومي',
+      icon: 'restaurant',
+      isMandatory: true,
       route: '/(tabs)/medical',
       checkFn: async (uid) => {
         const { data } = await supabase.from('lifestyle_profile').select('id').eq('user_id', uid).maybeSingle();
         return !!data;
       },
     },
+    {
+      id: 'docs',
+      title: 'التحاليل والمستندات',
+      subtitle: 'رفع ملفات PDF أو صور التحاليل الطبية',
+      icon: 'document-text',
+      isMandatory: false,
+      route: '/(tabs)/medical',
+      checkFn: async (uid) => {
+        const { count } = await supabase.from('client_documents').select('id', { count: 'exact', head: true }).eq('user_id', uid);
+        return (count ?? 0) > 0;
+      },
+    },
   ], []);
 
-  // 🔴 AUDIT FIX (UX-03): parallelize supabase onboarding step checks
+  // فحص حالة جميع الخطوات
   const checkAllSteps = useCallback(async () => {
     if (!userId) return;
     try {
@@ -125,7 +118,6 @@ export default function AssistantOnboardingView() {
     }
   }, [userId, steps]);
 
-
   useEffect(() => {
     setLoading(true);
     checkAllSteps();
@@ -137,27 +129,24 @@ export default function AssistantOnboardingView() {
     setRefreshing(false);
   }, [checkAllSteps]);
 
-  // 🔥 حساب الخطوات المكتملة (من الداتابيز + المحددة يدوياً)
   const isStepDone = (stepId: string) => completionStatus[stepId] || manuallyCompleted[stepId] || false;
   
-  // ✅ جعل التحاليل (docs) اختيارية
-  const mandatorySteps = steps.filter(s => s.id !== 'docs');
+  // حساب الإنجاز المعتمد على الخطوات الإلزامية
+  const mandatorySteps = steps.filter(s => s.isMandatory);
   const completedMandatoryCount = mandatorySteps.filter(s => isStepDone(s.id)).length;
   const totalMandatorySteps = mandatorySteps.length;
   
-  // التقدم مبني على الخطوات الإجبارية فقط
   const progressPercent = totalMandatorySteps > 0 ? Math.round((completedMandatoryCount / totalMandatorySteps) * 100) : 0;
   const allDone = completedMandatoryCount === totalMandatorySteps;
 
-  // 🔥 تحديد الخطوة كمكتملة يدوياً
-  const handleManualComplete = (stepId: string) => {
+  const handleManualComplete = (stepId: string, title: string) => {
     Alert.alert(
-      "تأكيد",
-      "هل تريد تحديد هذه الخطوة كمكتملة؟",
+      "تحديد كمكتمل",
+      `هل تريد تحديد خطوة "${title}" كمكتملة؟`,
       [
-        { text: "لا", style: "cancel" },
+        { text: "إلغاء", style: "cancel" },
         {
-          text: "نعم، تم",
+          text: "نعم، تم الإكمال",
           onPress: () => {
             setManuallyCompleted(prev => ({ ...prev, [stepId]: true }));
           },
@@ -166,7 +155,7 @@ export default function AssistantOnboardingView() {
     );
   };
 
-  // 🔥 عند إكمال كل الخطوات → تحديث is_onboarded في الداتابيز
+  // التحويل التلقائي للداشبورد عند اكتمال كل الخطوات الإلزامية
   useEffect(() => {
     if (!allDone || !userId || loading) return;
 
@@ -179,119 +168,179 @@ export default function AssistantOnboardingView() {
 
         if (error) throw error;
         logger.log('✅ is_onboarded updated to true');
-        // تحديث البروفايل في الـ Context → الداشبورد هيتحول لـ MainDashboardView
         refreshFamily();
       } catch (err) {
         logger.error('Error updating is_onboarded:', err);
       }
     };
 
-    // تأخير بسيط عشان اليوزر يشوف الـ 100% قبل ما الشاشة تتغير
     const timer = setTimeout(markOnboarded, 1500);
     return () => clearTimeout(timer);
   }, [allDone, userId, loading]);
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[AppColors.primary]} />}
-      >
-        {/* 🔥 Header ترحيبي */}
-        <View style={styles.heroSection}>
-          <View style={styles.heroIconBox}>
-            <Ionicons name="rocket" size={36} color={AppColors.primary} />
+      {/* 1. Top Navigation Bar */}
+      <View style={styles.topNav}>
+        <TouchableOpacity style={styles.notifBtn} activeOpacity={0.7}>
+          <Ionicons name="notifications-outline" size={22} color="#003527" />
+        </TouchableOpacity>
+
+        <View style={styles.userInfoRow}>
+          <View style={styles.userTextCol}>
+            <Text style={styles.welcomeText}>أهلاً بك، {userName}!</Text>
+            <Text style={styles.appNameText}>حيوية شاملة</Text>
           </View>
-          <Text style={styles.heroTitle}>
-            مرحباً {userName}!
-          </Text>
-          <Text style={styles.heroSubtitle}>
-            تم تفعيل اشتراكك بنجاح! أكمل الخطوات التالية عشان الكوتش يقدر يصمملك خطتك الشخصية.
+          
+          <View style={styles.avatarWrapper}>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Ionicons name="person" size={20} color="#003527" />
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#003527']} />}
+      >
+        {/* 2. Welcome Header */}
+        <View style={styles.welcomeHeader}>
+          <View style={styles.activeSubscriptionPill}>
+            <Ionicons name="sparkles" size={14} color="#F97316" />
+            <Text style={styles.activeSubscriptionText}>تم تفعيل اشتراكك</Text>
+          </View>
+
+          <Text style={styles.mainTitle}>لنبدأ رحلتك الصحية</Text>
+          <Text style={styles.mainSubtitle}>
+            أكمل خطوات الإعداد للحصول على تجربة مخصصة بالكامل.
           </Text>
         </View>
 
-        {/* 🔥 Progress Card */}
-        <View style={styles.progressCard}>
-          <View style={styles.progressHeader}>
-            <Text style={styles.progressLabel}>{completedMandatoryCount} من {totalMandatorySteps} خطوات إجبارية</Text>
-            <Text style={styles.progressPercent}>{progressPercent}%</Text>
+        {/* 3. Hero Progress Card */}
+        <View style={styles.heroProgressCard}>
+          <View style={styles.heroProgressTop}>
+            <View style={styles.percentCol}>
+              <Text style={styles.percentNumber}>{progressPercent}%</Text>
+              <Text style={styles.percentLabel}>معدل الإنجاز</Text>
+            </View>
+
+            <View style={styles.countCol}>
+              <Text style={styles.countTitle}>{completedMandatoryCount} من {totalMandatorySteps} خطوات</Text>
+              <Text style={styles.countSub}>خطوات إلزامية مكتملة</Text>
+            </View>
           </View>
+
+          {/* Progress Bar */}
           <View style={styles.progressBarBg}>
             <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
           </View>
+
           {allDone && (
             <View style={styles.allDoneBanner}>
-              <Ionicons name="checkmark-circle" size={18} color={AppColors.success} />
-              <Text style={styles.allDoneText}>ممتاز! كل البيانات مكتملة — جاري تحويلك للداشبورد...</Text>
+              <Ionicons name="checkmark-circle" size={20} color="#F97316" />
+              <Text style={styles.allDoneText}>
+                ممتاز! كل البيانات مكتملة — جاري تحويلك للداشبورد...
+              </Text>
             </View>
           )}
         </View>
 
-        {/* 🔥 Steps List */}
-        <Text style={styles.sectionTitle}>خطواتك القادمة</Text>
+        {/* 4. Tasks List */}
+        <View style={styles.tasksList}>
+          {steps.map((step) => {
+            const isDone = isStepDone(step.id);
 
-        {steps.map((step) => {
-          const isDone = isStepDone(step.id);
-
-          return (
-            <View key={step.id} style={[styles.stepCard, isDone && styles.stepCardDone]}>
-              {/* الكارت الأساسي — ينقل للصفحة */}
-              <TouchableOpacity
-                style={styles.stepMainRow}
-                activeOpacity={0.8}
-                onPress={() => router.push(step.route as any)}
-              >
-                {/* الأيقونة */}
-                <View style={[styles.stepIconBox, { backgroundColor: isDone ? '#F3F4F6' : step.bg }]}>
-                  {isDone ? (
-                    <Ionicons name="checkmark-circle" size={28} color={AppColors.success} />
-                  ) : (
-                    <Ionicons name={step.icon as any} size={24} color={step.color} />
-                  )}
-                </View>
-
-                {/* المحتوى */}
-                <View style={styles.stepContent}>
-                  <Text style={[styles.stepTitle, isDone && styles.stepTitleDone]}>
-                    {step.title}
-                  </Text>
-                  <Text style={[styles.stepSubtitle, isDone && styles.stepSubtitleDone]}>
-                    {isDone ? 'تم إكمال هذه الخطوة' : step.subtitle}
-                  </Text>
-                </View>
-
-                {/* السهم */}
-                <View style={styles.stepArrow}>
-                  <Ionicons
-                    name="chevron-back"
-                    size={20}
-                    color={isDone ? '#D1D5DB' : step.color}
-                  />
-                </View>
-              </TouchableOpacity>
-
-              {/* 🔥 زرار "تم" اليدوي — يظهر فقط لو الخطوة لسه مش مكتملة */}
-              {!isDone && (
+            return (
+              <View key={step.id} style={isDone ? [styles.taskCard, styles.taskCardDone] : styles.taskCard}>
                 <TouchableOpacity
-                  style={styles.markDoneBtn}
-                  activeOpacity={0.7}
-                  onPress={() => handleManualComplete(step.id)}
+                  style={styles.taskCardMain}
+                  activeOpacity={0.85}
+                  onPress={() => router.push(step.route as any)}
+                  onLongPress={() => !isDone && handleManualComplete(step.id, step.title)}
                 >
-                  <Text style={styles.markDoneBtnText}>تم ✓</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          );
-        })}
+                  {/* الأيقونة الدائرية جهة اليمين */}
+                  <View style={[styles.taskIconCircle, isDone ? styles.taskIconDoneBg : styles.taskIconPendingBg]}>
+                    <Ionicons
+                      name={step.icon}
+                      size={26}
+                      color={isDone ? '#F97316' : '#F97316'}
+                    />
+                  </View>
 
-        {/* ملاحظة مساعدة */}
-        <View style={styles.helpNote}>
-          <Ionicons name="information-circle" size={20} color={AppColors.textMuted} />
-          <Text style={styles.helpNoteText}>
-            يمكنك الضغط على "تم" بجانب أي خطوة لتحديدها كمكتملة حتى لو لم ترفع ملفات. بعد إكمال جميع الخطوات سيتم تحويلك تلقائياً للداشبورد.
-          </Text>
+                  {/* التفاصيل والشارات بالمنتصف */}
+                  <View style={styles.taskContentCol}>
+                    <View style={styles.taskTitleRow}>
+                      <Text style={[styles.taskTitle, isDone && styles.taskTitleDone]}>
+                        {step.title}
+                      </Text>
+
+                      {isDone ? (
+                        <View style={styles.doneBadge}>
+                          <Text style={styles.doneBadgeText}>مكتمل</Text>
+                        </View>
+                      ) : step.isMandatory ? (
+                        <View style={styles.mandatoryBadge}>
+                          <Text style={styles.mandatoryBadgeText}>إلزامي</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.optionalBadge}>
+                          <Text style={styles.optionalBadgeText}>اختياري</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <Text style={[styles.taskSub, isDone && styles.taskSubDone]}>
+                      {isDone ? 'تم تحديث البيانات بنجاح' : step.subtitle}
+                    </Text>
+                  </View>
+
+                  {/* الأيقونة/السهم جهة اليسار */}
+                  <View style={styles.taskActionCol}>
+                    {isDone ? (
+                      <View style={styles.checkDoneCircle}>
+                        <Ionicons name="checkmark-sharp" size={16} color="#FFFFFF" />
+                      </View>
+                    ) : (
+                      <Ionicons name="chevron-back" size={20} color="#bfc9c3" />
+                    )}
+                  </View>
+                </TouchableOpacity>
+
+                {/* زر إكمال يدوي سريع للمستخدم لو الخطوة غير مكتملة */}
+                {!isDone && (
+                  <TouchableOpacity
+                    style={styles.quickMarkDoneBar}
+                    activeOpacity={0.7}
+                    onPress={() => handleManualComplete(step.id, step.title)}
+                  >
+                    <Ionicons name="checkmark-done-outline" size={16} color="#F97316" />
+                    <Text style={styles.quickMarkDoneText}>تحديد كمكتمل يدوي</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          })}
         </View>
+
+        {/* 5. Help Box */}
+        <View style={styles.helpBox}>
+          <View style={styles.helpIconBox}>
+            <Ionicons name="information-circle" size={24} color="#F97316" />
+          </View>
+          <View style={styles.helpTextCol}>
+            <Text style={styles.helpTitle}>هل تحتاج للمساعدة؟</Text>
+            <Text style={styles.helpDesc}>
+              فريقنا متاح على مدار الساعة لمساعدتك في إكمال ملفك الصحي. يمكنك التواصل مع المدرب الشخصي مباشرة من خلال المحادثة أو الضغط مطولاً على الخطوة لتحديدها كمكتملة.
+            </Text>
+          </View>
+        </View>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -300,202 +349,357 @@ export default function AssistantOnboardingView() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: AppColors.background,
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingTop: 10,
+    backgroundColor: '#F8F9FA',
   },
 
-  // Hero
-  heroSection: {
+  // 1. Top Nav
+  topNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 25,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EDEEEF',
   },
-  heroIconBox: {
-    width: 80,
-    height: 80,
-    borderRadius: 25,
-    backgroundColor: AppColors.primaryLight,
+  userInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  userTextCol: {
+    alignItems: 'flex-end',
+  },
+  welcomeText: {
+    fontSize: 13,
+    color: '#404944',
+    fontFamily: AppFontFamily.medium,
+  },
+  appNameText: {
+    fontSize: 16,
+    color: '#003527',
+    fontFamily: AppFontFamily.extraBold,
+  },
+  avatarWrapper: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
+    borderColor: '#FFD7B0',
+    overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    backgroundColor: '#FFF7ED',
   },
-  heroTitle: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: AppColors.textPrimary,
-    textAlign: 'center',
-    marginBottom: 10,
+  avatarImg: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
-  heroSubtitle: {
-    fontSize: 15,
-    color: AppColors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
-    fontWeight: '600',
-    paddingHorizontal: 5,
+  avatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFF7ED',
+  },
+  notifBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F5',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
-  // Progress Card
-  progressCard: {
-    backgroundColor: AppColors.primary,
-    borderRadius: 25,
-    padding: 22,
-    marginBottom: 30,
-    elevation: 4,
-    shadowColor: AppColors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
+  // Scroll Content
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
-  progressHeader: {
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 12,
+
+  // 2. Welcome Header
+  welcomeHeader: {
+    marginBottom: 20,
+    alignItems: 'flex-start',
   },
-  progressPercent: {
-    color: '#FFF',
-    fontSize: 32,
-    fontWeight: '900',
+  activeSubscriptionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 9999,
+    marginBottom: 10,
+    alignSelf: 'flex-start',
   },
-  progressLabel: {
-    color: 'rgba(255,255,255,0.8)',
+  activeSubscriptionText: {
+    fontSize: 12,
+    color: '#F97316',
+    fontFamily: AppFontFamily.bold,
+  },
+  mainTitle: {
+    fontSize: 24,
+    color: '#003527',
+    fontFamily: AppFontFamily.extraBold,
+    textAlign: 'right',
+    marginBottom: 6,
+    alignSelf: 'flex-start',
+    width: '100%',
+  },
+  mainSubtitle: {
     fontSize: 14,
-    fontWeight: 'bold',
+    color: '#404944',
+    fontFamily: AppFontFamily.medium,
+    textAlign: 'right',
+    lineHeight: 20,
+    alignSelf: 'flex-start',
+    width: '100%',
+  },
+
+  // 3. Hero Progress Card
+  heroProgressCard: {
+    backgroundColor: '#003527',
+    borderRadius: 24,
+    padding: 22,
+    marginBottom: 24,
+    elevation: 6,
+    shadowColor: '#003527',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+  },
+  heroProgressTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: 16,
+  },
+  percentCol: {
+    alignItems: 'flex-start',
+  },
+  percentNumber: {
+    fontSize: 42,
+    color: '#F97316',
+    fontFamily: AppFontFamily.extraBold,
+    lineHeight: 46,
+  },
+  percentLabel: {
+    fontSize: 12,
+    color: '#FFEDD5',
+    fontFamily: AppFontFamily.bold,
+    marginTop: 2,
+  },
+  countCol: {
+    alignItems: 'flex-end',
+  },
+  countTitle: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    fontFamily: AppFontFamily.bold,
+  },
+  countSub: {
+    fontSize: 12,
+    color: '#FFEDD5',
+    fontFamily: AppFontFamily.medium,
+    marginTop: 2,
   },
   progressBarBg: {
-    height: 8,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 8,
+    height: 12,
+    backgroundColor: 'rgba(0, 53, 39, 0.4)',
+    borderRadius: 9999,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: AppColors.accent,
-    borderRadius: 8,
+    backgroundColor: '#F97316',
+    borderRadius: 9999,
   },
   allDoneBanner: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 14,
     padding: 12,
-    marginTop: 15,
+    marginTop: 14,
   },
   allDoneText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontSize: 13,
+    color: '#FFFFFF',
+    fontFamily: AppFontFamily.bold,
     flex: 1,
     textAlign: 'right',
-    lineHeight: 18,
   },
 
-  // Section Title
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: AppColors.textPrimary,
-    textAlign: 'right',
-    marginBottom: 18,
+  // 4. Tasks List
+  tasksList: {
+    gap: 14,
+    marginBottom: 24,
   },
-
-  // Step Cards
-  stepCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 22,
-    marginBottom: 14,
+  taskCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDEEEF',
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
+    shadowColor: '#064E3B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
     overflow: 'hidden',
   },
-  stepCardDone: {
-    backgroundColor: '#F9FAFB',
-    borderColor: '#E5E7EB',
+  taskCardDone: {
+    backgroundColor: '#F8F9FA',
+    borderColor: '#EDEEEF',
     elevation: 0,
     shadowOpacity: 0,
   },
-  stepMainRow: {
-    flexDirection: 'row-reverse',
+  taskCardMain: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 18,
+    padding: 16,
   },
-  stepIconBox: {
+  taskIconCircle: {
     width: 52,
     height: 52,
-    borderRadius: 16,
+    borderRadius: 26,
     justifyContent: 'center',
     alignItems: 'center',
-    marginStart: 14,
+    marginEnd: 14,
   },
-  stepContent: {
+  taskIconPendingBg: {
+    backgroundColor: '#FFF7ED',
+  },
+  taskIconDoneBg: {
+    backgroundColor: '#FFF7ED',
+  },
+  taskContentCol: {
     flex: 1,
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
   },
-  stepTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: AppColors.textPrimary,
+  taskTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     marginBottom: 4,
   },
-  stepTitleDone: {
-    color: '#9CA3AF',
+  taskTitle: {
+    fontSize: 17,
+    color: '#003527',
+    fontFamily: AppFontFamily.extraBold,
+    textAlign: 'right',
   },
-  stepSubtitle: {
+  taskTitleDone: {
+    color: '#707974',
+  },
+  mandatoryBadge: {
+    backgroundColor: '#FFDAD6',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 9999,
+  },
+  mandatoryBadgeText: {
+    fontSize: 10,
+    color: '#93000A',
+    fontFamily: AppFontFamily.bold,
+  },
+  optionalBadge: {
+    backgroundColor: '#E1E3E4',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 9999,
+  },
+  optionalBadgeText: {
+    fontSize: 10,
+    color: '#404944',
+    fontFamily: AppFontFamily.medium,
+  },
+  doneBadge: {
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 9999,
+  },
+  doneBadgeText: {
+    fontSize: 10,
+    color: '#F97316',
+    fontFamily: AppFontFamily.bold,
+  },
+  taskSub: {
     fontSize: 13,
-    color: AppColors.textSecondary,
-    fontWeight: '600',
+    color: '#404944',
+    fontFamily: AppFontFamily.medium,
     textAlign: 'right',
     lineHeight: 18,
+    alignSelf: 'flex-start',
+    width: '100%',
   },
-  stepSubtitleDone: {
-    color: '#9CA3AF',
+  taskSubDone: {
+    color: '#707974',
   },
-  stepArrow: {
-    marginEnd: 5,
+  taskActionCol: {
+    marginStart: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-
-  // ✅ Mark Done Button
-  markDoneBtn: {
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingVertical: 10,
+  checkDoneCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F97316',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quickMarkDoneBar: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FAFAFA',
+    gap: 6,
+    paddingVertical: 8,
+    backgroundColor: '#F3F4F5',
+    borderTopWidth: 1,
+    borderTopColor: '#EDEEEF',
   },
-  markDoneBtnText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: AppColors.success,
+  quickMarkDoneText: {
+    fontSize: 12,
+    color: '#F97316',
+    fontFamily: AppFontFamily.bold,
   },
 
-  // Help Note
-  helpNote: {
-    flexDirection: 'row-reverse',
+  // 5. Help Box
+  helpBox: {
+    flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: '#FFF',
-    borderRadius: 18,
+    gap: 12,
+    backgroundColor: '#FFF7ED',
+    borderRadius: 20,
     padding: 18,
-    marginTop: 10,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
+    borderColor: '#FFEDD5',
+    marginTop: 6,
   },
-  helpNoteText: {
+  helpIconBox: {
+    marginTop: 2,
+  },
+  helpTextCol: {
     flex: 1,
-    fontSize: 13,
-    color: AppColors.textMuted,
-    fontWeight: '600',
+    alignItems: 'flex-start',
+  },
+  helpTitle: {
+    fontSize: 14,
+    color: '#F97316',
+    fontFamily: AppFontFamily.bold,
+    marginBottom: 4,
     textAlign: 'right',
-    lineHeight: 20,
+  },
+  helpDesc: {
+    fontSize: 12,
+    color: '#404944',
+    fontFamily: AppFontFamily.medium,
+    textAlign: 'right',
+    lineHeight: 18,
   },
 });

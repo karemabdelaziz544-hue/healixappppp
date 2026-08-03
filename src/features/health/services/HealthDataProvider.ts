@@ -3,6 +3,7 @@ import { executeQuery } from '../../../lib/apiClient';
 import { logger } from '../../../lib/logger';
 import { ActivityRepository } from '../../activity/repositories/ActivityRepository';
 import { ActivitySyncManager } from '../../activity/services/ActivitySyncManager';
+import { ActivityService } from '../../activity/services/ActivityService';
 import type { DigitalHealthRecord, ActivityProgress, TimelineEvent, DoctorInfo } from '../../../types/digitalHealthRecord';
 
 export class HealthDataProvider {
@@ -82,7 +83,7 @@ export class HealthDataProvider {
           walking_minutes: activeMinutes,
           running_minutes: 0,
           cycling_minutes: 0,
-          source: 'Pedometer'
+          source: ActivityService.getActiveProviderName() as any
         };
       } else {
         activity = await ActivityRepository.fetchDailyActivity(userId, dateStr);
@@ -110,13 +111,45 @@ export class HealthDataProvider {
         const logData = logsRaw.data || [];
 
         if (allTasks && allTasks.length > 0) {
-          // Calculate day number based on activePlan start
-          const mainPlan = activePlan || activeWorkout;
-          const startDate = new Date(mainPlan.start_date || mainPlan.created_at);
-          startDate.setHours(0, 0, 0, 0);
-          const currentDayNum = Math.floor((new Date(dateStr).getTime() - startDate.getTime()) / 86400000) + 1;
-          
+          const selectedDay = new Date(dateStr);
+          selectedDay.setHours(0, 0, 0, 0);
+          const selectedWeekdayName = selectedDay.toLocaleDateString('ar-EG', { weekday: 'long' });
+
+          // Calculate nutrition plan day number & check duration expiry
+          let nutritionDayNum = 1;
+          let isNutritionExpired = false;
+          if (activePlan) {
+            const startDate = new Date(activePlan.start_date || activePlan.created_at);
+            startDate.setHours(0, 0, 0, 0);
+            nutritionDayNum = Math.floor((selectedDay.getTime() - startDate.getTime()) / 86400000) + 1;
+            const maxDuration = activePlan.duration_days || 14;
+            if (nutritionDayNum > maxDuration) {
+              isNutritionExpired = true;
+              supabase.from('plans').update({ status: 'completed' }).eq('id', activePlan.id);
+            }
+          }
+
+          // Calculate workout plan day number independently & check duration expiry
+          let workoutDayNum = 1;
+          let isWorkoutExpired = false;
+          if (activeWorkout) {
+            const startDate = new Date(activeWorkout.start_date || activeWorkout.created_at);
+            startDate.setHours(0, 0, 0, 0);
+            workoutDayNum = Math.floor((selectedDay.getTime() - startDate.getTime()) / 86400000) + 1;
+            const maxDuration = activeWorkout.duration_days || 14;
+            if (workoutDayNum > maxDuration) {
+              isWorkoutExpired = true;
+              supabase.from('plans').update({ status: 'completed' }).eq('id', activeWorkout.id);
+            }
+          }
+
           const filtered = allTasks.filter(t => {
+            const isWorkout = t.task_type === 'workout';
+            if (isWorkout && isWorkoutExpired) return false;
+            if (!isWorkout && isNutritionExpired) return false;
+
+            const currentDayNum = isWorkout ? workoutDayNum : nutritionDayNum;
+
             if (t.day_number !== undefined && t.day_number !== null) {
               return t.day_number === currentDayNum;
             }
@@ -126,7 +159,7 @@ export class HealthDataProvider {
             if (match) {
               return parseInt(match[0], 10) === currentDayNum;
             }
-            return false;
+            return name.includes(selectedWeekdayName);
           });
 
           const logsMap = new Map(logData.map(log => [log.task_id, log.is_completed]));
@@ -184,9 +217,9 @@ export class HealthDataProvider {
           type = 'AchievementEvent';
         } else if (log.table_name === 'activity_logs') {
           title = 'إنجاز الحركة اليومية';
-          subtitle = 'حققت إنجازاً حركياً جديداً اليوم 🏃';
+          subtitle = 'حققت إنجازاً حركياً جديداً اليوم';
           icon = 'footsteps-outline';
-          color = '#8B5CF6';
+          color = '#27443B';
           type = 'AchievementEvent';
         }
 

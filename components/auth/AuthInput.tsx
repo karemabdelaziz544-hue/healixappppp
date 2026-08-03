@@ -80,7 +80,7 @@ export const AuthInput: React.FC<AuthInputProps> = ({ label, isPassword, hint, h
 
 const styles = StyleSheet.create({
   inputGroup: { marginBottom: AppSpacing.lg },
-  header: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: AppSpacing.sm },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: AppSpacing.sm },
   label: { fontSize: AppFontSize.sm, fontWeight: 'bold', color: AppColors.textSecondary, textAlign: 'right' },
   input: { 
     backgroundColor: AppColors.inputBg, 
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent'
   },
   passwordContainer: { 
-    flexDirection: 'row-reverse', 
+    flexDirection: 'row', 
     alignItems: 'center', 
     backgroundColor: AppColors.inputBg, 
     height: 55, 

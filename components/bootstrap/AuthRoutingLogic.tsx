@@ -1,10 +1,8 @@
 import { useEffect } from 'react';
 import { useRouter, useSegments, useRootNavigationState } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
 import { useAuth } from '../../src/context/AuthContext';
 import { useSubscriptionGuard } from '../../hooks/useSubscriptionGuard';
-
-let isSplashScreenHidden = false;
+import { safeHideSplashScreen } from './splashUtils';
 
 export function AuthRoutingLogic() {
   const { session, isLoading } = useAuth();
@@ -14,6 +12,10 @@ export function AuthRoutingLogic() {
   const { userLifecycleState, isGuardLoading } = useSubscriptionGuard();
 
   useEffect(() => {
+    if (!isLoading && !isGuardLoading) {
+      safeHideSplashScreen();
+    }
+
     if (!navigationState?.key || isLoading || isGuardLoading) return;
 
     const currentSegment = (segments[0] || '') as string;
@@ -21,12 +23,6 @@ export function AuthRoutingLogic() {
     const isOnboardingRoute = currentSegment === 'onboarding';
     // index route acts as a loading portal — let it redirect via layout
     const isIndexRoute = currentSegment === '' || currentSegment === 'index';
-
-    // Hide Splash screen after auth check is complete
-    if (!isSplashScreenHidden) {
-      isSplashScreenHidden = true;
-      SplashScreen.hideAsync().catch(() => {});
-    }
 
     if (session) {
       if (isAuthRoute || isOnboardingRoute || isIndexRoute) {

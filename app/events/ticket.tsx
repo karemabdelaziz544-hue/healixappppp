@@ -99,7 +99,7 @@ export default function EventTicketScreen() {
           .from('event_bookings')
           .select('*, event:events(*)')
           .eq('id', id)
-          .single();
+          .maybeSingle();
 
         if (error) throw error;
 
@@ -108,7 +108,7 @@ export default function EventTicketScreen() {
           .from('profiles')
           .select('full_name')
           .eq('id', data.user_id)
-          .single();
+          .maybeSingle();
 
         setBooking({
           ...data,

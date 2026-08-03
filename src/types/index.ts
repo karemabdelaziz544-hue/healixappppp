@@ -18,6 +18,7 @@ export interface Profile {
   age?: number | null;
   weight?: number;
   height?: number;
+  relation?: string;
   entitlement?: { status: 'included' | 'excluded' | 'expired' | 'cancelled'; included_until: string | null } | null;
 }
 
@@ -27,6 +28,7 @@ export interface Plan {
   title: string | null;
   status: 'active' | 'completed' | 'archived';
   plan_type: 'nutrition' | 'workout';
+  duration_days?: number | null;
   start_date: string | null;
   created_at: string;
   updated_at?: string;

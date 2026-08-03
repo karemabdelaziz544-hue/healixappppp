@@ -104,11 +104,11 @@ export default function MedicalRecordsScreen() {
   }, [fetchAllData]);
 
   const fetchProfiles = async () => {
-    const { data: health } = await supabase.from('health_profile').select('id, user_id, diseases, has_allergies, allergies_details, diet_type, family_history, medications, surgeries, injuries, digestive_issues, hormonal_status').eq('user_id', userId).single();
+    const { data: health } = await supabase.from('health_profile').select('id, user_id, diseases, has_allergies, allergies_details, diet_type, family_history, medications, surgeries, injuries, digestive_issues, hormonal_status').eq('user_id', userId).maybeSingle();
     const currentHealth = health || null;
     setHealthProfile(currentHealth);
 
-    const { data: life } = await supabase.from('lifestyle_profile').select('id, user_id, goal, meals_per_day, has_breakfast, has_snacks, late_night_eating, favorite_foods, disliked_foods, water_liters, beverages, activity_level, does_exercise, exercise_details, sleep_hours, sleep_quality, smoker, stress_level, work_nature, emotional_eating, diet_history, supplements, caffeine_intake, appetite_level, weight_plateau').eq('user_id', userId).single();
+    const { data: life } = await supabase.from('lifestyle_profile').select('id, user_id, goal, meals_per_day, has_breakfast, has_snacks, late_night_eating, favorite_foods, disliked_foods, water_liters, beverages, activity_level, does_exercise, exercise_details, sleep_hours, sleep_quality, smoker, stress_level, work_nature, emotional_eating, diet_history, supplements, caffeine_intake, appetite_level, weight_plateau').eq('user_id', userId).maybeSingle();
     const currentLife = life || null;
     setLifestyleProfile(currentLife);
     

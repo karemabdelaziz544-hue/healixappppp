@@ -114,8 +114,8 @@ export async function executeQuery<T>(
     } catch (raw: unknown) {
       const appError = classifyError(raw);
 
-      if (appError.code === 'TIMEOUT') {
-        logger.warn(`[apiClient] Timeout on attempt ${attempt + 1}`);
+      if (appError.code === 'TIMEOUT' || appError.code === 'NETWORK' || appError.code === 'FORBIDDEN' || appError.code === 'NOT_FOUND') {
+        logger.warn(`[apiClient] ${appError.code}: ${appError.message}`);
       } else {
         logger.error(`[apiClient] ${appError.code}: ${appError.message}`);
       }
@@ -133,11 +133,13 @@ export async function executeQuery<T>(
         continue;
       }
 
-      // Final failure — report to Sentry with full classification context
-      Sentry.captureException(raw instanceof Error ? raw : new Error(appError.message), {
-        tags: { context: 'apiClient', errorCode: appError.code },
-        extra: { attempt, appError },
-      });
+      // Final failure — report to Sentry with full classification context (skip expected NOT_FOUND)
+      if (appError.code !== 'NOT_FOUND') {
+        Sentry.captureException(raw instanceof Error ? raw : new Error(appError.message), {
+          tags: { context: 'apiClient', errorCode: appError.code },
+          extra: { attempt, appError },
+        });
+      }
 
       return { data: null, error: appError };
     }

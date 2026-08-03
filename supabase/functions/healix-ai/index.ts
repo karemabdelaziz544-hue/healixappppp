@@ -3,7 +3,7 @@
 // تستقبل الرسائل من العميل وترسلها لـ Groq للدردشة الصحية والتغذية بناءً على الملف الطبي والمستندات وخطة التغذية
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { HEALIX_SYSTEM_PROMPT } from './prompts.ts';
+import { DASHBOARD_COACH_PROMPT, CHAT_ASSISTANT_PROMPT } from './prompts.ts';
 
 const APP_URL = Deno.env.get('APP_URL');
 const allowedOrigin = APP_URL ?? null;
@@ -29,7 +29,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { messages } = await req.json();
+    const { messages, mode = 'chat_assistant', profileId } = await req.json();
 
     if (!messages || !Array.isArray(messages)) {
       return new Response(JSON.stringify({ error: 'messages array is required' }), {
@@ -55,6 +55,25 @@ Deno.serve(async (req: Request) => {
     }
 
     const userId = user.id;
+    let targetUserId = userId;
+
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const dbClient = serviceRoleKey
+      ? createClient(Deno.env.get('SUPABASE_URL') ?? '', serviceRoleKey)
+      : userClient;
+
+    // دعم الحسابات الفرعية العائلية: التأكد من أن البروفايل المطلوب يتبع للمدير الحالي
+    if (profileId && profileId !== userId) {
+      const { data: profileCheck } = await dbClient
+        .from('profiles')
+        .select('id, manager_id')
+        .eq('id', profileId)
+        .maybeSingle();
+
+      if (profileCheck && (profileCheck.id === userId || profileCheck.manager_id === userId)) {
+        targetUserId = profileId;
+      }
+    }
 
     // ——— 2. استعلام قاعدة البيانات في Supabase بالتوازي لسرعة الاستجابة ———
     const safeQuery = async (promise: Promise<any>) => {
@@ -80,13 +99,13 @@ Deno.serve(async (req: Request) => {
       activePlanData,
       dailyLogsData,
     ] = await Promise.all([
-      safeQuery(userClient.from('profiles').select('full_name, birth_date, gender, weight, height').eq('id', userId).maybeSingle()),
-      safeQuery(userClient.from('health_profile').select('diseases, has_allergies, allergies_details, diet_type, family_history, medications, surgeries, injuries, digestive_issues, hormonal_status').eq('user_id', userId).maybeSingle()),
-      safeQuery(userClient.from('lifestyle_profile').select('goal, meals_per_day, has_breakfast, has_snacks, late_night_eating, favorite_foods, disliked_foods, water_liters, beverages, activity_level, does_exercise, sleep_hours, sleep_quality, smoker, stress_level, work_nature, emotional_eating, supplements, caffeine_intake, appetite_level, weight_plateau').eq('user_id', userId).maybeSingle()),
-      safeQuery(userClient.from('inbody_records').select('weight, muscle_mass, fat_percent, record_date, ai_summary').eq('user_id', userId).order('record_date', { ascending: false }).limit(1).maybeSingle()),
-      safeQuery(userClient.from('client_documents').select('file_name, file_type, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(5)),
-      safeQuery(userClient.from('plans').select('id, title, start_date, plan_type, created_at').eq('user_id', userId).eq('status', 'active').eq('plan_type', 'nutrition').order('created_at', { ascending: false }).limit(1).maybeSingle()),
-      safeQuery(userClient.from('daily_logs').select('date, completed_tasks').eq('user_id', userId).order('date', { ascending: false }).limit(30)),
+      safeQuery(dbClient.from('profiles').select('full_name, birth_date, gender, weight, height').eq('id', targetUserId).maybeSingle()),
+      safeQuery(dbClient.from('health_profile').select('diseases, has_allergies, allergies_details, diet_type, family_history, medications, surgeries, injuries, digestive_issues, hormonal_status').eq('user_id', targetUserId).maybeSingle()),
+      safeQuery(dbClient.from('lifestyle_profile').select('goal, meals_per_day, has_breakfast, has_snacks, late_night_eating, favorite_foods, disliked_foods, water_liters, beverages, activity_level, does_exercise, sleep_hours, sleep_quality, smoker, stress_level, work_nature, emotional_eating, supplements, caffeine_intake, appetite_level, weight_plateau').eq('user_id', targetUserId).maybeSingle()),
+      safeQuery(dbClient.from('inbody_records').select('weight, muscle_mass, fat_percent, record_date, ai_summary').eq('user_id', targetUserId).order('record_date', { ascending: false }).limit(1).maybeSingle()),
+      safeQuery(dbClient.from('client_documents').select('file_name, file_type, created_at').eq('user_id', targetUserId).order('created_at', { ascending: false }).limit(5)),
+      safeQuery(dbClient.from('plans').select('id, title, start_date, plan_type, created_at').eq('user_id', targetUserId).eq('status', 'active').eq('plan_type', 'nutrition').order('created_at', { ascending: false }).limit(1).maybeSingle()),
+      safeQuery(dbClient.from('daily_logs').select('date, completed_tasks').eq('user_id', targetUserId).order('date', { ascending: false }).limit(30)),
     ]);
 
     // ——— 3. معالجة الخطة النشطة والوجبات والمهام الحالية ———
@@ -96,7 +115,7 @@ Deno.serve(async (req: Request) => {
 
     if (activePlanData?.id) {
       const activePlanTasks = await safeQuery(
-        userClient
+        dbClient
           .from('plan_tasks')
           .select('id, day_name, content, task_type, order_index')
           .eq('plan_id', activePlanData.id)
@@ -124,10 +143,10 @@ Deno.serve(async (req: Request) => {
         // جلب حالة الإتمام لمهام اليوم
         const todayStr = today.toISOString().split('T')[0];
         const todayLogs = await safeQuery(
-          userClient
+          dbClient
             .from('daily_task_logs')
             .select('task_id, is_completed')
-            .eq('user_id', userId)
+            .eq('user_id', targetUserId)
             .eq('log_date', todayStr)
         );
 
@@ -176,7 +195,22 @@ Deno.serve(async (req: Request) => {
     }
 
     // ——— 5. بناء سياق العميل الطبي والغذائي المخصص (Hidden System Prompt) ———
-    let medicalContext = '\n\n=== سياق ملف المشترك الشخصي والطبّي (سرّي للذكاء الاصطناعي فقط) ===\n';
+    const activeProfileHeader = `
+===== ACTIVE PROFILE =====
+- Profile Name: ${profileData?.full_name || 'غير محدد'}
+- Relationship: ${profileData?.relation || (targetUserId === userId ? 'المستفيد الرئيسي' : 'تابع')}
+- Is Primary Profile: ${targetUserId === userId ? 'Yes' : 'No'}
+- Profile ID: ${targetUserId}
+- Manager ID: ${userId}
+- Gender: ${profileData?.gender || 'غير محدد'}
+
+INSTRUCTION FOR HEALIX AI:
+This conversation ONLY refers to this profile (${profileData?.full_name || 'المستخدم'}).
+Never use information from the manager or any other family member.
+Only answer using the active profile's health data.
+`.trim();
+
+    let medicalContext = `\n\n${activeProfileHeader}\n\n=== سياق ملف المشترك الشخصي والطبّي (سرّي للذكاء الاصطناعي فقط) ===\n`;
 
     if (profileData) {
       medicalContext += `* معلومات شخصية:\n`;
@@ -269,9 +303,12 @@ Deno.serve(async (req: Request) => {
       throw new Error('GROQ_API_KEY secret is not configured in Supabase');
     }
 
+    const basePrompt = mode === 'dashboard_coach' ? DASHBOARD_COACH_PROMPT : CHAT_ASSISTANT_PROMPT;
+    const maxTokensLimit = mode === 'dashboard_coach' ? 150 : 350;
+
     // ——— 7. دمج موجه النظام مع رسائل الدردشة الحالية ———
     const groqMessages = [
-      { role: 'system', content: `${HEALIX_SYSTEM_PROMPT}${medicalContext}` },
+      { role: 'system', content: `${basePrompt}${medicalContext}` },
       ...messages
     ];
 
@@ -292,7 +329,7 @@ Deno.serve(async (req: Request) => {
           model: GROQ_MODEL,
           messages: groqMessages,
           temperature: 0.3,
-          max_tokens: 1000,
+          max_tokens: maxTokensLimit,
         }),
       });
     } catch (fetchErr: unknown) {

@@ -30,7 +30,7 @@ export function useChatPagination(inquiryId: string, currentUserId: string | und
       if (inquiryId === 'support') {
         // Fetch an admin as the receiver for customer support chat
         const { data: adminData, error: adminErr } = await executeQuery<{ id: string; updated_at: string }>(
-          supabase.from('profiles').select('id, updated_at').eq('role', 'admin').limit(1).single()
+          supabase.from('profiles').select('id, updated_at').eq('role', 'admin').limit(1).maybeSingle()
         );
         if (!adminErr && adminData) {
           targetReceiverId = adminData.id;
@@ -39,12 +39,12 @@ export function useChatPagination(inquiryId: string, currentUserId: string | und
       } else {
         // Fetch assigned doctor as the receiver for medical inquiries
         const { data: userProfile, error: profileErr } = await executeQuery<{ assigned_doctor_id: string }>(
-          supabase.from('profiles').select('assigned_doctor_id').eq('id', currentUserId).single()
+          supabase.from('profiles').select('assigned_doctor_id').eq('id', currentUserId).maybeSingle()
         );
         
         if (!profileErr && userProfile?.assigned_doctor_id) {
            const { data: doctorData } = await executeQuery<{ id: string; updated_at: string }>(
-             supabase.from('profiles').select('id, updated_at').eq('id', userProfile.assigned_doctor_id).single()
+             supabase.from('profiles').select('id, updated_at').eq('id', userProfile.assigned_doctor_id).maybeSingle()
            );
            if (doctorData) {
               targetReceiverId = doctorData.id;

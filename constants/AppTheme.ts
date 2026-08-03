@@ -10,28 +10,66 @@
  */
 
 export const AppColors = {
-  // ألوان رئيسية
-  primary: '#2A4B46',
+  // Healix Stitch Design System — Primary Tokens
+  primary: '#27443B',
   primaryLight: '#E8F3F1',
-  accent: '#F97316',
-  accentLight: '#FFF7ED',
-  accentBorder: '#FFEDD5',
+  primaryContainer: '#3E5C52',
+  onPrimaryContainer: '#B2D3C6',
+  inversePrimary: '#ADCEC1',
+  primaryFixed: '#C8EADD',
+  primaryFixedDim: '#ADCEC1',
+  onPrimaryFixed: '#012018',
+  onPrimaryFixedVariant: '#2F4C43',
 
-  // خلفيات
-  background: '#F9F6F0',
-  surface: '#FFFFFF',
-  inputBg: '#F3F4F6',
+  // Secondary & Alerts
+  secondary: '#BB0026',
+  secondaryContainer: '#E22139',
+  onSecondaryContainer: '#FFFBFF',
 
-  // نصوص
-  textPrimary: '#1F2937',
-  textSecondary: '#6B7280',
-  textMuted: '#9CA3AF',
+  // Tertiary
+  tertiary: '#583632',
+  tertiaryContainer: '#724D48',
+  onTertiaryContainer: '#F2C0BA',
 
-  // حدود
+  // Surfaces & Glassmorphism
+  surface: '#F6FAF8',
+  surfaceDim: '#D7DBD9',
+  surfaceBright: '#F6FAF8',
+  surfaceContainerLowest: '#FFFFFF',
+  surfaceContainerLow: '#F0F4F2',
+  surfaceContainer: '#EBEFED',
+  surfaceContainerHigh: '#E5E9E7',
+  surfaceContainerHighest: '#DFE3E1',
+  surfaceGlass: 'rgba(255, 255, 255, 0.75)',
+  surfaceTint: '#46645A',
+  
+  // Backgrounds & Text
+  background: '#F6FAF8',
+  onBackground: '#181D1C',
+  onSurface: '#181D1C',
+  onSurfaceVariant: '#414845',
+  inverseSurface: '#2D3130',
+  inverseOnSurface: '#EEF2F0',
+
+  // Borders & Lines
+  outline: '#727975',
+  outlineVariant: '#C1C8C4',
+  borderSubtle: 'rgba(62, 92, 82, 0.08)',
   border: '#E5E7EB',
   borderLight: '#F3F4F6',
 
-  // حالات
+  // Accent & Legacy
+  accent: '#F97316',
+  accentLight: '#FFF7ED',
+  accentBorder: '#FFEDD5',
+  inputBg: '#F3F4F6',
+
+  // Legacy Text Aliases
+  textPrimary: '#181D1C',
+  textSecondary: '#727975',
+  textMuted: '#9CA3AF',
+
+  // Feedback & Status
   danger: '#EF4444',
   dangerLight: '#FEE2E2',
   dangerBg: '#FEF2F2',
@@ -42,11 +80,20 @@ export const AppColors = {
   warningLight: '#FEF3C7',
   warningBorder: '#FDE68A',
 
-  // تابات وتنقل
+  // Data Visualization
+  dataRed: '#D31130',
+  dataGold: '#EADCCF',
+
+  // Named Colors & Aliases
+  white: '#FFFFFF',
+  modalOverlay: 'rgba(0, 0, 0, 0.4)',
+  orange: '#FD761C',
+  purple: '#8B5CF6',
+  blue: '#3B82F6',
+
+  // Tabs & Features
   tabInactive: '#9CA3AF',
   tabActiveIcon: '#FFFFFF',
-
-  // ألوان خاصة
   readReceipt: '#4ADE80',
 };
 

@@ -12,6 +12,7 @@ import { showToast } from '../../components/AppToast';
 import { AuthInput } from '../../components/auth/AuthInput';
 import { AuthButton } from '../../components/auth/AuthButton';
 import { AppColors, AppRadius, AppSpacing, AppFontSize , AppFontFamily } from '@/constants/AppTheme';
+import { Logo } from '../../components/Logo';
 
 export default function SignupScreen() {
   const { width } = useWindowDimensions();
@@ -102,18 +103,20 @@ export default function SignupScreen() {
       if (error) throw error;
       if (!data.user) throw new Error('تعذر إنشاء الحساب');
 
-      // 3. إنشاء أو تحديث بروفايل المستخدم
-      await supabase.from('profiles').upsert({
-        id: data.user.id,
-        full_name: name,
-        phone: phone,
-        gender: gender,
-        subscription_status: 'new',
-        role: 'client',
-        updated_at: new Date().toISOString(),
-      });
+      // 3. Profile is created automatically by database trigger (handle_new_user) from raw_user_meta_data.
+      try {
+        await supabase.from('profiles').upsert({
+          id: data.user.id,
+          full_name: name,
+          phone: phone,
+          gender: gender,
+          subscription_status: 'new',
+          role: 'client',
+          updated_at: new Date().toISOString(),
+        });
+      } catch {}
 
-      showToast.success('تم إنشاء الحساب! تفقد بريدك لإدخال الكود.');
+      showToast.success('تم إنشاء الحساب بنجاح!');
       router.push({
         pathname: '/verify',
         params: { email: email.trim() }
@@ -142,8 +145,8 @@ export default function SignupScreen() {
         <SlideInView direction="up" distance={20} style={[styles.formCard]}>
 
           <View style={styles.header}>
-            <View style={styles.logoContainer}>
-              <Image source={require('../../assets/images/icon.png')} style={styles.logo} resizeMode="contain" />
+            <View style={{ marginBottom: AppSpacing.md, alignSelf: 'flex-start' }}>
+              <Logo width={72} height={72} color={AppColors.primary} />
             </View>
             <Text style={styles.title}>انضم لعائلة هيليكس</Text>
             <Text style={styles.subtitle}>ابدأ رحلة صحية جديدة ومخصصة لك</Text>
@@ -174,10 +177,6 @@ export default function SignupScreen() {
               <AuthInput label="البريد الإلكتروني" placeholder="name@example.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" isLTR={true} />
 
               <View style={rowStyle}>
-                <View style={{ flex: isMobile ? undefined : 1 }}>
-                  <AuthInput label="رقم الهاتف" placeholder="01xxxxxxxxx" value={phone} onChangeText={setPhone} keyboardType="phone-pad" isLTR={true} />
-                </View>
-
                 <View style={{ flex: isMobile ? undefined : 1, marginBottom: isMobile ? AppSpacing.lg : 0 }}>
                   <Text style={styles.label}>النوع</Text>
                   <View style={styles.genderToggle}>
@@ -188,6 +187,10 @@ export default function SignupScreen() {
                       <Text style={[styles.genderText, gender === 'female' && styles.genderTextActive]}>أنثى</Text>
                     </AnimatedButton>
                   </View>
+                </View>
+
+                <View style={{ flex: isMobile ? undefined : 1 }}>
+                  <AuthInput label="رقم الهاتف" placeholder="01xxxxxxxxx" value={phone} onChangeText={setPhone} keyboardType="phone-pad" isLTR={true} />
                 </View>
               </View>
 
@@ -282,43 +285,27 @@ const styles = StyleSheet.create({
     shadowRadius: 24 
   },
 
-  header: { alignItems: 'center', marginBottom: AppSpacing.xxxl },
-  logoContainer: {
-    width: 84,
-    height: 84,
-    borderRadius: 22,
-    backgroundColor: '#FFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: AppSpacing.lg,
-    borderWidth: 1.5,
-    borderColor: '#ECEFE8',
-    shadowColor: AppColors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  logo: { width: 60, height: 60 },
-  title: { fontSize: AppFontSize.title, fontFamily: AppFontFamily.extraBold, color: AppColors.primary, marginBottom: AppSpacing.xs, textAlign: 'center' },
-  subtitle: { fontSize: AppFontSize.md, color: AppColors.textSecondary, fontFamily: AppFontFamily.medium, textAlign: 'center' },
+  header: { alignItems: 'flex-start', marginBottom: AppSpacing.xxxl, width: '100%' },
+  logo: { width: 72, height: 72, borderRadius: 16, marginBottom: AppSpacing.md },
+  title: { fontSize: AppFontSize.title, fontFamily: AppFontFamily.extraBold, color: AppColors.primary, marginBottom: AppSpacing.xs, alignSelf: 'flex-start' },
+  subtitle: { fontSize: AppFontSize.md, color: AppColors.textSecondary, fontFamily: AppFontFamily.medium, alignSelf: 'flex-start' },
 
-  row: { flexDirection: 'row-reverse', gap: AppSpacing.lg, marginBottom: AppSpacing.lg },
-  label: { fontSize: AppFontSize.sm, fontFamily: AppFontFamily.bold, color: AppColors.textSecondary, textAlign: 'right', marginBottom: AppSpacing.sm },
+  row: { flexDirection: 'row', gap: AppSpacing.lg, marginBottom: AppSpacing.lg },
+  label: { fontSize: AppFontSize.sm, fontFamily: AppFontFamily.bold, color: AppColors.textSecondary, textAlign: 'right', marginBottom: AppSpacing.sm, alignSelf: 'flex-start' },
 
-  genderToggle: { flexDirection: 'row-reverse', backgroundColor: AppColors.inputBg, height: 55, borderRadius: AppRadius.lg, padding: 4 },
+  genderToggle: { flexDirection: 'row', backgroundColor: AppColors.inputBg, height: 55, borderRadius: AppRadius.lg, padding: 4 },
   genderBtn: { flex: 1, justifyContent: 'center', alignItems: 'center', borderRadius: AppRadius.md },
   genderBtnActive: { backgroundColor: AppColors.surface, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3 },
   genderText: { fontSize: AppFontSize.md, fontFamily: AppFontFamily.bold, color: AppColors.textMuted },
   genderTextActive: { color: AppColors.primary },
 
-  footer: { flexDirection: 'row-reverse', justifyContent: 'center', marginTop: AppSpacing.xxl, alignItems: 'center' },
+  footer: { flexDirection: 'row', justifyContent: 'flex-start', marginTop: AppSpacing.xxl, alignItems: 'center' },
   footerText: { color: AppColors.textSecondary, fontSize: AppFontSize.md, fontFamily: AppFontFamily.medium },
   loginLink: { color: AppColors.accent, fontSize: AppFontSize.md, fontFamily: AppFontFamily.bold },
 
   // Stepper Styles
-  stepperContainer: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', marginBottom: AppSpacing.xxxl, gap: 10 },
-  stepIndicator: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
+  stepperContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', marginBottom: AppSpacing.xxxl, gap: 10 },
+  stepIndicator: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stepCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: AppColors.inputBg, justifyContent: 'center', alignItems: 'center' },
   stepCircleActive: { backgroundColor: AppColors.primary },
   stepCircleText: { fontSize: 12, color: AppColors.textMuted, fontFamily: AppFontFamily.bold },
@@ -329,15 +316,15 @@ const styles = StyleSheet.create({
   stepLineActive: { backgroundColor: AppColors.primary },
 
   // Password Strength
-  strengthContainer: { width: '100%', marginBottom: AppSpacing.lg, alignItems: 'flex-end' },
+  strengthContainer: { width: '100%', marginBottom: AppSpacing.lg, alignItems: 'flex-start' },
   strengthBarBg: { width: '100%', height: 6, backgroundColor: AppColors.inputBg, borderRadius: 3, overflow: 'hidden', marginBottom: 6 },
   strengthBarFill: { height: '100%', borderRadius: 3 },
   strengthText: { fontSize: 12, fontFamily: AppFontFamily.medium },
 
   // Back Button
-  backStepBtn: { marginTop: 15, paddingVertical: 12, alignItems: 'center', width: '100%' },
+  backStepBtn: { marginTop: 15, paddingVertical: 12, alignItems: 'flex-start', width: '100%' },
   backStepBtnText: { color: AppColors.textSecondary, fontSize: 14, fontFamily: AppFontFamily.bold },
-  legalFooter: { flexDirection: 'row-reverse', justifyContent: 'center', alignItems: 'center', marginTop: AppSpacing.xxl, gap: 6 },
+  legalFooter: { flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', marginTop: AppSpacing.xxl, gap: 6 },
   legalLink: { color: AppColors.textMuted, fontSize: AppFontSize.sm, fontFamily: AppFontFamily.medium },
   legalSeparator: { color: AppColors.textMuted, fontSize: AppFontSize.sm },
 });

@@ -38,9 +38,17 @@ Sentry.init({
 // 🛑 prevent auto-hiding of SplashScreen - handled in AuthRoutingLogic / StartupFailureBoundary
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+import { safeHideSplashScreen } from '../components/bootstrap/splashUtils';
+
 function AppLayoutContent() {
   const { session, isLoading, authError, retryAuth } = useAuth();
   const { familyError, refreshFamily, loadingFamily } = useFamily();
+
+  React.useEffect(() => {
+    if (!isLoading && !loadingFamily) {
+      safeHideSplashScreen();
+    }
+  }, [isLoading, loadingFamily]);
 
   const combinedError = authError || familyError;
   const combinedLoading = isLoading || loadingFamily;

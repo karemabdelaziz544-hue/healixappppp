@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { LayoutAnimation } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { supabase } from '../../../lib/supabase';
@@ -8,10 +8,12 @@ import { HealthDataProvider } from '../services/HealthDataProvider';
 import { HealthAnalyticsEngine, HealthAnalysis } from '../services/HealthAnalyticsEngine';
 import { HealthLogger } from '../services/HealthLogger';
 import { HealixAIContextBuilder } from '../services/HealixAIContextBuilder';
+import { HealixAITriggerManager } from '../services/HealixAITriggerManager';
 import { OfflineQueue } from '../../../lib/offlineQueue';
 import { ActivityEventEmitter } from '../../activity/services/ActivityEventEmitter';
 import type { DigitalHealthRecord, TimelineEvent } from '../../../types/digitalHealthRecord';
 import type { PlanTask } from '../../../types';
+import { AppColors } from '../../../../constants/AppTheme';
 
 interface UseHealthCommandCenterViewModelProps {
   userId: string;
@@ -33,7 +35,10 @@ export function useHealthCommandCenterViewModel({ userId, todayStr }: UseHealthC
   const [aiRecommendation, setAiRecommendation] = useState<string | null>(null);
   const [localTimelineEvents, setLocalTimelineEvents] = useState<TimelineEvent[]>([]);
 
-  // Presentation State Binds (Calculated by ViewModel)
+  // Guided Journey & Presentation States
+  const [expandedMealId, setExpandedMealId] = useState<string | null>(null);
+  const [streakDays, setStreakDays] = useState(1);
+  const [heroSummary, setHeroSummary] = useState('');
   const [greeting, setGreeting] = useState('يسعدنا رؤيتك اليوم.');
   const [activitySyncTime, setActivitySyncTime] = useState('تمت المزامنة منذ ثوانٍ');
 
@@ -46,8 +51,44 @@ export function useHealthCommandCenterViewModel({ userId, todayStr }: UseHealthC
 
     try {
       const cacheKey = `dashboard_${userId}`;
+      const timelineCacheKey = `timeline_${userId}_${todayStr}`;
+      const streakKey = `user_streak_${userId}`;
+      const lastDateKey = `user_last_active_date_${userId}`;
+
+      // Calculate dynamic commitment streak for active profile
+      const cachedStreak = (await AppCache.get<number>(streakKey)) || 0;
+      const lastActiveDate = await AppCache.get<string>(lastDateKey);
+
+      let currentStreak = 1;
+      if (!lastActiveDate) {
+        currentStreak = 1;
+      } else if (lastActiveDate === todayStr) {
+        currentStreak = cachedStreak || 1;
+      } else {
+        const todayDate = new Date(todayStr);
+        const lastDate = new Date(lastActiveDate);
+        const diffTime = Math.abs(todayDate.getTime() - lastDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 1) {
+          currentStreak = (cachedStreak || 0) + 1;
+        } else {
+          currentStreak = 1;
+        }
+      }
+
+      await AppCache.set(streakKey, currentStreak);
+      await AppCache.set(lastDateKey, todayStr);
+      setStreakDays(currentStreak);
+
       if (clearCache) {
         await AppCache.invalidate(cacheKey);
+      }
+
+      // Load persisted timeline events for today
+      const savedTimeline = await AppCache.get<TimelineEvent[]>(timelineCacheKey);
+      if (savedTimeline) {
+        setLocalTimelineEvents(savedTimeline);
       }
 
       // Check cache first
@@ -57,7 +98,6 @@ export function useHealthCommandCenterViewModel({ userId, todayStr }: UseHealthC
         setTasks(cached.tasks);
         setWaterGlasses(cached.waterGlasses);
         setActivitySteps(cached.activitySteps);
-        setLocalTimelineEvents([]);
         setLoading(false);
       }
 
@@ -74,7 +114,6 @@ export function useHealthCommandCenterViewModel({ userId, todayStr }: UseHealthC
         setTasks(allTasks);
         setWaterGlasses(fetchedDhr.water.consumedGlasses);
         setActivitySteps(fetchedDhr.activity.steps);
-        setLocalTimelineEvents([]);
 
         // Save to cache
         await AppCache.set(cacheKey, {
@@ -91,10 +130,41 @@ export function useHealthCommandCenterViewModel({ userId, todayStr }: UseHealthC
     }
   }, [userId, todayStr]);
 
-  // Initial load
+  // Reset local states on profile change to prevent stale data cross-contamination
+  useEffect(() => {
+    setDhr(null);
+    setAnalysis(null);
+    setTasks([]);
+    setWaterGlasses(0);
+    setActivitySteps(0);
+    setAiRecommendation(null);
+    setLocalTimelineEvents([]);
+
+    if (userId) {
+      const cacheKey = `healix_ai_dashboard_${userId}_${todayStr}`;
+      AppCache.get<string>(cacheKey).then(cached => {
+        if (cached && !cached.includes('حاول المشي') && !cached.includes('الدورة الدموية')) {
+          setAiRecommendation(cached);
+        }
+      });
+    }
+  }, [userId, todayStr]);
+
+  // Initial load on mount or profile change
   useEffect(() => {
     loadDashboardData();
-  }, [loadDashboardData]);
+  }, [userId, loadDashboardData]);
+
+  // Sync expanded meal state to first uncompleted meal when tasks change
+  useEffect(() => {
+    const mealsList = tasks.filter(t => t.task_type !== 'workout');
+    if (mealsList.length > 0) {
+      if (!expandedMealId || !mealsList.some(m => m.id === expandedMealId)) {
+        const firstUncompleted = mealsList.find(m => !m.is_completed);
+        setExpandedMealId(firstUncompleted ? firstUncompleted.id : mealsList[0].id);
+      }
+    }
+  }, [tasks]);
 
   // Pedometer Watcher logic inside hook — uses ActivityEventEmitter instead of
   // a direct sensor subscription so it respects the ActivitySyncManager batching logic.
@@ -103,26 +173,25 @@ export function useHealthCommandCenterViewModel({ userId, todayStr }: UseHealthC
 
     const unsub = ActivityEventEmitter.subscribe('ActivityUpdated', (payload: { steps: number }) => {
       const steps = payload.steps;
-      if (steps > activitySteps) {
-        setActivitySteps(steps);
-        setActivitySyncTime('تمت المزامنة للتو');
+      setActivitySteps(steps);
+      setActivitySyncTime('تمت المزامنة للتو');
 
         // Prepend achievement event if steps hit goal milestones
         const goal = dhr.goals.activity.daily_steps || 10000;
         if (steps >= goal && activitySteps < goal) {
+          const nowTime = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
           const newEvent: TimelineEvent = {
             id: `steps_goal_${Date.now()}`,
-            title: 'إنجاز الحركة اليومية 🏃',
+            title: 'إنجاز الحركة اليومية',
             subtitle: `أحسنت! حققت هدف المشي اليوم بالكامل بتجاوزك ${goal.toLocaleString()} خطوة.`,
-            time: 'الآن',
+            time: nowTime,
             icon: 'trophy',
-            color: '#10B981',
+            color: AppColors.accent,
             type: 'AchievementEvent'
           };
           setLocalTimelineEvents(prev => [newEvent, ...prev]);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
-      }
     });
 
     return () => {
@@ -131,14 +200,12 @@ export function useHealthCommandCenterViewModel({ userId, todayStr }: UseHealthC
   }, [userId, dhr, activitySteps]);
 
   // 2. Dynamic Client-Side Presentation Recalculations (Instant updates on action)
-  useEffect(() => {
-    if (!dhr) return;
-
-    // Construct local snapshot DHR containing modified values
+  const activeDhr = useMemo<DigitalHealthRecord | null>(() => {
+    if (!dhr) return null;
     const todayMeals = tasks.filter(t => t.task_type !== 'workout');
     const todayWorkouts = tasks.filter(t => t.task_type === 'workout');
 
-    const localDhr: DigitalHealthRecord = {
+    return {
       ...dhr,
       activity: {
         ...dhr.activity,
@@ -168,15 +235,16 @@ export function useHealthCommandCenterViewModel({ userId, todayStr }: UseHealthC
         consumedLiters: waterGlasses * 0.25
       }
     };
+  }, [dhr, tasks, waterGlasses, activitySteps]);
+
+  useEffect(() => {
+    if (!activeDhr) return;
 
     // Calculate dynamic analysis values
-    // streak_days is not stored on Profile — always recalculate from 0; the engine
-    // uses compliance data from the DHR itself to gauge weekly performance.
-    const streak = 0;
-    const report = HealthAnalyticsEngine.analyze(localDhr, streak);
+    const report = HealthAnalyticsEngine.analyze(activeDhr, streakDays);
     setAnalysis(report);
 
-    // Dynamic greeting builder
+    // Dynamic greeting & summary builders
     const hour = new Date().getHours();
     let greet = 'مرحباً بك';
     if (hour >= 5 && hour < 12) greet = 'صباح الخير';
@@ -184,17 +252,26 @@ export function useHealthCommandCenterViewModel({ userId, todayStr }: UseHealthC
     else if (hour >= 17 && hour < 22) greet = 'مساء الخير';
     else greet = 'طاب مساؤك';
 
-    const clientName = dhr.profile.full_name?.split(' ')[0] || '';
-    if (report.compliance === 100) {
-      setGreeting(`${greet}، ${clientName}! يوم مثالي كامل الالتزام اليوم! 🏆`);
-    } else if (report.compliance >= 60) {
-      setGreeting(`${greet}، ${clientName}! خطوت خطوات ممتازة اليوم. 🌟`);
-    } else if (report.compliance > 0) {
-      setGreeting(`${greet}، ${clientName}! واصل تقديم نشاطات صحية اليوم. 🔥`);
+    const clientName = activeDhr.profile.full_name?.split(' ')[0] || '';
+    setGreeting(`${greet}، ${clientName}`);
+
+    // Summary calculation for Hero
+    const todayMeals = activeDhr.meals.todayMeals;
+    const remainingMealsCount = todayMeals.filter((t: any) => !t.is_completed).length;
+    const targetLiters = activeDhr.water.targetLiters || 2.5;
+    const consumedLiters = waterGlasses * 0.25;
+    const remainingLiters = Math.max(0, targetLiters - consumedLiters).toFixed(1);
+
+    if (remainingMealsCount > 0 && Number(remainingLiters) > 0) {
+      setHeroSummary(`فاضلك ${remainingMealsCount} وجبة ومتبقي ${remainingLiters} لتر مياه`);
+    } else if (remainingMealsCount > 0) {
+      setHeroSummary(`فاضلك ${remainingMealsCount} وجبة لإكمال الخطة اليومية`);
+    } else if (Number(remainingLiters) > 0) {
+      setHeroSummary(`متبقي ${remainingLiters} لتر مياه للوصول للهدف`);
     } else {
-      setGreeting(`${greet}، ${clientName}! ابدأ يومك بنشاط صحي الآن. ☀️`);
+      setHeroSummary('ممتاز! تم تحقيق التزامات اليوم بالكامل 🏆');
     }
-  }, [tasks, waterGlasses, activitySteps, dhr]);
+  }, [activeDhr, waterGlasses, streakDays]);
 
   // 3. User Hydration Actions
   const handleLogWater = useCallback(async (amount: number) => {
@@ -206,21 +283,26 @@ export function useHealthCommandCenterViewModel({ userId, todayStr }: UseHealthC
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setWaterGlasses(newGlasses);
 
-    // Prepend timeline event locally
+    const nowTime = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    const addedMl = Math.round(amount * 250);
     const newEvent: TimelineEvent = {
       id: `water_${Date.now()}`,
-      title: 'تسجيل كوب مياه 💧',
-      subtitle: `أضفت ${(amount * 250)} مل إلى كمية المياه المكتملة لليوم.`,
-      time: 'الآن',
+      title: `شربت ${addedMl}ml مياه`,
+      subtitle: `إجمالي المستهلك الان: ${(newGlasses * 0.25).toFixed(1)} لتر.`,
+      time: nowTime,
       icon: 'water',
-      color: '#3B82F6',
+      color: AppColors.primary,
       type: 'WaterEvent'
     };
-    setLocalTimelineEvents(prev => [newEvent, ...prev]);
+    setLocalTimelineEvents(prev => {
+      const updated = [newEvent, ...prev];
+      AppCache.set(`timeline_${userId}_${todayStr}`, updated);
+      return updated;
+    });
 
     // Async write through unified logger
     await HealthLogger.log(userId, 'water', amount, { target: dhr.water.targetGlasses });
-  }, [userId, dhr, waterGlasses]);
+  }, [userId, dhr, waterGlasses, todayStr]);
 
   const handleUndoWater = useCallback(async () => {
     if (!userId || !dhr || waterGlasses <= 0) return;
@@ -236,6 +318,7 @@ export function useHealthCommandCenterViewModel({ userId, todayStr }: UseHealthC
       if (idx !== -1) {
         const cpy = [...prev];
         cpy.splice(idx, 1);
+        AppCache.set(`timeline_${userId}_${todayStr}`, cpy);
         return cpy;
       }
       return prev;
@@ -257,33 +340,51 @@ export function useHealthCommandCenterViewModel({ userId, todayStr }: UseHealthC
     const updated = tasks.map(t => t.id === taskId ? { ...t, is_completed: newStatus } : t);
     setTasks(updated);
 
+    // Auto-advance expanded meal to next uncompleted meal if completing current meal
+    const mealsList = updated.filter(t => t.task_type !== 'workout');
+    if (newStatus) {
+      const nextUncompleted = mealsList.find(m => !m.is_completed);
+      if (nextUncompleted) {
+        setExpandedMealId(nextUncompleted.id);
+      }
+    }
+
     // Prepend timeline item locally
     const matched = tasks.find(t => t.id === taskId);
     if (matched) {
       const isWorkout = matched.task_type === 'workout';
-      const eventTitle = isWorkout ? 'أنجزت تدريباً رياضياً 🏋️' : 'تناولت وجبة صحية 🥗';
-      const eventSub = newStatus 
-        ? `تم إكمال: ${matched.content}` 
-        : `تراجعت عن إكمال: ${matched.content}`;
+      const nowTime = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+      const eventTitle = newStatus 
+        ? (isWorkout ? `أنهيت ${matched.content || 'التمرين'}` : `أنهيت ${matched.title || matched.content || 'الوجبة'}`)
+        : (isWorkout ? `تراجعت عن ${matched.content}` : `تراجعت عن ${matched.title || matched.content}`);
       
       const newEvent: TimelineEvent = {
         id: `task_${taskId}_${Date.now()}`,
         title: eventTitle,
-        subtitle: eventSub,
-        time: 'الآن',
+        subtitle: newStatus ? 'تم التوثيق والارسال للطبيب المعالج' : 'تم إلغاء التوثيق',
+        time: nowTime,
         icon: isWorkout ? 'barbell' : 'restaurant',
-        color: isWorkout ? '#8B5CF6' : '#10B981',
+        color: AppColors.primary,
         type: isWorkout ? 'WorkoutEvent' : 'MealEvent'
       };
-      setLocalTimelineEvents(prev => [newEvent, ...prev]);
+      setLocalTimelineEvents(prev => {
+        const updated = [newEvent, ...prev];
+        AppCache.set(`timeline_${userId}_${todayStr}`, updated);
+        return updated;
+      });
     }
 
     try {
-      await OfflineQueue.addMutation('task_toggle', userId, {
-        taskId,
-        isCompleted: newStatus,
-        logDate: todayStr
-      });
+      const isValidUuid = typeof taskId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId);
+      if (isValidUuid) {
+        await OfflineQueue.addMutation('task_toggle', userId, {
+          taskId,
+          isCompleted: newStatus,
+          logDate: todayStr
+        });
+      } else {
+        logger.warn(`[useHealthCommandCenterViewModel] Skipping OfflineQueue mutation for non-UUID taskId: ${taskId}`);
+      }
     } catch (e) {
       logger.error('[useHealthCommandCenterViewModel] task toggle mutation failed:', e);
       // Revert UI on failure
@@ -293,27 +394,66 @@ export function useHealthCommandCenterViewModel({ userId, todayStr }: UseHealthC
     }
   }, [userId, tasks, todayStr]);
 
-  // 5. Refetch AI coach recommendations with dynamic prompt
+  // Instant profile switch cache swap
+  useEffect(() => {
+    setAiRecommendation(null);
+    if (userId) {
+      const cacheKey = `healix_ai_dashboard_${userId}_${todayStr}`;
+      AppCache.get<string>(cacheKey).then(cached => {
+        if (cached && !cached.includes('حاول المشي') && !cached.includes('الدورة الدموية')) {
+          setAiRecommendation(cached);
+        }
+      });
+    }
+  }, [userId, todayStr]);
+
+  // 5. Refetch AI coach recommendations with dynamic prompt & event-driven trigger manager
   const handleFetchAIRecommendation = useCallback(async (force = false) => {
-    if (!userId || !dhr || !analysis) return;
-    
-    const cacheKey = `ai_tip_${userId}_${todayStr}`;
-    if (!force) {
-      const cached = await AppCache.get<string>(cacheKey);
-      if (cached) {
-        setAiRecommendation(cached);
-        return;
-      }
+    const currentDhr = activeDhr || dhr;
+    if (!userId || !currentDhr || !analysis) return;
+
+    // Guard against stale DHR from previous profile during profile switch transition
+    if (currentDhr.profile.id !== userId) {
+      logger.log(`[useHealthCommandCenterViewModel] Stale DHR profile ID (${currentDhr.profile.id}) does not match active userId (${userId}). Skipping AI call.`);
+      return;
+    }
+
+    const cacheKey = `healix_ai_dashboard_${userId}_${todayStr}`;
+    const cachedTip = await AppCache.get<string>(cacheKey);
+    const firstFirstName = currentDhr.profile.full_name?.split(' ')[0] || '';
+    const isStaleFallback = !!cachedTip && (cachedTip.includes('حاول المشي') || cachedTip.includes('الدورة الدموية'));
+    const isWrongName = !!cachedTip && !!firstFirstName && !cachedTip.includes(firstFirstName);
+    const effectiveForce = force || isStaleFallback || isWrongName;
+
+    // Evaluate if a meaningful change event occurred on activeDhr
+    const { shouldCall, reason } = await HealixAITriggerManager.shouldTriggerAICall(userId, todayStr, currentDhr, effectiveForce);
+
+    if (!shouldCall && cachedTip && !isStaleFallback && !isWrongName) {
+      logger.log(`[useHealthCommandCenterViewModel] Using cached AI tip. Reason: ${reason}`);
+      setAiRecommendation(cachedTip);
+      return;
     }
 
     try {
-      const contextPrompt = HealixAIContextBuilder.buildContext(dhr, analysis);
+      const contextPrompt = HealixAIContextBuilder.buildContext(currentDhr, analysis);
+      const isSameUserTip = !!cachedTip && !isWrongName && !isStaleFallback;
+      const previousTipContext = isSameUserTip ? `\n\nالرسالة السابقة التي قلتها للمستخدم: "${cachedTip}". ابدأ من حيث انتهيت بدون تكرار التحية أو الجمل المكررة.` : '';
+
+      const session = (await supabase.auth.getSession()).data.session;
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const { data, error } = await supabase.functions.invoke('healix-ai', {
+        headers,
         body: {
+          mode: 'dashboard_coach',
+          profileId: userId,
           messages: [
             {
               role: 'user',
-              content: `أعطني نصيحة وتوجيه مخصص ومحفز جداً لليوم بناءً على سياق التقرير الصحي المرفق أدناه بحد أقصى سطرين باللغة العربية الفصحى بدون استخدام إيموجي.\n\nالسياق الحالي:\n${contextPrompt}`
+              content: `أنت كوتش الصفحة الرئيسية لـ Healix للمستخدم ${firstFirstName}. اكتب رسالة مصرية قصيرة جداً ومشجعة ومحددة (بين 30 إلى 50 كلمة فقط). خاطبه باسمه الأول فقط. لا تصف أدوية ولا دايت ولا تأخذ دور الطبيب.\n\nالسياق الشامل للتقدم اليومي:\n${contextPrompt}${previousTipContext}`
             }
           ]
         }
@@ -323,47 +463,70 @@ export function useHealthCommandCenterViewModel({ userId, todayStr }: UseHealthC
       const tip = data?.choices?.[0]?.message?.content || data?.choices?.[0]?.text;
       if (tip) {
         const cleaned = tip.replace(/[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '').trim();
+        
         setAiRecommendation(cleaned);
-        await AppCache.set(cacheKey, cleaned);
-
-        // Prepend timeline AI event
-        const newEvent: TimelineEvent = {
-          id: `ai_tip_${Date.now()}`,
-          title: 'توصية ذكية من هيليكس 🤖',
-          subtitle: cleaned,
-          time: 'الآن',
-          icon: 'sparkles',
-          color: '#FD761C',
-          type: 'AIEvent'
-        };
-        setLocalTimelineEvents(prev => [newEvent, ...prev]);
+        await HealixAITriggerManager.recordAICall(userId, todayStr, currentDhr, cleaned);
       }
     } catch (e) {
-      logger.error('[useHealthCommandCenterViewModel] AI tip generation error:', e);
-    }
-  }, [userId, dhr, analysis, todayStr]);
+      logger.warn('[useHealthCommandCenterViewModel] AI Edge Function offline/unavailable, using dynamic local fallback:', e);
+      if (cachedTip && !cachedTip.includes('حاول المشي') && !cachedTip.includes('الدورة الدموية')) {
+        setAiRecommendation(cachedTip);
+      } else {
+        const firstName = currentDhr.profile.full_name?.split(' ')[0] || 'يا بطل';
+        const todayMeals = currentDhr.meals.todayMeals || [];
+        const uncompleted = todayMeals.filter(m => !m.is_completed);
+        const consumedW = currentDhr.water.consumedLiters || 0;
+        const targetW = currentDhr.water.targetLiters || 2.5;
 
-  // Auto trigger AI recommendation when analysis finishes compiling
+        // Rich soulful Egyptian phrases pool
+        const mealPhrases = [
+          `يا ${firstName} يا غالي! قدامك ${uncompleted[0]?.content || 'الوجبة القادمة'}، جاهز تاكلها ونكمل اليوم بحماس وطاقة عالية؟ 🥗`,
+          `عاش يا ${firstName}! متبقي ${uncompleted[0]?.content || 'الوجبة القادمة'}، التزامك بيها هو اللبنة اللي بتبني بيها صحتك ورشاقتك اليوم! ✨`,
+          `يا ${firstName}، ${uncompleted[0]?.content || 'وجبتك الجاية'} مستنياك، خليك مستمر بنفس القوة والروح الجميلة دي! 💪`,
+        ];
+
+        const waterPhrases = [
+          `يا ${firstName}، أداءك في الأكل ممتاز! متبقي ${(targetW - consumedW).toFixed(1)} لتر مياه، اشرب بوق مياه دلوقتي عشان جسمك يجدد نشاطه 💧`,
+          `عاش يا ${firstName}! الترطيب الصافي هو سر الصفاء والتركيز، اشرب كوباية مياه كبيرة دلوقتي وخليك دايماً رويان 🌊`,
+        ];
+
+        const donePhrases = [
+          `إيه الحلاوة والجمال ده يا ${firstName}! قفلت كافة التزامات اليوم بنجاح باهر، أنا ككوتش فخور بيك جداً 🏆`,
+          `يا ${firstName} يا بطل، 100% التزام اليوم! استمتع براحة استثنائية ونوم عميق ورائع الليلة ✨`,
+        ];
+
+        let dynamicFallback = `عاش يا ${firstName}! واصل الالتزام بالخطة اليومية لتحقيق أهدافك الصحية 🌟`;
+        if (uncompleted.length > 0) {
+          dynamicFallback = mealPhrases[Math.floor(Math.random() * mealPhrases.length)];
+        } else if (consumedW < targetW) {
+          dynamicFallback = waterPhrases[Math.floor(Math.random() * waterPhrases.length)];
+        } else {
+          dynamicFallback = donePhrases[Math.floor(Math.random() * donePhrases.length)];
+        }
+        setAiRecommendation(dynamicFallback);
+      }
+    }
+  }, [userId, activeDhr, dhr, analysis, todayStr]);
+
+  // Auto trigger AI recommendation evaluation on data changes
   useEffect(() => {
-    if (analysis && !aiRecommendation) {
+    if (analysis && activeDhr) {
       handleFetchAIRecommendation();
     }
-  }, [analysis, aiRecommendation, handleFetchAIRecommendation]);
+  }, [analysis, activeDhr, handleFetchAIRecommendation]);
 
-  // Pull to refresh handler
+  // Pull to refresh handler — preserves AI tip cache unless event trigger fires
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadDashboardData(true);
-    if (userId) {
-      const cacheKey = `ai_tip_${userId}_${todayStr}`;
-      await AppCache.invalidate(cacheKey);
-      setAiRecommendation(null);
-    }
     setRefreshing(false);
-  }, [loadDashboardData, userId, todayStr]);
+  }, [loadDashboardData]);
 
   // Merged Timeline events getter (dynamic prepends + DB timeline logs)
-  const compiledTimeline = [...localTimelineEvents, ...(dhr?.timeline || [])];
+  // Strictly profile-isolated and excludes AI Coach recommendation messages
+  const compiledTimeline = [...localTimelineEvents, ...(dhr?.timeline || [])].filter(
+    event => event.type !== 'AIEvent' && !event.id.startsWith('ai_tip_') && !event.title.includes('كوتش')
+  );
 
   return {
     loading,
@@ -371,6 +534,9 @@ export function useHealthCommandCenterViewModel({ userId, todayStr }: UseHealthC
     dhr,
     analysis,
     tasks,
+    expandedMealId,
+    streakDays,
+    heroSummary,
     waterGlasses,
     activitySteps,
     aiRecommendation,
@@ -378,6 +544,7 @@ export function useHealthCommandCenterViewModel({ userId, todayStr }: UseHealthC
     greeting,
     activitySyncTime,
     actions: {
+      setExpandedMealId,
       onLogWater: handleLogWater,
       onUndoWater: handleUndoWater,
       onToggleTask: handleToggleTask,

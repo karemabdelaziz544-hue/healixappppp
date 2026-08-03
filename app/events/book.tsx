@@ -59,7 +59,7 @@ export default function EventBookingScreen() {
           .from('events')
           .select('*')
           .eq('id', id)
-          .single();
+          .maybeSingle();
 
         if (error) throw error;
         setEvent(data);
@@ -134,7 +134,7 @@ export default function EventBookingScreen() {
           attended: false,
         })
         .select()
-        .single();
+        .maybeSingle();
 
       if (bkErr) throw bkErr;
 

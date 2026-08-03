@@ -135,8 +135,12 @@ export class ActivityRepository {
           }, { onConflict: 'user_id,date' })
       );
       if (error) throw error;
-    } catch (e) {
-      logger.error('[ActivityRepository] failed to save daily activity:', e);
+    } catch (e: any) {
+      if (e?.code === 'NETWORK' || e?.code === 'FORBIDDEN') {
+        logger.warn('[ActivityRepository] Save daily activity warning (offline or RLS policy):', e?.message || e);
+      } else {
+        logger.error('[ActivityRepository] failed to save daily activity:', e);
+      }
       throw e;
     }
   }

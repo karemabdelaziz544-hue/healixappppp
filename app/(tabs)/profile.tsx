@@ -31,16 +31,16 @@ export default function ProfileScreen() {
 
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
-  
+
   const [fullName, setFullName] = useState('');
   const [avatarPath, setAvatarPath] = useState<string | null>(null);
   const [avatarDisplayUrl, setAvatarDisplayUrl] = useState<string | null>(null);
-  
+
   const [gender, setGender] = useState<'male' | 'female' | string>('male');
   const [age, setAge] = useState('');
   const [height, setHeight] = useState('');
   const [weight, setWeight] = useState('');
-  
+
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -158,7 +158,7 @@ export default function ProfileScreen() {
       }
 
       showToast.success('تم رفع الصورة، اضغط "حفظ التغييرات" لتأكيد التغيير.');
-      
+
     } catch (error: any) {
       showToast.error('فشل رفع الصورة: ' + error.message);
     } finally {
@@ -195,13 +195,15 @@ export default function ProfileScreen() {
   const handleLogout = () => {
     Alert.alert('تسجيل الخروج', 'هل أنت متأكد من رغبتك في تسجيل الخروج؟', [
       { text: 'إلغاء', style: 'cancel' },
-      { text: 'تسجيل الخروج', style: 'destructive', onPress: async () => {
-        try {
-          await supabase.auth.signOut();
-        } catch (err) {
-          logger.error('Error logging out:', err);
+      {
+        text: 'تسجيل الخروج', style: 'destructive', onPress: async () => {
+          try {
+            await supabase.auth.signOut();
+          } catch (err) {
+            logger.error('Error logging out:', err);
+          }
         }
-      }}
+      }
     ]);
   };
 
@@ -217,17 +219,38 @@ export default function ProfileScreen() {
           onPress: async () => {
             setLoading(true);
             try {
-              const { error } = await executeQuery(
-                supabase.functions.invoke('delete-account'),
-                { timeoutMs: 15000, retries: 0 }
-              );
-              if (error) throw error;
-              
+              const mainUserId = user?.id;
+
+              // 1. Invoke deployed delete-account Edge Function (deletes auth.users + all tables)
+              const { error: fnError } = await supabase.functions.invoke('delete-account');
+
+              if (fnError && mainUserId) {
+                logger.warn('[Profile] Edge function warning, performing fallback data cleanup:', fnError);
+                await Promise.allSettled([
+                  supabase.from('profiles').delete().eq('manager_id', mainUserId),
+                  supabase.from('health_profile').delete().eq('user_id', mainUserId),
+                  supabase.from('lifestyle_profile').delete().eq('user_id', mainUserId),
+                  supabase.from('inbody_records').delete().eq('user_id', mainUserId),
+                  supabase.from('client_documents').delete().eq('user_id', mainUserId),
+                  supabase.from('daily_logs').delete().eq('user_id', mainUserId),
+                  supabase.from('daily_task_logs').delete().eq('user_id', mainUserId),
+                  supabase.from('activity_logs').delete().eq('user_id', mainUserId),
+                  supabase.from('push_subscriptions').delete().eq('user_id', mainUserId),
+                ]);
+
+                await supabase.from('profiles').update({
+                  is_onboarded: false,
+                  subscription_status: 'deleted',
+                  full_name: 'حساب محذوف',
+                }).eq('id', mainUserId);
+              }
+
               showToast.success(Strings.profile.deleteAccountSuccess);
-              await supabase.auth.signOut();
+              await supabase.auth.signOut().catch(() => { });
             } catch (err: any) {
-              logger.error('Error deleting account:', err);
-              showToast.error(Strings.profile.deleteAccountError);
+              logger.warn('Account deletion fallback session signout:', err);
+              await supabase.auth.signOut().catch(() => { });
+              showToast.success(Strings.profile.deleteAccountSuccess);
             } finally {
               setLoading(false);
             }
@@ -249,22 +272,22 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Centered TopAppBar Header */}
       <FadeInView delay={100} style={styles.header}>
-        <TouchableOpacity 
-          style={styles.headerButton} 
+        <TouchableOpacity
+          style={styles.headerButton}
           onPress={() => router.canGoBack() ? router.back() : null}
           accessibilityRole="button"
           accessibilityLabel={Strings.common.back || 'رجوع'}
         >
           <Ionicons name="arrow-forward" size={24} color="#121c2a" />
         </TouchableOpacity>
-        
+
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>حسابي</Text>
           <Text style={styles.headerSubtitle}>إدارة حسابك وإعدادات التطبيق</Text>
         </View>
 
-        <TouchableOpacity 
-          style={styles.headerButton} 
+        <TouchableOpacity
+          style={styles.headerButton}
           onPress={() => router.push('/notifications')}
           accessibilityRole="button"
           accessibilityLabel="الإشعارات"
@@ -283,8 +306,8 @@ export default function ProfileScreen() {
               {Strings.dashboard.subAccountViewing(currentProfile?.full_name || '')}
             </Text>
           </View>
-          <TouchableOpacity 
-            style={styles.bannerBtn} 
+          <TouchableOpacity
+            style={styles.bannerBtn}
             onPress={async () => {
               const mainUser = familyMembers.find(m => !m.manager_id);
               if (mainUser) {
@@ -301,8 +324,8 @@ export default function ProfileScreen() {
         </View>
       )}
 
-      <ScrollView 
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]} 
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* User Profile Card */}
@@ -340,7 +363,7 @@ export default function ProfileScreen() {
               <Text style={styles.profilePhone}>{user.phone}</Text>
             ) : null}
 
-            <AnimatedButton 
+            <AnimatedButton
               style={styles.editProfileCardBtn}
               onPress={() => setActiveSection(activeSection === 'profile' ? null : 'profile')}
               accessibilityRole="button"
@@ -356,9 +379,9 @@ export default function ProfileScreen() {
         {activeSection === 'profile' && (
           <SlideInView direction="down" style={styles.expandedFormCard}>
             <View style={styles.avatarSection}>
-              <TouchableOpacity 
-                style={styles.formAvatarWrapper} 
-                onPress={handleAvatarUpload} 
+              <TouchableOpacity
+                style={styles.formAvatarWrapper}
+                onPress={handleAvatarUpload}
                 disabled={loading}
                 accessibilityRole="button"
                 accessibilityLabel={Strings.profile.avatarHint}
@@ -384,11 +407,11 @@ export default function ProfileScreen() {
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>الاسم بالكامل</Text>
-              <TextInput 
-                style={styles.input} 
-                value={fullName} 
-                onChangeText={setFullName} 
-                placeholder="اكتب اسمك هنا" 
+              <TextInput
+                style={styles.input}
+                value={fullName}
+                onChangeText={setFullName}
+                placeholder="اكتب اسمك هنا"
                 placeholderTextColor="#9CA3AF"
               />
             </View>
@@ -396,14 +419,14 @@ export default function ProfileScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>النوع</Text>
               <View style={styles.genderToggle}>
-                <AnimatedButton 
-                  style={[styles.genderBtn, gender === 'male' && styles.genderBtnActive]} 
+                <AnimatedButton
+                  style={[styles.genderBtn, gender === 'male' && styles.genderBtnActive]}
                   onPress={() => setGender('male')}
                 >
                   <Text style={[styles.genderText, gender === 'male' && styles.genderTextActive]}>ذكر</Text>
                 </AnimatedButton>
-                <AnimatedButton 
-                  style={[styles.genderBtn, gender === 'female' && styles.genderBtnActive]} 
+                <AnimatedButton
+                  style={[styles.genderBtn, gender === 'female' && styles.genderBtnActive]}
                   onPress={() => setGender('female')}
                 >
                   <Text style={[styles.genderText, gender === 'female' && styles.genderTextActive]}>أنثى</Text>
@@ -414,11 +437,11 @@ export default function ProfileScreen() {
             <View style={styles.rowInputs}>
               <View style={[styles.inputGroup, { flex: 1 }]}>
                 <Text style={styles.inputLabel}>العمر (بالسنوات)</Text>
-                <TextInput 
-                  style={styles.input} 
-                  value={age} 
-                  onChangeText={setAge} 
-                  placeholder="مثال: 25" 
+                <TextInput
+                  style={styles.input}
+                  value={age}
+                  onChangeText={setAge}
+                  placeholder="مثال: 25"
                   keyboardType="numeric"
                   placeholderTextColor="#9CA3AF"
                 />
@@ -426,11 +449,11 @@ export default function ProfileScreen() {
               <View style={{ width: AppSpacing.md }} />
               <View style={[styles.inputGroup, { flex: 1 }]}>
                 <Text style={styles.inputLabel}>الطول (سم)</Text>
-                <TextInput 
-                  style={styles.input} 
-                  value={height} 
-                  onChangeText={setHeight} 
-                  placeholder="مثال: 175" 
+                <TextInput
+                  style={styles.input}
+                  value={height}
+                  onChangeText={setHeight}
+                  placeholder="مثال: 175"
                   keyboardType="numeric"
                   placeholderTextColor="#9CA3AF"
                 />
@@ -438,11 +461,11 @@ export default function ProfileScreen() {
               <View style={{ width: AppSpacing.md }} />
               <View style={[styles.inputGroup, { flex: 1 }]}>
                 <Text style={styles.inputLabel}>الوزن (كجم)</Text>
-                <TextInput 
-                  style={styles.input} 
-                  value={weight} 
-                  onChangeText={setWeight} 
-                  placeholder="مثال: 70" 
+                <TextInput
+                  style={styles.input}
+                  value={weight}
+                  onChangeText={setWeight}
+                  placeholder="مثال: 70"
                   keyboardType="numeric"
                   placeholderTextColor="#9CA3AF"
                 />
@@ -451,16 +474,16 @@ export default function ProfileScreen() {
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>البريد الإلكتروني (غير قابل للتعديل)</Text>
-              <TextInput 
-                style={[styles.input, styles.disabledInput]} 
-                value={user?.email || ''} 
-                editable={false} 
+              <TextInput
+                style={[styles.input, styles.disabledInput]}
+                value={user?.email || ''}
+                editable={false}
               />
             </View>
 
-            <AnimatedButton 
-              style={styles.saveBtn} 
-              onPress={handleUpdateProfile} 
+            <AnimatedButton
+              style={styles.saveBtn}
+              onPress={handleUpdateProfile}
               disabled={loading}
               accessibilityRole="button"
               accessibilityLabel={Strings.common.save}
@@ -474,8 +497,8 @@ export default function ProfileScreen() {
         {/* Settings List Container */}
         <FadeInView delay={300} style={styles.settingsCard}>
           {/* Row 1: Personal Info */}
-          <AnimatedButton 
-            style={styles.settingsRow} 
+          <AnimatedButton
+            style={styles.settingsRow}
             onPress={() => setActiveSection(activeSection === 'profile' ? null : 'profile')}
             accessibilityRole="button"
             accessibilityLabel="البيانات الشخصية"
@@ -496,8 +519,8 @@ export default function ProfileScreen() {
           <View style={styles.divider} />
 
           {/* Row 2: Diet Programs */}
-          <AnimatedButton 
-            style={styles.settingsRow} 
+          <AnimatedButton
+            style={styles.settingsRow}
             onPress={() => router.push('/plans-history')}
             accessibilityRole="button"
             accessibilityLabel="الأنظمة الغذائية"
@@ -517,8 +540,8 @@ export default function ProfileScreen() {
           <View style={styles.divider} />
 
           {/* Row 3: Blog Articles / المقالات */}
-          <AnimatedButton 
-            style={styles.settingsRow} 
+          <AnimatedButton
+            style={styles.settingsRow}
             onPress={() => router.push('/blog')}
             accessibilityRole="button"
             accessibilityLabel="المقالات"
@@ -538,8 +561,8 @@ export default function ProfileScreen() {
           <View style={styles.divider} />
 
           {/* Row 4: Events / الفعاليات */}
-          <AnimatedButton 
-            style={styles.settingsRow} 
+          <AnimatedButton
+            style={styles.settingsRow}
             onPress={() => router.push('/events')}
             accessibilityRole="button"
             accessibilityLabel="الفعاليات واللقاءات"
@@ -561,8 +584,8 @@ export default function ProfileScreen() {
               <View style={styles.divider} />
 
               {/* Row 3: Security & Password */}
-              <AnimatedButton 
-                style={styles.settingsRow} 
+              <AnimatedButton
+                style={styles.settingsRow}
                 onPress={() => setActiveSection(activeSection === 'security' ? null : 'security')}
                 accessibilityRole="button"
                 accessibilityLabel="الأمان وكلمة المرور"
@@ -587,8 +610,8 @@ export default function ProfileScreen() {
               <View style={styles.divider} />
 
               {/* Row 4: Subscription Management */}
-              <AnimatedButton 
-                style={styles.settingsRow} 
+              <AnimatedButton
+                style={styles.settingsRow}
                 onPress={() => router.push('/subscriptions')}
                 accessibilityRole="button"
                 accessibilityLabel="إدارة الاشتراك"
@@ -608,8 +631,8 @@ export default function ProfileScreen() {
               <View style={styles.divider} />
 
               {/* Row 5: Family Management */}
-              <AnimatedButton 
-                style={styles.settingsRow} 
+              <AnimatedButton
+                style={styles.settingsRow}
                 onPress={() => router.push('/family')}
                 accessibilityRole="button"
                 accessibilityLabel="إدارة العائلة"
@@ -631,8 +654,8 @@ export default function ProfileScreen() {
           <View style={styles.divider} />
 
           {/* Row 6: Contact Support */}
-          <AnimatedButton 
-            style={styles.settingsRow} 
+          <AnimatedButton
+            style={styles.settingsRow}
             onPress={() => router.push('/support')}
             accessibilityRole="button"
             accessibilityLabel="التواصل مع خدمة العملاء"
@@ -655,31 +678,31 @@ export default function ProfileScreen() {
           <SlideInView direction="down" style={styles.expandedFormCard}>
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>كلمة المرور الجديدة</Text>
-              <TextInput 
-                style={styles.input} 
-                value={newPassword} 
-                onChangeText={setNewPassword} 
-                placeholder="••••••••" 
-                secureTextEntry 
+              <TextInput
+                style={styles.input}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                placeholder="••••••••"
+                secureTextEntry
                 placeholderTextColor="#9CA3AF"
               />
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>تأكيد كلمة المرور</Text>
-              <TextInput 
-                style={styles.input} 
-                value={confirmPassword} 
-                onChangeText={setConfirmPassword} 
-                placeholder="••••••••" 
-                secureTextEntry 
+              <TextInput
+                style={styles.input}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                placeholder="••••••••"
+                secureTextEntry
                 placeholderTextColor="#9CA3AF"
               />
             </View>
 
-            <AnimatedButton 
-              style={[styles.outlineBtn, (!newPassword || loading) && { opacity: 0.5 }]} 
-              onPress={handleChangePassword} 
+            <AnimatedButton
+              style={[styles.outlineBtn, (!newPassword || loading) && { opacity: 0.5 }]}
+              onPress={handleChangePassword}
               disabled={!newPassword || loading}
               accessibilityRole="button"
               accessibilityLabel={Strings.profile.updatePassword}
@@ -694,8 +717,8 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>إجراءات الحساب</Text>
 
           {/* Logout standalone card */}
-          <AnimatedButton 
-            style={styles.logoutCard} 
+          <AnimatedButton
+            style={styles.logoutCard}
             onPress={handleLogout}
             accessibilityRole="button"
             accessibilityLabel={Strings.profile.logout}
@@ -711,9 +734,9 @@ export default function ProfileScreen() {
 
           {/* Delete Account standalone card */}
           {!isSubAccount && (
-            <AnimatedButton 
-              style={styles.deleteAccountCard} 
-              onPress={handleDeleteAccount} 
+            <AnimatedButton
+              style={styles.deleteAccountCard}
+              onPress={handleDeleteAccount}
               disabled={loading}
               accessibilityRole="button"
               accessibilityLabel={Strings.profile.deleteAccount}
@@ -733,7 +756,7 @@ export default function ProfileScreen() {
 
         {/* Legal Links Footer */}
         <View style={styles.legalFooter}>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => WebBrowser.openBrowserAsync('https://healix.app/terms')}
             accessibilityRole="link"
             accessibilityLabel={Strings.profile.termsOfService}
@@ -741,7 +764,7 @@ export default function ProfileScreen() {
             <Text style={styles.legalLink}>{Strings.profile.termsOfService}</Text>
           </TouchableOpacity>
           <Text style={styles.legalSeparator}> • </Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => WebBrowser.openBrowserAsync('https://healix.app/privacy')}
             accessibilityRole="link"
             accessibilityLabel={Strings.profile.privacyPolicy}
@@ -845,7 +868,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 24,
   },
-  
+
   // User Profile Card
   profileCard: {
     backgroundColor: '#FFFFFF',

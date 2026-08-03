@@ -192,7 +192,7 @@ export default function ArticleDetailsScreen() {
           .from('articles')
           .select('*')
           .eq('id', id)
-          .single();
+          .maybeSingle();
 
         if (error) throw error;
         setArticle(art);

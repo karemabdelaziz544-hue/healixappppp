@@ -18,8 +18,9 @@ import { getCachedSignedUrl } from '../src/lib/storageCache';
 
 const toEnglishDigits = (str: string): string => {
   const arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-  const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+  const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '٨', '٩'];
   return str
+    .replace(/,/g, '.')
     .replace(/[٠-٩]/g, (w) => arabicDigits.indexOf(w).toString())
     .replace(/[۰-۹]/g, (w) => persianDigits.indexOf(w).toString());
 };
@@ -82,7 +83,26 @@ export default function FamilyScreen() {
     }
 
     if (!formData.fullName || !formData.height || !formData.weight || !formData.birthYear) {
-      showToast.info("يرجى إكمال جميع البيانات بما في ذلك سنة الميلاد");
+      showToast.info("يرجى إكمال جميع البيانات المطلوبة");
+      return;
+    }
+
+    if (formData.fullName.trim().length < 2) {
+      showToast.info("الاسم يجب أن يكون حرفين على الأقل");
+      return;
+    }
+
+    const cleanHeight = toEnglishDigits(formData.height || '');
+    const heightNum = parseFloat(cleanHeight);
+    if (isNaN(heightNum) || heightNum < 30 || heightNum > 250) {
+      showToast.info("يرجى إدخال الطول بالسنتيمتر (مثال: 170 سم - بين 30 و 250)");
+      return;
+    }
+
+    const cleanWeight = toEnglishDigits(formData.weight || '');
+    const weightNum = parseFloat(cleanWeight);
+    if (isNaN(weightNum) || weightNum < 2 || weightNum > 400) {
+      showToast.info("يرجى إدخال الوزن بالكيلوجرام (مثال: 75 كجم - بين 2 و 400)");
       return;
     }
 
@@ -97,24 +117,22 @@ export default function FamilyScreen() {
     const currentYear = new Date().getFullYear();
     if (birthYearNum < 120) {
       birthYearNum = currentYear - birthYearNum;
-    } else if (birthYearNum < 1900 || birthYearNum > currentYear) {
+    }
+    if (birthYearNum < 1900 || birthYearNum > currentYear) {
       showToast.info("سنة الميلاد المدخلة غير منطقية");
       return;
     }
 
     setLoading(true);
     try {
-      const cleanHeight = toEnglishDigits(formData.height || '');
-      const cleanWeight = toEnglishDigits(formData.weight || '');
-
       const { error } = await executeQuery(
         supabase.rpc('create_sub_member', {
-          member_name: formData.fullName,
+          member_name: formData.fullName.trim(),
           member_gender: formData.gender,
           member_birth: `${birthYearNum}-01-01`,
           member_relation: formData.relation,
-          member_height: Number(cleanHeight),
-          member_weight: Number(cleanWeight)
+          member_height: heightNum,
+          member_weight: weightNum
         }),
         { retries: 0 }
       );
@@ -127,8 +145,18 @@ export default function FamilyScreen() {
       Keyboard.dismiss();
       refreshFamily();
 
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : 'فشل إضافة الفرد';
+    } catch (error: any) {
+      let msg = "فشل إضافة الفرد";
+      const rawMsg = error?.message || (error instanceof Error ? error.message : '');
+      if (rawMsg.includes('Invalid family member details')) {
+        msg = "يرجى التأكد من البيانات: الطول بالسنتيمتر (30-250) والوزن بالكيلوجرام (2-400).";
+      } else if (rawMsg.includes('Family member quota has been reached')) {
+        msg = "تم الوصول للحد الأقصى لأفراد العائلة بالباقة الحالية.";
+      } else if (rawMsg.includes('An active subscription is required')) {
+        msg = "يلزم وجود اشتراك عائلي مفعل لإضافة أفراد.";
+      } else if (rawMsg) {
+        msg = rawMsg;
+      }
       showToast.error(msg);
       logger.error('[family] add member:', error);
     } finally {

@@ -64,7 +64,7 @@ export default function NewInquiryScreen() {
         .from('profiles')
         .select('assigned_doctor_id')
         .eq('id', currentUserId)
-        .single();
+        .maybeSingle();
       
       const doctorId = profile?.assigned_doctor_id;
       if (!doctorId) {
@@ -103,7 +103,7 @@ export default function NewInquiryScreen() {
           status: 'open'
         })
         .select('id')
-        .single();
+        .maybeSingle();
       
       if (inquiryErr || !inquiry) throw inquiryErr;
 

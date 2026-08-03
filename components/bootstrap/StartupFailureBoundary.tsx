@@ -15,7 +15,7 @@ interface StartupFailureBoundaryProps {
   children: React.ReactNode;
 }
 
-let isSplashScreenHidden = false;
+import { safeHideSplashScreen } from './splashUtils';
 
 export function StartupFailureBoundary({
   error,
@@ -29,10 +29,7 @@ export function StartupFailureBoundary({
   useEffect(() => {
     if (!isLoading && error) {
       // Hide splash screen so user can see the error screen
-      if (!isSplashScreenHidden) {
-        isSplashScreenHidden = true;
-        SplashScreen.hideAsync().catch(() => {});
-      }
+      safeHideSplashScreen();
       // Report to Sentry
       Sentry.captureException(error, {
         tags: { context: 'auth_bootstrap' },

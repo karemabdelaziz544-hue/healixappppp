@@ -1,31 +1,8 @@
 // src/lib/validateEnv.ts
 
 export function validateEnv() {
-  // في Expo، المتغيرات التي تبدأ بـ EXPO_PUBLIC_ يتم حقنها في process.env 
-  // ولكن Metro Bundler يتطلب أحياناً استدعاءً صريحاً.
-  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-
-  console.log("[EnvCheck] URL:", supabaseUrl); // أضفنا هذا للتأكد في الـ Terminal
-  console.log("[EnvCheck] Key exists:", !!supabaseAnonKey);
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    const errorMsg = `[Healix Critical] Environment variables missing! 
-      URL: ${supabaseUrl ? 'Found' : 'MISSING'} 
-      Key: ${supabaseAnonKey ? 'Found' : 'MISSING'}`;
-
-    console.error(errorMsg);
-
-    // بدلاً من الـ Throw فقط، سنقوم بإظهار تنبيه يمنع التطبيق من المضي قدماً
-    if (!__DEV__) {
-      throw new Error(errorMsg);
-    }
-
-    return {
-      supabaseUrl: supabaseUrl || 'https://placeholder.supabase.co',
-      supabaseAnonKey: supabaseAnonKey || 'placeholder',
-    };
-  }
+  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://bruafdfakvdreagfeqau.supabase.co';
+  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJydWFmZGZha3ZkcmVhZ2ZlcWF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0ODAzNTYsImV4cCI6MjA4MDA1NjM1Nn0.bIFFTG3McJhYZJYNmhn_24099ahNNdb8oxPsLOGwtZ8';
 
   return {
     supabaseUrl,

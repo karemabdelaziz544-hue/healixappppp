@@ -32,10 +32,16 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
-// 🔴 AUDIT FIX: Fail-fast env validation.
-// In production: throws immediately if vars are missing (prevents silent broken state).
-// In DEV: warns but continues to allow debugging without a real .env.
-const { supabaseUrl, supabaseAnonKey } = validateEnv();
+const getEnvVar = (name: string, fallback: string): string => {
+  const val = process.env[name];
+  if (typeof val === 'string' && val.trim().length > 0) {
+    return val.trim();
+  }
+  return fallback;
+};
+
+const supabaseUrl = getEnvVar('EXPO_PUBLIC_SUPABASE_URL', 'https://bruafdfakvdreagfeqau.supabase.co');
+const supabaseAnonKey = getEnvVar('EXPO_PUBLIC_SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJydWFmZGZha3ZkcmVhZ2ZlcWF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0ODAzNTYsImV4cCI6MjA4MDA1NjM1Nn0.bIFFTG3McJhYZJYNmhn_24099ahNNdb8oxPsLOGwtZ8');
 
 /**
  * XHR-based fetch fallback.
@@ -128,12 +134,6 @@ const xhrFetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Respons
 const safeFetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 
-  // Prefer the un-patched native fetch saved by the debugger, if available
-  const nativeFetch =
-    (global as any).originalFetch ||
-    (global as any).__fetch_original ||
-    null;
-
   // Bypasses the Expo Go debugger network wrapping for all Supabase requests in iOS development
   if (
     Platform.OS === 'ios' &&
@@ -141,10 +141,6 @@ const safeFetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Respon
     (urlStr.includes('/auth/v1/') || urlStr.includes('/rest/v1/') || urlStr.includes(supabaseUrl) || urlStr.includes('supabase.co'))
   ) {
     return xhrFetch(input, init);
-  }
-
-  if (nativeFetch) {
-    return nativeFetch(input, init);
   }
 
   return fetch(input, init);

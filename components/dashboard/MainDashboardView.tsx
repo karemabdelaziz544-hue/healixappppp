@@ -1,9 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import * as Haptics from 'expo-haptics';
 import { 
   ScrollView, 
-  LayoutAnimation, 
   Platform, 
   RefreshControl, 
   StyleSheet, 
@@ -13,33 +11,32 @@ import {
 import { Text } from '@/components/AppText';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
 import { AppColors } from '../../constants/AppTheme';
 import { useFamily } from '../../src/context/FamilyContext';
 import Skeleton from '../Skeleton';
-import { AnimatedButton } from '../animations/AnimatedButton';
-import NotificationBell from '../NotificationBell';
 import { PermissionBottomSheet } from './PermissionBottomSheet';
 import { ActivitySyncManager } from '../../src/features/activity/services/ActivitySyncManager';
 import { ActivityService } from '../../src/features/activity/services/ActivityService';
 import { AppCache } from '../../src/lib/cache';
 import { useHealthCommandCenterViewModel } from '../../src/features/health/hooks/useHealthCommandCenterViewModel';
+import { SwapIcon } from '../../components/icons';
 import { 
-  HealthScoreWidget, 
-  AIInsightWidget, 
-  QuickActionsWidget, 
-  ProgressGridWidget, 
-  WaterWidget, 
-  MealsWidget, 
-  WorkoutWidget, 
-  DoctorWidget, 
-  TimelineWidget,
+  DashboardHeaderWidget,
+  ProgressHeroWidget,
+  CurrentMealWidget as ActionableCurrentMealWidget,
+  HealixAICardWidget as ContextualAICoachWidget,
+  QuickActionsWidget,
+  IndicatorsWidget as TodayIndicatorsWidget,
+  WaterWidget as WaterTrackerWidget,
+  WorkoutWidget as WorkoutSectionWidget,
+  MovementWidget as DailyActivityWidget,
+  TimelineWidget as LiveTimelineWidget,
   MoreBottomSheetModal
-} from './HomeWidgets';
+} from './widgets';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const getLocalDateString = (d = new Date()) => {
   const year = d.getFullYear();
@@ -50,7 +47,7 @@ const getLocalDateString = (d = new Date()) => {
 
 export default function MainDashboardView() {
   const router = useRouter();
-  const { currentProfile, familyMembers, switchProfile } = useFamily();
+  const { currentProfile, familyMembers, switchProfile, accountProfileId } = useFamily();
   const userId = currentProfile?.id;
   const insets = useSafeAreaInsets();
 
@@ -61,15 +58,16 @@ export default function MainDashboardView() {
   const [isPermissionSheetVisible, setIsPermissionSheetVisible] = useState(false);
   
   const scrollViewRef = useRef<ScrollView>(null);
-  const [mealsListY, setMealsListY] = useState(0);
+  const [mealsSectionY, setMealsSectionY] = useState(0);
 
   // Synchronize on focus
   useFocusEffect(
     useCallback(() => {
       if (userId) {
+        ActivitySyncManager.start(userId, todayStr);
         vm.actions.onRefresh();
       }
-    }, [userId])
+    }, [userId, todayStr])
   );
 
   // Pedometer Permission Dialog logic on mount
@@ -80,17 +78,21 @@ export default function MainDashboardView() {
       const isSensorAvail = await ActivityService.isAvailable();
       if (isSensorAvail) {
         const check = await ActivityService.getPermissions();
-        if (check.status === 'undetermined') {
-          const dismissedTime = await AppCache.get<number>(`dismissed_motion_permission_${userId}`);
-          const oneWeek = 7 * 24 * 60 * 60 * 1000;
-          if (!dismissedTime || (Date.now() - dismissedTime) > oneWeek) {
+        if (check.granted) {
+          await ActivitySyncManager.start(userId, todayStr);
+        } else {
+          // Auto request permissions so iOS pops up native Motion & Fitness prompt
+          const request = await ActivityService.requestPermissions();
+          if (request.granted) {
+            await ActivitySyncManager.start(userId, todayStr);
+          } else {
             setIsPermissionSheetVisible(true);
           }
         }
       }
     };
     checkMotionPermissions();
-  }, [userId, currentProfile]);
+  }, [userId, currentProfile, todayStr]);
 
   const handlePermissionConfirm = useCallback(async () => {
     setIsPermissionSheetVisible(false);
@@ -112,57 +114,49 @@ export default function MainDashboardView() {
 
   const handleScrollToMeals = useCallback(() => {
     if (scrollViewRef.current) {
-      scrollViewRef.current.scrollTo({ y: mealsListY, animated: true });
+      scrollViewRef.current.scrollTo({ y: mealsSectionY, animated: true });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-  }, [mealsListY]);
-
-  const handleCardPress = useCallback((key: string) => {
-    if (key === 'meals') {
-      handleScrollToMeals();
-    } else if (key === 'workouts') {
-      router.push('/(tabs)/workouts' as any);
-    }
-  }, [handleScrollToMeals, router]);
+  }, [mealsSectionY]);
 
   if (vm.loading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.skeletonContainer}>
-          <Skeleton width="100%" height={160} borderRadius={24} style={{ marginBottom: 20 }} />
-          <Skeleton width="100%" height={100} borderRadius={20} style={{ marginBottom: 15 }} />
-          <Skeleton width="100%" height={120} borderRadius={20} style={{ marginBottom: 15 }} />
-          <Skeleton width="100%" height={180} borderRadius={24} />
+          <Skeleton width="100%" height={60} borderRadius={20} style={{ marginBottom: 15 }} />
+          <Skeleton width="100%" height={160} borderRadius={28} style={{ marginBottom: 20 }} />
+          <Skeleton width="100%" height={220} borderRadius={28} style={{ marginBottom: 15 }} />
+          <Skeleton width="100%" height={120} borderRadius={28} style={{ marginBottom: 15 }} />
+          <Skeleton width="100%" height={180} borderRadius={28} />
         </View>
       </SafeAreaView>
     );
   }
 
-  // Split meals and workouts checklists
-  const mealsList = vm.tasks.filter(t => t.task_type !== 'workout');
-  const workoutsList = vm.tasks.filter(t => t.task_type === 'workout');
-
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {currentProfile?.manager_id && (
         <View style={styles.subAccountBanner}>
-          <Ionicons name="swap-horizontal" size={14} color="#FFF" />
+          <SwapIcon size={14} color={AppColors.white} />
           <Text style={styles.subAccountBannerText}>
             أنت تستعرض حالياً حساب العائلة التابع: {currentProfile.full_name}
           </Text>
         </View>
       )}
 
-      {/* Greeting Header */}
-      <View style={styles.header}>
-        <AnimatedButton style={styles.iconCircle}>
-          <NotificationBell />
-        </AnimatedButton>
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.greetingTitle}>{vm.greeting}</Text>
-          <Text style={styles.greetingSub}>مرحباً بك في مركز قيادتك الصحي</Text>
-        </View>
-      </View>
+      {/* 1. Header (Profile, Avatar, Notifications, Daily Streak) */}
+      <DashboardHeaderWidget
+        fullName={currentProfile?.full_name}
+        greeting={vm.greeting}
+        avatarUrl={currentProfile?.avatar_url}
+        streakDays={vm.streakDays}
+        onNotificationPress={() => router.push('/notifications' as any)}
+        onProfilePress={() => router.push('/(tabs)/profile' as any)}
+        familyMembers={familyMembers}
+        currentProfile={currentProfile}
+        accountProfileId={accountProfileId}
+        onSwitchProfile={switchProfile}
+      />
 
       <ScrollView
         ref={scrollViewRef}
@@ -176,105 +170,95 @@ export default function MainDashboardView() {
           />
         }
       >
-        {/* 1. Health Score Widget */}
-        <HealthScoreWidget
-          score={vm.analysis?.score || 75}
-          compliance={vm.analysis?.compliance || 0}
-          contributors={vm.analysis?.contributors || { nutrition: 0, water: 0, activity: 0, sleep: 0 }}
-          warnings={vm.analysis?.warnings || []}
-          achievements={vm.analysis?.achievements || []}
-          onPressDetails={() => router.push('/(tabs)/medical' as any)}
+        {/* 2. Today's Progress Hero */}
+        <ProgressHeroWidget
+          score={vm.analysis?.score}
+          compliance={vm.analysis?.compliance}
+          summaryText={vm.heroSummary}
+          onContinueDayPress={handleScrollToMeals}
         />
 
-        {/* 2. AI Coach Insights */}
-        <AIInsightWidget
-          recommendation={vm.aiRecommendation || undefined}
-          onChatPress={() => router.push('/healix-ai' as any)}
-        />
-
-        {/* 3. Quick Actions */}
-        <QuickActionsWidget
-          onLogWaterPress={() => vm.actions.onLogWater(1.0)}
-          onAICoachPress={() => router.push('/healix-ai' as any)}
-          onDietPlanPress={handleScrollToMeals}
-          onProgressPress={() => router.push('/(tabs)/medical' as any)}
-          onMorePress={() => setIsMoreModalVisible(true)}
-        />
-
-        {/* 4. Progress Indicators */}
-        <ProgressGridWidget
-          mealsCount={vm.dhr?.meals.completedCount || 0}
-          totalMeals={vm.dhr?.meals.totalCount || 0}
-          workoutsCount={vm.dhr?.workouts?.completedCount || 0}
-          totalWorkouts={vm.dhr?.workouts?.totalCount || 0}
-          activitySteps={vm.activitySteps}
-          activityGoalSteps={vm.dhr?.goals.activity.daily_steps || 10000}
-          syncTime={vm.activitySyncTime}
-          sourceName={ActivityService.getActiveProviderName()}
-          onCardPress={handleCardPress}
-        />
-
-        {/* 5. Hydration Water Tracker */}
-        <WaterWidget
-          consumedGlasses={vm.waterGlasses}
-          targetGlasses={vm.dhr?.water.targetGlasses || 8}
-          onAddWater={vm.actions.onLogWater}
-          onUndoWater={vm.actions.onUndoWater}
-        />
-
-        {/* 6. Daily Meals checklist */}
+        {/* 3. Current Meal (Highest Priority) */}
         <View 
           onLayout={(e) => {
             const layout = e.nativeEvent.layout;
-            setMealsListY(layout.y);
+            setMealsSectionY(layout.y);
           }}
         >
-          <MealsWidget
-            tasks={mealsList}
+          <ActionableCurrentMealWidget
+            tasks={vm.tasks}
+            expandedMealId={vm.expandedMealId}
+            onSelectMeal={vm.actions.setExpandedMealId}
             onToggleTask={vm.actions.onToggleTask}
           />
         </View>
 
-        {/* 7. Daily Workouts checklist */}
-        <WorkoutWidget
-          tasks={workoutsList}
+        {/* 4. Healix AI Coach Tip */}
+        <ContextualAICoachWidget
+          recommendation={vm.aiRecommendation || undefined}
+          onChatPress={() => router.push('/healix-ai' as any)}
+        />
+
+        {/* 5. Quick Actions Grid */}
+        <QuickActionsWidget
+          onContactDoctorPress={() => router.push('/chat' as any)}
+          onAICoachPress={() => router.push('/healix-ai' as any)}
+          onUploadLabsPress={() => router.push('/(tabs)/medical' as any)}
+          onWorkoutsPress={() => router.push('/(tabs)/workouts' as any)}
+          onMorePress={() => setIsMoreModalVisible(true)}
+        />
+
+        {/* 6. Today's Key Indicators */}
+        <TodayIndicatorsWidget
+          compliance={vm.analysis?.compliance}
+          waterLiters={vm.waterGlasses * 0.25}
+          targetWaterLiters={vm.dhr?.water.targetLiters}
+          steps={vm.activitySteps}
+        />
+
+        {/* 7. Hydration Water Card */}
+        <WaterTrackerWidget
+          consumedGlasses={vm.waterGlasses}
+          targetGlasses={vm.dhr?.water.targetGlasses || 10}
+          onAddWater={vm.actions.onLogWater}
+          onUndoWater={vm.actions.onUndoWater}
+        />
+
+        {/* 8. Workout Section */}
+        <WorkoutSectionWidget
+          tasks={vm.tasks}
           onToggleTask={vm.actions.onToggleTask}
         />
 
-        {/* 8. Doctor Details Card */}
-        <DoctorWidget
-          doctorName={vm.dhr?.doctorInfo?.name}
-          avatarUrl={vm.dhr?.doctorInfo?.avatarUrl}
-          specialty={vm.dhr?.doctorInfo?.specialty}
-          isOnline={vm.dhr?.doctorInfo?.isOnline}
-          lastReviewText={
-            vm.dhr?.doctorNotes && vm.dhr.doctorNotes.length > 0 
-              ? `آخر مراجعة: ${vm.dhr.doctorNotes[0]}` 
-              : 'تمت مراجعة خطتك التدريبية والغذائية بالأمس'
-          }
-          onChatPress={() => router.push('/(tabs)/chat' as any)}
-          onBookPress={() => router.push('/events' as any)}
+        {/* 9. Daily Activity & Movement */}
+        <DailyActivityWidget
+          steps={vm.activitySteps}
+          goalSteps={vm.dhr?.goals.activity.daily_steps || 10000}
+          calories={Math.round(vm.activitySteps * 0.04)}
+          distanceKm={Number(((vm.activitySteps * 0.76) / 1000).toFixed(1))}
+          activeMinutes={Math.round(vm.activitySteps / 100)}
+          syncTime={vm.activitySyncTime}
+          sourceName={ActivityService.getActiveProviderName()}
         />
 
-        {/* 9. Timeline Activity Feed */}
-        <TimelineWidget
-          activities={vm.timeline}
-          onViewJourney={() => router.push('/(tabs)/medical' as any)}
+        {/* 10. Live Activity Timeline Log */}
+        <LiveTimelineWidget
+          timeline={vm.timeline}
         />
       </ScrollView>
 
-      {/* Services Bottom Sheet Modal */}
-      <MoreBottomSheetModal
-        visible={isMoreModalVisible}
-        onClose={() => setIsMoreModalVisible(false)}
-        onNavigate={(route) => router.push(route as any)}
-      />
-
-      {/* Sensor Permission sheet */}
+      {/* Permission Bottom Sheet for Activity sensors */}
       <PermissionBottomSheet
         visible={isPermissionSheetVisible}
         onConfirm={handlePermissionConfirm}
         onCancel={handlePermissionCancel}
+      />
+
+      {/* More Tools Modal */}
+      <MoreBottomSheetModal
+        visible={isMoreModalVisible}
+        onClose={() => setIsMoreModalVisible(false)}
+        onLogWaterPress={() => vm.actions.onLogWater(1.0)}
       />
     </SafeAreaView>
   );
@@ -283,61 +267,27 @@ export default function MainDashboardView() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: AppColors.background,
   },
   skeletonContainer: {
-    flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 30,
+    paddingTop: 20,
   },
   subAccountBanner: {
-    flexDirection: 'row-reverse',
+    backgroundColor: AppColors.primary,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1E3A34',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    gap: 8,
   },
   subAccountBannerText: {
+    color: AppColors.white,
     fontSize: 12,
-    color: '#FFF',
-    marginRight: 6,
-    textAlign: 'center',
-  },
-  header: {
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-    zIndex: 10,
-  },
-  headerTextWrap: {
-    alignItems: 'flex-end',
-  },
-  greetingTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  greetingSub: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
+    fontFamily: 'Thmanyah-Medium',
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-  }
+    paddingTop: 6,
+  },
 });

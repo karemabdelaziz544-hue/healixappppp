@@ -91,7 +91,7 @@ export default function OnboardingScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Image source={require('../assets/images/icon.png')} style={styles.logo} resizeMode="contain" />
+        <Image source={require('../assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
         {currentIndex < slides.length - 1 && (
           <AnimatedButton onPress={handleSkip} style={styles.skipBtn}>
             <Text style={styles.skipText}>تخطي</Text>

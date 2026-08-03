@@ -4,13 +4,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/AppText';
 import { AppColors, AppFontFamily, AppRadius, AppSpacing } from '@/constants/AppTheme';
 
+import { useFamily } from '@/src/context/FamilyContext';
+
 export const AIWelcome = React.memo(() => {
+  const { currentProfile } = useFamily();
+  const firstName = currentProfile?.full_name?.split(' ')[0] || '';
+
   return (
     <View style={styles.cardContainer}>
       <View style={styles.iconCircle}>
         <Ionicons name="sparkles" size={32} color={AppColors.accent} />
       </View>
-      <Text style={styles.title}>مرحبًا بك في Healix AI</Text>
+      <Text style={styles.title}>{firstName ? `أهلاً بك، ${firstName} 👋` : 'مرحبًا بك في Healix AI'}</Text>
       <Text style={styles.subtitle}>أنا مساعدك الصحي الذكي</Text>
       <Text style={styles.description}>
         أستطيع مساعدتك في الإجابة عن أسئلتك المتعلقة بالتغذية، والسعرات الحرارية، والأنظمة الغذائية، والعادات الصحية، وكل ما يساعدك على تحقيق أهدافك الصحية.
