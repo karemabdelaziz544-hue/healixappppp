@@ -36,7 +36,7 @@ CREATE POLICY "Users and managers can update daily task logs" ON public.daily_ta
   );
 
 -- 3. daily_logs table policies
-DROP POLICY IF EXISTS "Users and managers can access daily logs" ON public.logs; -- cleanup potential duplicates
+DROP POLICY IF EXISTS "Users and managers can access daily logs" ON public.daily_logs; -- cleanup potential duplicates
 DROP POLICY IF EXISTS "Users and managers can access daily logs" ON public.daily_logs;
 
 CREATE POLICY "Users and managers can access daily logs" ON public.daily_logs

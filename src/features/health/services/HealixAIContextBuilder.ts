@@ -70,9 +70,9 @@ ${activeProfileHeader}
 - مؤشر كتلة الجسم (BMI): ${bmiText}
 
 التاريخ الطبي والتحذيرات:
-- الأمراض المزمنة: ${medical?.diseases && medical.diseases.length > 0 ? medical.diseases.join('، ') : 'لا يوجد'}
-- الحساسية الغذائية: ${medical?.allergies && medical.allergies.length > 0 ? medical.allergies.join('، ') : 'لا يوجد'}
-- الأدوية الحالية: ${medical?.medications && medical.medications.length > 0 ? medical.medications.join('، ') : 'لا يوجد'}
+- الأمراض المزمنة: ${Array.isArray(medical?.diseases) && medical.diseases.length > 0 ? medical.diseases.join('، ') : (typeof medical?.diseases === 'string' ? medical.diseases : 'لا يوجد')}
+- الحساسية الغذائية: ${Array.isArray(medical?.allergies) && medical.allergies.length > 0 ? medical.allergies.join('، ') : (typeof medical?.allergies === 'string' ? medical.allergies : 'لا يوجد')}
+- الأدوية الحالية: ${Array.isArray(medical?.medications) && medical.medications.length > 0 ? medical.medications.join('، ') : (typeof medical?.medications === 'string' ? medical.medications : 'لا يوجد')}
 
 مؤشرات اليوم الحالي:
 - الالتزام اليومي الإجمالي: ${analysis.compliance}% (النتيجة الصحية: ${analysis.score}/100)

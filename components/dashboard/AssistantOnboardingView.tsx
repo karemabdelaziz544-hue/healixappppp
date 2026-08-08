@@ -22,11 +22,10 @@ interface OnboardingStep {
   icon: keyof typeof Ionicons.glyphMap;
   isMandatory: boolean;
   route: string;
-  checkFn: (userId: string) => Promise<boolean>;
 }
 
 export default function AssistantOnboardingView() {
-  const { currentProfile, refreshFamily } = useFamily();
+  const { currentProfile, refreshFamily, optimisticUpdateProfile } = useFamily();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const userId = currentProfile?.id;
@@ -47,10 +46,6 @@ export default function AssistantOnboardingView() {
       icon: 'fitness',
       isMandatory: true,
       route: '/(tabs)/medical',
-      checkFn: async (uid) => {
-        const { count } = await supabase.from('inbody_records').select('id', { count: 'exact', head: true }).eq('user_id', uid);
-        return (count ?? 0) > 0;
-      },
     },
     {
       id: 'health',
@@ -59,10 +54,6 @@ export default function AssistantOnboardingView() {
       icon: 'heart',
       isMandatory: true,
       route: '/(tabs)/medical',
-      checkFn: async (uid) => {
-        const { data } = await supabase.from('health_profile').select('id').eq('user_id', uid).maybeSingle();
-        return !!data;
-      },
     },
     {
       id: 'lifestyle',
@@ -71,10 +62,6 @@ export default function AssistantOnboardingView() {
       icon: 'restaurant',
       isMandatory: true,
       route: '/(tabs)/medical',
-      checkFn: async (uid) => {
-        const { data } = await supabase.from('lifestyle_profile').select('id').eq('user_id', uid).maybeSingle();
-        return !!data;
-      },
     },
     {
       id: 'docs',
@@ -83,10 +70,6 @@ export default function AssistantOnboardingView() {
       icon: 'document-text',
       isMandatory: false,
       route: '/(tabs)/medical',
-      checkFn: async (uid) => {
-        const { count } = await supabase.from('client_documents').select('id', { count: 'exact', head: true }).eq('user_id', uid);
-        return (count ?? 0) > 0;
-      },
     },
   ], []);
 
@@ -94,21 +77,19 @@ export default function AssistantOnboardingView() {
   const checkAllSteps = useCallback(async () => {
     if (!userId) return;
     try {
-      const results = await Promise.all(
-        steps.map(async (step) => {
-          try {
-            const completed = await step.checkFn(userId);
-            return { id: step.id, completed };
-          } catch {
-            return { id: step.id, completed: false };
-          }
-        })
-      );
-
+      const { data, error } = await supabase.rpc('get_user_onboarding_status', { target_uid: userId });
+      
       const statusMap: Record<string, boolean> = {};
-      results.forEach(({ id, completed }) => {
-        statusMap[id] = completed;
-      });
+      
+      if (!error && data) {
+        statusMap['inbody'] = data.has_inbody ?? false;
+        statusMap['health'] = data.has_health_profile ?? false;
+        statusMap['lifestyle'] = data.has_lifestyle_profile ?? false;
+        statusMap['docs'] = data.has_client_documents ?? false;
+      } else {
+        // Fallback to false if RPC fails
+        steps.forEach(s => statusMap[s.id] = false);
+      }
 
       setCompletionStatus(statusMap);
     } catch (err) {
@@ -155,28 +136,46 @@ export default function AssistantOnboardingView() {
     );
   };
 
+  const [completing, setCompleting] = useState(false);
+
+  // 🚀 إكمال الأونبوردينج الموثوق بالأمر المباشر من RPC
+  const handleCompleteOnboardingNow = useCallback(async () => {
+    if (!userId || completing) return;
+    setCompleting(true);
+
+    try {
+      // 1) تجربة الـ RPC المباشر (يتجاوز قيود RLS للأكونت الفرعي)
+      const { error: rpcErr } = await supabase.rpc('complete_profile_onboarding', {
+        target_profile_id: userId,
+      });
+
+      if (rpcErr) {
+        logger.warn('RPC complete_profile_onboarding fallback:', rpcErr.message);
+        // Fallback: التحديث المباشر للبروفايل
+        await supabase.from('profiles').update({ is_onboarded: true }).eq('id', userId);
+      }
+
+      logger.log('✅ is_onboarded updated to true via RPC for profile:', userId);
+    } catch (err) {
+      logger.error('Error updating is_onboarded:', err);
+    } finally {
+      // ✅ Optimistic update: نحدّث الـ state فوراً في الـ Context
+      optimisticUpdateProfile({ is_onboarded: true });
+      refreshFamily();
+      setCompleting(false);
+    }
+  }, [userId, completing, optimisticUpdateProfile, refreshFamily]);
+
   // التحويل التلقائي للداشبورد عند اكتمال كل الخطوات الإلزامية
   useEffect(() => {
     if (!allDone || !userId || loading) return;
 
-    const markOnboarded = async () => {
-      try {
-        const { error } = await supabase
-          .from('profiles')
-          .update({ is_onboarded: true })
-          .eq('id', userId);
+    const timer = setTimeout(() => {
+      handleCompleteOnboardingNow();
+    }, 1000);
 
-        if (error) throw error;
-        logger.log('✅ is_onboarded updated to true');
-        refreshFamily();
-      } catch (err) {
-        logger.error('Error updating is_onboarded:', err);
-      }
-    };
-
-    const timer = setTimeout(markOnboarded, 1500);
     return () => clearTimeout(timer);
-  }, [allDone, userId, loading]);
+  }, [allDone, userId, loading, handleCompleteOnboardingNow]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -328,6 +327,19 @@ export default function AssistantOnboardingView() {
           })}
         </View>
 
+        {/* 4.5 زر إكمال التسجيل المباشر والتفعيل */}
+        <TouchableOpacity
+          style={[styles.primaryCompleteBtn, completing && { opacity: 0.6 }]}
+          activeOpacity={0.85}
+          disabled={completing}
+          onPress={handleCompleteOnboardingNow}
+        >
+          <Ionicons name="sparkles" size={20} color="#FFFFFF" />
+          <Text style={styles.primaryCompleteBtnText}>
+            {completing ? 'جاري التحويل للداشبورد...' : 'تأكيد إكمال الإعداد والانتقال للداشبورد ✨'}
+          </Text>
+        </TouchableOpacity>
+
         {/* 5. Help Box */}
         <View style={styles.helpBox}>
           <View style={styles.helpIconBox}>
@@ -336,7 +348,7 @@ export default function AssistantOnboardingView() {
           <View style={styles.helpTextCol}>
             <Text style={styles.helpTitle}>هل تحتاج للمساعدة؟</Text>
             <Text style={styles.helpDesc}>
-              فريقنا متاح على مدار الساعة لمساعدتك في إكمال ملفك الصحي. يمكنك التواصل مع المدرب الشخصي مباشرة من خلال المحادثة أو الضغط مطولاً على الخطوة لتحديدها كمكتملة.
+              فريقنا متاح على مدار الساعة لمساعدتك في إكمال ملفك الصحي. يمكنك إدخال البيانات أو الضغط على زر التخطي وإكمال البيانات لاحقاً.
             </Text>
           </View>
         </View>
@@ -701,5 +713,30 @@ const styles = StyleSheet.create({
     fontFamily: AppFontFamily.medium,
     textAlign: 'right',
     lineHeight: 18,
+  },
+
+  // 6. Primary Completion CTA
+  primaryCompleteBtn: {
+    backgroundColor: '#003527',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 18,
+    marginTop: 20,
+    marginBottom: 10,
+    shadowColor: '#003527',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  primaryCompleteBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: AppFontFamily.bold,
+    textAlign: 'center',
   },
 });

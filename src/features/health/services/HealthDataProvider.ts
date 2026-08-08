@@ -31,16 +31,16 @@ export class HealthDataProvider {
         inbodyRes,
         docsRes
       ] = await Promise.all([
-        executeQuery<any>(supabase.from('profiles').select('*').eq('id', userId).maybeSingle(), { isIdempotent: true }),
-        executeQuery<any>(supabase.from('health_profile').select('*').eq('user_id', userId).maybeSingle(), { isIdempotent: true }),
-        executeQuery<any>(supabase.from('lifestyle_profile').select('*').eq('user_id', userId).maybeSingle(), { isIdempotent: true }),
+        executeQuery<any>(supabase.from('profiles').select('id, full_name, weight, height, age, gender, relation, manager_id, assigned_doctor_id').eq('id', userId).maybeSingle(), { isIdempotent: true }),
+        executeQuery<any>(supabase.from('health_profile').select('id, diseases, allergies, medications, blood_type, has_chronic_disease, surgeries').eq('user_id', userId).maybeSingle(), { isIdempotent: true }),
+        executeQuery<any>(supabase.from('lifestyle_profile').select('id, activity_level, dietary_preference, typical_sleep_hours, water_intake_goal, daily_steps_goal, has_dietitian, smoke, alcohol, stress_level').eq('user_id', userId).maybeSingle(), { isIdempotent: true }),
         executeQuery<any[]>(supabase.from('water_tracking').select('amount').eq('user_id', userId).gte('recorded_at', startOfDay.toISOString()).lte('recorded_at', endOfDay.toISOString()), { isIdempotent: true }),
-        executeQuery<any[]>(supabase.from('medical_audit_log').select('*').eq('profile_id', userId).order('occurred_at', { ascending: false }).limit(5), { isIdempotent: true }),
+        executeQuery<any[]>(supabase.from('medical_audit_log').select('id, action, created_at, occurred_at').eq('profile_id', userId).order('occurred_at', { ascending: false }).limit(5), { isIdempotent: true }),
         ActivityRepository.fetchActivityGoal(userId),
-        executeQuery<any>(supabase.from('plans').select('*').eq('user_id', userId).neq('plan_type', 'workout').eq('status', 'active').order('created_at', { ascending: false }).limit(1).maybeSingle(), { isIdempotent: true }),
-        executeQuery<any>(supabase.from('plans').select('*').eq('user_id', userId).eq('plan_type', 'workout').eq('status', 'active').order('created_at', { ascending: false }).limit(1).maybeSingle(), { isIdempotent: true }),
-        executeQuery<any>(supabase.from('inbody_records').select('*').eq('user_id', userId).order('record_date', { ascending: false }).limit(1).maybeSingle(), { isIdempotent: true }),
-        executeQuery<any[]>(supabase.from('client_documents').select('*').eq('user_id', userId).order('created_at', { ascending: false }), { isIdempotent: true })
+        executeQuery<any>(supabase.from('plans').select('id, title, plan_type, status, created_at, end_date').eq('user_id', userId).neq('plan_type', 'workout').eq('status', 'active').order('created_at', { ascending: false }).limit(1).maybeSingle(), { isIdempotent: true }),
+        executeQuery<any>(supabase.from('plans').select('id, title, plan_type, status, created_at, end_date').eq('user_id', userId).eq('plan_type', 'workout').eq('status', 'active').order('created_at', { ascending: false }).limit(1).maybeSingle(), { isIdempotent: true }),
+        executeQuery<any>(supabase.from('inbody_records').select('id, record_date, weight, fat_percent, muscle_mass, score').eq('user_id', userId).order('record_date', { ascending: false }).limit(1).maybeSingle(), { isIdempotent: true }),
+        executeQuery<any[]>(supabase.from('client_documents').select('id, title, document_type, file_url, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(50), { isIdempotent: true })
       ]);
 
       if (!profileRes.data) return null;
@@ -103,7 +103,7 @@ export class HealthDataProvider {
 
       if (planIds.length > 0) {
         const [tasksRes, logsRaw] = await Promise.all([
-          executeQuery<any[]>(supabase.from('plan_tasks').select('*').in('plan_id', planIds).order('order_index', { ascending: true }), { isIdempotent: true }),
+          executeQuery<any[]>(supabase.from('plan_tasks').select('id, plan_id, title, task_type, content, order_index, time_of_day, target_day_num, target_weekday, duration_mins, calories_burned').in('plan_id', planIds).order('order_index', { ascending: true }).limit(100), { isIdempotent: true }),
           executeQuery<any[]>(supabase.from('daily_task_logs').select('task_id, is_completed').eq('user_id', userId).eq('log_date', dateStr), { isIdempotent: true })
         ]);
 

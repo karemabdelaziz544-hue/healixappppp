@@ -1,9 +1,11 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/AppText';
 import { AppColors, AppFontFamily, AppSpacing } from '@/constants/AppTheme';
 import { Strings } from '@/constants/strings';
+import { SparklesIcon } from '@/components/icons';
+import { HELI_BRAND } from '../constants/heliBrand';
 
 interface AIHeaderProps {
   onBack: () => void;
@@ -16,15 +18,18 @@ export const AIHeader = React.memo(({ onBack }: AIHeaderProps) => {
         <TouchableOpacity onPress={onBack} style={styles.backButton} accessibilityLabel={Strings.common.back}>
           <Ionicons name="arrow-forward" size={24} color={AppColors.primary} />
         </TouchableOpacity>
+        <View style={styles.iconCircleHeader}>
+          <Image source={HELI_BRAND.ui.avatarImage} style={styles.avatarHeaderImage} resizeMode="cover" />
+        </View>
         <View style={styles.textContainer}>
-          <Text style={styles.title}>Healix AI</Text>
-          <Text style={styles.subtitle}>مساعدك الصحي الذكي</Text>
+          <Text style={styles.title}>{HELI_BRAND.chatScreen.headerTitle}</Text>
+          <Text style={styles.subtitle}>{HELI_BRAND.chatScreen.headerSubtitle}</Text>
         </View>
       </View>
       <View style={styles.leftSection}>
         <View style={styles.aiStatusBadge}>
           <View style={styles.statusDot} />
-          <Text style={styles.statusText}>نشط</Text>
+          <Text style={styles.statusText}>متصل</Text>
         </View>
       </View>
     </View>
@@ -51,6 +56,19 @@ const styles = StyleSheet.create({
     padding: AppSpacing.xs,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  iconCircleHeader: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(242, 110, 17, 0.25)',
+  },
+  avatarHeaderImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 18,
   },
   textContainer: {
     alignItems: 'flex-start',

@@ -108,18 +108,18 @@ export default function EventDetailsScreen() {
         // 1. Fetch Event info
         const { data: evData, error: evErr } = await supabase
           .from('events')
-          .select('*')
+          .select('id, title, subtitle, description, event_date, location, points_reward, price, max_attendees, image_url, speakers, agenda')
           .eq('id', id)
           .maybeSingle();
 
         if (evErr) throw evErr;
-        setEvent(evData);
+        setEvent(evData as any);
 
         // 2. Fetch User booking status for this event
         if (user) {
           const { data: bkData } = await supabase
             .from('event_bookings')
-            .select('*')
+            .select('id, status, created_at')
             .eq('event_id', id)
             .eq('user_id', user.id)
             .maybeSingle();

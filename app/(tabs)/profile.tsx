@@ -45,15 +45,49 @@ export default function ProfileScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const [activeSection, setActiveSection] = useState<'profile' | 'security' | null>(null);
+  const [loadedProfileId, setLoadedProfileId] = useState<string | null>(null);
+
+  // Helper to normalize Eastern Arabic numerals to Western digits and clean input
+  const normalizeNumericInput = (text: string, allowDecimal = false): string => {
+    if (!text) return '';
+    let normalized = text
+      .replace(/[٠۰]/g, '0')
+      .replace(/[١۱]/g, '1')
+      .replace(/[٢۲]/g, '2')
+      .replace(/[٣۳]/g, '3')
+      .replace(/[٤۴]/g, '4')
+      .replace(/[٥۵]/g, '5')
+      .replace(/[٦۶]/g, '6')
+      .replace(/[٧۷]/g, '7')
+      .replace(/[٨۸]/g, '8')
+      .replace(/[٩۹]/g, '9')
+      .replace(/,/g, '.');
+
+    if (allowDecimal) {
+      normalized = normalized.replace(/[^0-9.]/g, '');
+      const parts = normalized.split('.');
+      if (parts.length > 2) {
+        normalized = parts[0] + '.' + parts.slice(1).join('');
+      }
+    } else {
+      normalized = normalized.replace(/[^0-9]/g, '');
+    }
+    return normalized;
+  };
 
   useEffect(() => {
     const loadAvatar = async () => {
       if (currentProfile) {
-        setFullName(currentProfile.full_name || '');
-        setGender(currentProfile.gender || 'male');
-        setAge(currentProfile.age ? String(currentProfile.age) : '');
-        setHeight(currentProfile.height ? String(currentProfile.height) : '');
-        setWeight(currentProfile.weight ? String(currentProfile.weight) : '');
+        // Only initialize form fields when switching to a different profile ID
+        if (currentProfile.id !== loadedProfileId) {
+          setLoadedProfileId(currentProfile.id);
+          setFullName(currentProfile.full_name || '');
+          setGender(currentProfile.gender || 'male');
+          setAge(currentProfile.age ? String(currentProfile.age) : '');
+          setHeight(currentProfile.height ? String(currentProfile.height) : '');
+          setWeight(currentProfile.weight ? String(currentProfile.weight) : '');
+        }
+
         const path = currentProfile.avatar_url;
         if (path) {
           setAvatarPath(path);
@@ -72,6 +106,7 @@ export default function ProfileScreen() {
           setAvatarDisplayUrl(null);
         }
       } else {
+        setLoadedProfileId(null);
         setFullName('');
         setGender('male');
         setAge('');
@@ -83,15 +118,22 @@ export default function ProfileScreen() {
       setFetching(false);
     };
     loadAvatar();
-  }, [currentProfile]);
+  }, [currentProfile, loadedProfileId]);
 
   const handleUpdateProfile = async () => {
     const profileId = currentProfile?.id;
     if (!profileId) return;
     setLoading(true);
     try {
+      const cleanAge = normalizeNumericInput(age, false);
+      const cleanHeight = normalizeNumericInput(height, true);
+      const cleanWeight = normalizeNumericInput(weight, true);
+
+      const ageNum = parseInt(cleanAge, 10);
+      const heightNum = parseFloat(cleanHeight);
+      const weightNum = parseFloat(cleanWeight);
+
       const currentYear = new Date().getFullYear();
-      const ageNum = parseInt(age, 10);
       let calculatedBirthDate = null;
       if (!isNaN(ageNum) && ageNum > 0) {
         calculatedBirthDate = `${currentYear - ageNum}-01-01`;
@@ -99,17 +141,18 @@ export default function ProfileScreen() {
 
       const updates = {
         id: profileId,
-        full_name: fullName,
+        full_name: fullName.trim(),
         avatar_url: avatarPath,
         gender: gender,
-        age: !isNaN(ageNum) ? ageNum : null,
+        age: !isNaN(ageNum) && ageNum > 0 ? ageNum : null,
         birth_date: calculatedBirthDate,
-        height: height ? Number(height) : null,
-        weight: weight ? Number(weight) : null,
+        height: !isNaN(heightNum) && heightNum > 0 ? heightNum : null,
+        weight: !isNaN(weightNum) && weightNum > 0 ? weightNum : null,
         updated_at: new Date().toISOString(),
       };
       const { error } = await supabase.from('profiles').upsert(updates);
       if (error) throw error;
+
       showToast.success('تم تحديث الملف الشخصي بنجاح!');
       setActiveSection(null);
     } catch (error: any) {
@@ -440,7 +483,7 @@ export default function ProfileScreen() {
                 <TextInput
                   style={styles.input}
                   value={age}
-                  onChangeText={setAge}
+                  onChangeText={(val) => setAge(normalizeNumericInput(val, false))}
                   placeholder="مثال: 25"
                   keyboardType="numeric"
                   placeholderTextColor="#9CA3AF"
@@ -452,9 +495,9 @@ export default function ProfileScreen() {
                 <TextInput
                   style={styles.input}
                   value={height}
-                  onChangeText={setHeight}
+                  onChangeText={(val) => setHeight(normalizeNumericInput(val, true))}
                   placeholder="مثال: 175"
-                  keyboardType="numeric"
+                  keyboardType="decimal-pad"
                   placeholderTextColor="#9CA3AF"
                 />
               </View>
@@ -464,9 +507,9 @@ export default function ProfileScreen() {
                 <TextInput
                   style={styles.input}
                   value={weight}
-                  onChangeText={setWeight}
+                  onChangeText={(val) => setWeight(normalizeNumericInput(val, true))}
                   placeholder="مثال: 70"
-                  keyboardType="numeric"
+                  keyboardType="decimal-pad"
                   placeholderTextColor="#9CA3AF"
                 />
               </View>

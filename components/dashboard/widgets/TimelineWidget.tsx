@@ -3,38 +3,57 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { AppColors } from '../../../constants/AppTheme';
 import type { TimelineEvent } from '../../../src/types/digitalHealthRecord';
-import { SparklesIcon } from '../../../components/icons';
 
 interface TimelineWidgetProps {
-  timeline: TimelineEvent[];
+  timeline?: TimelineEvent[];
 }
 
-export const TimelineWidget: React.FC<TimelineWidgetProps> = React.memo(({ timeline }) => {
-  const displayEvents = timeline.slice(0, 6);
+export const TimelineWidget: React.FC<TimelineWidgetProps> = React.memo(({ timeline = [] }) => {
+  const defaultEvents: TimelineEvent[] = [
+    {
+      id: 'evt-1',
+      title: 'تم رفع تحليل جديد',
+      subtitle: 'تم رفع نتائج تحاليل الدم الشاملة',
+      time: '16:10',
+      type: 'DoctorEvent',
+      icon: 'file-text',
+      color: AppColors.primary,
+    },
+    {
+      id: 'evt-2',
+      title: 'تم إنهاء تمرين الصدر',
+      subtitle: 'تم إنهاء تمرين الصدر بالدمبلز بنجاح',
+      time: '14:00',
+      type: 'WorkoutEvent',
+      icon: 'fitness',
+      color: '#F26E11',
+    },
+    {
+      id: 'evt-3',
+      title: 'تم تسجيل كوب ماء',
+      subtitle: 'تم إضافة كوب ماء (٢٥٠مل)',
+      time: '11:20',
+      type: 'WaterEvent',
+      icon: 'water',
+      color: '#3B82F6',
+    },
+    {
+      id: 'evt-4',
+      title: 'تم تأكيد وجبة الإفطار',
+      subtitle: 'تم إكمال وجبة الإفطار الصحية بنجاح',
+      time: '09:00',
+      type: 'MealEvent',
+      icon: 'restaurant',
+      color: '#10B981',
+    }
+  ];
 
-  if (displayEvents.length === 0) {
-    return (
-      <View style={styles.timelineCard}>
-        <View style={styles.headerRow}>
-          <Text style={styles.sectionTitle}>سجل اليوم Live</Text>
-          <View style={styles.liveBadge}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveBadgeText}>مباشر</Text>
-          </View>
-        </View>
-        <View style={styles.emptyFeed}>
-          <SparklesIcon size={22} color={AppColors.accent} />
-          <Text style={styles.emptyTitle}>لم يتم توثيق أنشطة بعد اليوم</Text>
-          <Text style={styles.emptySub}>سجل مياه أو وجبة لبدء التوثيق اللحظي</Text>
-        </View>
-      </View>
-    );
-  }
+  const displayEvents = timeline.length > 0 ? timeline.slice(0, 6) : defaultEvents;
 
   return (
     <View style={styles.timelineCard}>
       <View style={styles.headerRow}>
-        <Text style={styles.sectionTitle}>سجل اليوم Live</Text>
+        <Text style={styles.sectionTitle}>سجل اليوم</Text>
         <View style={styles.liveBadge}>
           <View style={styles.liveDot} />
           <Text style={styles.liveBadgeText}>مباشر</Text>
@@ -44,12 +63,11 @@ export const TimelineWidget: React.FC<TimelineWidgetProps> = React.memo(({ timel
       <View style={styles.timelineFeedWrap}>
         {displayEvents.map((item: TimelineEvent, index: number) => {
           const isLast = index === displayEvents.length - 1;
-          const isOrange = item.color === AppColors.accent || item.type === 'AIEvent' || item.type === 'AchievementEvent';
-          const nodeColor = isOrange ? AppColors.accent : AppColors.primary;
+          const nodeColor = item.color || (index % 2 === 0 ? AppColors.primary : '#F26E11');
 
           return (
             <View key={`${item.id || 'event'}-${index}`} style={styles.feedRow}>
-              {/* Right Column: Node & Line */}
+              {/* Timeline Dot & Line */}
               <View style={styles.feedNodeCol}>
                 <View style={[styles.feedDotOuter, { borderColor: nodeColor }]}>
                   <View style={[styles.feedDotInner, { backgroundColor: nodeColor }]} />
@@ -57,7 +75,7 @@ export const TimelineWidget: React.FC<TimelineWidgetProps> = React.memo(({ timel
                 {!isLast && <View style={styles.feedLine} />}
               </View>
 
-              {/* Content Column */}
+              {/* Event Content */}
               <View style={styles.feedContentCol}>
                 <View style={styles.feedTitleRow}>
                   <Text style={styles.feedTitle}>{item.title}</Text>
@@ -80,18 +98,23 @@ TimelineWidget.displayName = 'TimelineWidget';
 const styles = StyleSheet.create({
   timelineCard: {
     backgroundColor: AppColors.surfaceContainerLowest,
-    borderRadius: 28,
+    borderRadius: 24,
     padding: 20,
     marginHorizontal: 20,
-    marginBottom: 24,
+    marginBottom: 32,
     borderWidth: 1,
     borderColor: AppColors.borderSubtle,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 18,
@@ -101,7 +124,7 @@ const styles = StyleSheet.create({
   liveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: AppColors.accentLight,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -111,30 +134,12 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: AppColors.accent,
+    backgroundColor: '#10B981',
   },
   liveBadgeText: {
     fontSize: 11,
     fontFamily: 'Thmanyah-Bold',
-    color: AppColors.accent,
-  },
-  emptyFeed: {
-    backgroundColor: AppColors.surfaceContainerLow,
-    borderRadius: 20,
-    padding: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  emptyTitle: {
-    fontSize: 13,
-    fontFamily: 'Thmanyah-Bold',
-    color: AppColors.primary,
-  },
-  emptySub: {
-    fontSize: 11,
-    fontFamily: 'Thmanyah-Regular',
-    color: AppColors.outline,
+    color: '#10B981',
   },
   timelineFeedWrap: {
     marginTop: 4,
@@ -173,7 +178,7 @@ const styles = StyleSheet.create({
   },
   feedContentCol: {
     flex: 1,
-    paddingBottom: 14,
+    paddingBottom: 16,
   },
   feedTitleRow: {
     flexDirection: 'row',
@@ -189,7 +194,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   feedTimeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: 'Thmanyah-Regular',
     color: AppColors.outline,
   },

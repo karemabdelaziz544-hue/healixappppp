@@ -21,7 +21,15 @@ Deno.serve(async (req: Request) => {
     const authHeader = req.headers.get('Authorization') ?? '';
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!serviceRoleKey) {
+      console.error('[delete-account] SUPABASE_SERVICE_ROLE_KEY is not configured');
+      return new Response(JSON.stringify({ error: 'Server configuration error' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // 1. Authenticate user JWT
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -67,7 +75,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.from('daily_logs').delete().in('user_id', allProfileIds),
       supabaseAdmin.from('daily_task_logs').delete().in('user_id', allProfileIds),
       supabaseAdmin.from('activity_logs').delete().in('user_id', allProfileIds),
-      supabaseAdmin.from('messages').delete().or(`sender_id.in.(${allProfileIds.join(',')}),recipient_id.in.(${allProfileIds.join(',')})`),
+      supabaseAdmin.from('messages').delete().or(`sender_id.in.(${allProfileIds.join(',')}),receiver_id.in.(${allProfileIds.join(',')})`),
       supabaseAdmin.from('push_subscriptions').delete().in('user_id', allProfileIds),
     ]);
 

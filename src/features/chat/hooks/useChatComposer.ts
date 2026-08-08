@@ -2,7 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { Keyboard, Platform } from 'react-native';
 import { Audio } from 'expo-av';
 import { supabase } from '../../../lib/supabase';
+import { executeQuery } from '../../../lib/apiClient';
 import { showToast } from '../../../../components/AppToast';
+import { logger } from '../../../lib/logger';
 import * as Haptics from 'expo-haptics';
 import type { Attachment } from './useChatAttachments';
 import { OfflineQueue, generateUUID } from '../../../lib/offlineQueue';
@@ -27,8 +29,6 @@ export function useChatComposer(
   const recordingRef = useRef<Audio.Recording | null>(null);
   const MAX_MESSAGE_LENGTH = 1000;
 
-  // 🔴 C4-FIX: Cleanup on unmount — release microphone lock and stop timer
-  // if user navigates away mid-recording. Without this, the mic stays locked.
   useEffect(() => {
     return () => {
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
@@ -46,8 +46,6 @@ export function useChatComposer(
 
   const startRecording = async () => {
     try {
-      // 🔴 C4-FIX: Check existing permission before requesting.
-      // Requesting immediately with no rationale risks App Store/Play Store rejection.
       const { status: existingStatus } = await Audio.getPermissionsAsync();
 
       if (existingStatus === 'denied') {
@@ -94,7 +92,12 @@ export function useChatComposer(
     if (now - lastSentAt < 1000) return;
     setLastSentAt(now);
 
-    if (!receiverId || (!newMessage.trim() && !attachment) || !currentUserId) return;
+    if ((!newMessage.trim() && !attachment) || !currentUserId) {
+      logger.warn('[useChatComposer] Cannot send message: empty input or unauthenticated user');
+      return;
+    }
+
+    const effectiveReceiverId = (receiverId && receiverId !== '00000000-0000-0000-0000-000000000000') ? receiverId : null;
     
     if (newMessage.trim().length > MAX_MESSAGE_LENGTH) {
       showToast.error('الرسالة طويلة جداً (الحد الأقصى 1000 حرف)');
@@ -144,36 +147,72 @@ export function useChatComposer(
         : (newMessage || (attachmentType === 'image' ? '📷 صورة مرفقة' : '📎 ملف مرفق'));
 
       const messageId = generateUUID();
+      const recipientType = inquiryId === 'support' ? 'admin' : 'doctor';
+      const effectiveInquiryId = inquiryId === 'support' ? null : inquiryId;
+
       const optimisticMsg: import('../../../types').Message = {
         id: messageId,
         sender_id: currentUserId!,
-        receiver_id: receiverId!,
+        receiver_id: effectiveReceiverId || '',
         content: contentText,
         attachment_url: attachmentPath,
         attachment_type: (attachmentType || null) as import('../../../types').Message['attachment_type'],
-        recipient_type: inquiryId === 'support' ? 'admin' : 'doctor',
-        inquiry_id: inquiryId === 'support' ? undefined : inquiryId,
+        recipient_type: recipientType,
+        inquiry_id: effectiveInquiryId || undefined,
         is_read: false,
         created_at: new Date().toISOString(),
       };
       setMessages(prev => [optimisticMsg, ...prev]);
 
-      await OfflineQueue.addMutation('chat_send', currentUserId, {
-        messageId,
-        receiverId,
-        content: contentText,
-        attachmentUrl: attachmentPath,
-        attachmentType,
-        attachment: attachmentPayload,
-        recipientType: inquiryId === 'support' ? 'admin' : 'doctor',
-        inquiryId: inquiryId === 'support' ? undefined : inquiryId
-      });
+      // Direct insertion when online for immediate delivery & instant feedback
+      if (isOnline) {
+        const { error: dbError } = await executeQuery(
+          supabase.from('messages').insert({
+            id: messageId,
+            sender_id: currentUserId,
+            receiver_id: effectiveReceiverId,
+            content: contentText,
+            attachment_url: attachmentPath,
+            attachment_type: attachmentType,
+            recipient_type: recipientType,
+            inquiry_id: effectiveInquiryId,
+            is_read: false,
+            created_at: optimisticMsg.created_at,
+          })
+        );
+        if (dbError) {
+          logger.error('[useChatComposer] Supabase message insert error:', dbError);
+          // Queue for offline retry if direct insert failed
+          await OfflineQueue.addMutation('chat_send', currentUserId, {
+            messageId,
+            receiverId: effectiveReceiverId,
+            content: contentText,
+            attachmentUrl: attachmentPath,
+            attachmentType,
+            attachment: attachmentPayload,
+            recipientType,
+            inquiryId: effectiveInquiryId
+          });
+        }
+      } else {
+        await OfflineQueue.addMutation('chat_send', currentUserId, {
+          messageId,
+          receiverId: effectiveReceiverId,
+          content: contentText,
+          attachmentUrl: attachmentPath,
+          attachmentType,
+          attachment: attachmentPayload,
+          recipientType,
+          inquiryId: effectiveInquiryId
+        });
+      }
 
       setNewMessage('');
       setAttachment(null);
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch (err) {
-      showToast.error('فشل الإرسال، حاول مرة أخرى');
+    } catch (err: any) {
+      logger.error('[useChatComposer] Send message exception:', err);
+      showToast.error('فشل الإرسال: ' + (err.message || 'يرجى المحاولة مرة أخرى'));
     } finally {
       setUploading(false);
     }

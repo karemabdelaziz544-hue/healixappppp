@@ -116,21 +116,21 @@ export default function MedicalRecordsScreen() {
   };
 
   const fetchInbody = async () => {
-    const { data } = await supabase.from('inbody_records').select('id, user_id, weight, muscle_mass, fat_percent, record_date, ai_summary, image_url').eq('user_id', userId).order('record_date', { ascending: true });
+    const { data } = await supabase.from('inbody_records').select('id, user_id, weight, muscle_mass, fat_percent, record_date, ai_summary, image_url').eq('user_id', userId).order('record_date', { ascending: false }).limit(30);
     const records = data || [];
     setInbodyRecords(records);
     return records;
   };
 
   const fetchDocs = async () => {
-    const { data } = await supabase.from('client_documents').select('id, user_id, file_name, file_url, file_type, created_at').eq('user_id', userId).order('created_at', { ascending: false });
+    const { data } = await supabase.from('client_documents').select('id, user_id, file_name, file_url, file_type, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(50);
     const docsList = data || [];
     setDocs(docsList);
     return docsList;
   };
 
   // 🛡️ Loading State — Skeleton
-  if (isGuardLoading || !currentProfile || loading) {
+  if (isGuardLoading || userLifecycleState === 'loading' || (loading && userLifecycleState === 'active')) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
@@ -153,25 +153,7 @@ export default function MedicalRecordsScreen() {
   }
 
 
-  // 🔒 Lead — مقفول بالكامل
-  if (!isGuardLoading && userLifecycleState === 'lead') {
-    return (
-      <LockedTabView
-        icon="pulse"
-        iconColor="#F97316"
-        iconBg="#FFF7ED"
-        title="المركز الطبي والقياسات"
-        subtitle="اشترك الآن لتبدأ في تسجيل قياساتك الطبية، التحاليل، ونمط حياتك لمتابعة أدق مع طبيبك."
-        buttonText="اشترك الآن"
-        onPress={() => router.push('/subscriptions')}
-      />
-    );
-  }
 
-  // ⏰ Expired — مقفول بالكامل (إجبار على التجديد)
-  if (!isGuardLoading && userLifecycleState === 'expired') {
-    return <ExpiredState />;
-  }
 
   return (
     <SafeAreaView style={styles.container}>

@@ -176,9 +176,23 @@ export default function MainDashboardView() {
           compliance={vm.analysis?.compliance}
           summaryText={vm.heroSummary}
           onContinueDayPress={handleScrollToMeals}
+          steps={vm.activitySteps}
+          calories={vm.dhr?.activity?.calories ?? Math.round(vm.activitySteps * 0.04)}
+          waterGlasses={vm.waterGlasses}
+          activeMinutes={vm.dhr?.activity?.active_minutes ?? Math.round(vm.activitySteps / 100)}
+          weightKg={currentProfile?.weight ?? vm.dhr?.inbody?.weight ?? vm.dhr?.profile?.weight ?? 70.0}
         />
 
-        {/* 3. Current Meal (Highest Priority) */}
+        {/* 3. Quick Actions Grid (Immediately After Hero) */}
+        <QuickActionsWidget
+          onContactDoctorPress={() => router.push('/chat' as any)}
+          onAICoachPress={() => router.push('/healix-ai' as any)}
+          onUploadLabsPress={() => router.push('/(tabs)/medical' as any)}
+          onWorkoutsPress={() => router.push('/(tabs)/workouts' as any)}
+          onMorePress={() => setIsMoreModalVisible(true)}
+        />
+
+        {/* 4. Current Meal (Highest Priority) */}
         <View 
           onLayout={(e) => {
             const layout = e.nativeEvent.layout;
@@ -193,19 +207,10 @@ export default function MainDashboardView() {
           />
         </View>
 
-        {/* 4. Healix AI Coach Tip */}
+        {/* 5. Healix AI Coach Tip */}
         <ContextualAICoachWidget
           recommendation={vm.aiRecommendation || undefined}
           onChatPress={() => router.push('/healix-ai' as any)}
-        />
-
-        {/* 5. Quick Actions Grid */}
-        <QuickActionsWidget
-          onContactDoctorPress={() => router.push('/chat' as any)}
-          onAICoachPress={() => router.push('/healix-ai' as any)}
-          onUploadLabsPress={() => router.push('/(tabs)/medical' as any)}
-          onWorkoutsPress={() => router.push('/(tabs)/workouts' as any)}
-          onMorePress={() => setIsMoreModalVisible(true)}
         />
 
         {/* 6. Today's Key Indicators */}

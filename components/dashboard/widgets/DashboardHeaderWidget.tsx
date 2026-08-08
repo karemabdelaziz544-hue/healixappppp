@@ -1,8 +1,10 @@
 import { Text } from '@/components/AppText';
 import React, { useState, useEffect, useCallback } from 'react';
+import { useEntitlements } from '../../../src/features/subscriptions/useEntitlements';
+import { useRouter } from 'expo-router';
 import { View, StyleSheet, TouchableOpacity, Image, Modal, FlatList } from 'react-native';
 import { AppColors } from '../../../constants/AppTheme';
-import { NotificationIcon, StreakIcon, CheckmarkIcon, SwapIcon } from '../../../components/icons';
+import { NotificationIcon, StreakIcon, CheckmarkIcon, SwapIcon, LockIcon, SparklesIcon } from '../../../components/icons';
 import { getCachedSignedUrl } from '../../../src/lib/storageCache';
 import type { Profile } from '../../../src/types';
 
@@ -32,10 +34,32 @@ export const DashboardHeaderWidget: React.FC<DashboardHeaderWidgetProps> = React
   accountProfileId,
   onSwitchProfile,
 }) => {
+  const router = useRouter();
+  const { plan, canUse, userRole } = useEntitlements();
   const firstName = fullName ? (fullName.split(' ')[0] || fullName) : 'المستخدم';
   const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState<string | null>(null);
   const [showAccountSwitcher, setShowAccountSwitcher] = useState(false);
   const [memberAvatars, setMemberAvatars] = useState<Record<string, string | null>>({});
+
+  const isDoctorOrAdmin = currentProfile?.role === 'doctor' || currentProfile?.role === 'admin' || userRole === 'admin' || userRole === 'doctor';
+  const isFamily = plan === 'FAMILY';
+  const isPremium = plan === 'INDIVIDUAL' || canUse('NUTRITION_PLAN');
+
+  const badgeText = isDoctorOrAdmin
+    ? 'أدمن / دكتور'
+    : isFamily
+      ? 'عائلي'
+      : isPremium
+        ? 'بريميوم'
+        : 'الباقة Free';
+
+  const badgeIconColor = isDoctorOrAdmin
+    ? '#1D4ED8'
+    : isFamily
+      ? '#6D28D9'
+      : isPremium
+        ? '#047857'
+        : '#4B5563';
 
   // Resolve avatar URL (handles Supabase storage paths)
   useEffect(() => {
@@ -142,6 +166,22 @@ export const DashboardHeaderWidget: React.FC<DashboardHeaderWidgetProps> = React
     );
   }, [currentProfile, memberAvatars, handleSwitchProfile]);
 
+  const badgeStyle = isDoctorOrAdmin
+    ? styles.badgeDoctor
+    : isFamily
+      ? styles.badgeFamily
+      : isPremium
+        ? styles.badgePremium
+        : styles.badgeFree;
+
+  const badgeTextStyle = isDoctorOrAdmin
+    ? styles.badgeDoctorText
+    : isFamily
+      ? styles.badgeFamilyText
+      : isPremium
+        ? styles.badgePremiumText
+        : styles.badgeFreeText;
+
   return (
     <>
       <View style={styles.headerContainer}>
@@ -166,12 +206,20 @@ export const DashboardHeaderWidget: React.FC<DashboardHeaderWidgetProps> = React
         </TouchableOpacity>
 
         <View style={styles.headerRightActions}>
-          {streakDays > 0 && (
-            <View style={styles.streakBadge}>
-              <StreakIcon size={14} color={AppColors.primary} />
-              <Text style={styles.streakText}>{streakDays} يوم ملتزم</Text>
-            </View>
-          )}
+          <TouchableOpacity
+            style={[styles.badgeContainer, badgeStyle]}
+            onPress={() => router.push('/subscriptions' as any)}
+            activeOpacity={0.8}
+          >
+            {isPremium || isDoctorOrAdmin || isFamily ? (
+              <SparklesIcon size={12} color={badgeIconColor} />
+            ) : (
+              <LockIcon size={12} color={badgeIconColor} />
+            )}
+            <Text style={[styles.badgeTextBase, badgeTextStyle]}>
+              {badgeText}
+            </Text>
+          </TouchableOpacity>
 
           <TouchableOpacity style={styles.iconCircleBtn} onPress={onNotificationPress} activeOpacity={0.8}>
             <NotificationIcon size={20} color={AppColors.primary} />
@@ -285,7 +333,49 @@ const styles = StyleSheet.create({
   headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  badgeTextBase: {
+    fontSize: 11,
+    fontFamily: 'Thmanyah-Bold',
+  },
+  badgePremium: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  badgePremiumText: {
+    color: '#047857',
+  },
+  badgeFree: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+  },
+  badgeFreeText: {
+    color: '#4B5563',
+  },
+  badgeFamily: {
+    backgroundColor: '#F5F3FF',
+    borderColor: '#DDD6FE',
+  },
+  badgeFamilyText: {
+    color: '#6D28D9',
+  },
+  badgeDoctor: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  badgeDoctorText: {
+    color: '#1D4ED8',
   },
   streakBadge: {
     flexDirection: 'row',

@@ -12,8 +12,6 @@ export function useChatPagination(inquiryId: string, currentUserId: string | und
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  // 🔴 M1-FIX: stable ref for the last message cursor — prevents loadMoreMessages
-  // from being invalidated on every realtime update that adds to messages[].
   const lastMessageRef = useRef<Message | null>(null);
 
   useEffect(() => {
@@ -27,64 +25,49 @@ export function useChatPagination(inquiryId: string, currentUserId: string | und
       let targetReceiverId: string | null = null;
       let targetLastSeen: string | null = null;
 
-      if (inquiryId === 'support') {
-        // Fetch an admin as the receiver for customer support chat
-        const { data: adminData, error: adminErr } = await executeQuery<{ id: string; updated_at: string }>(
-          supabase.from('profiles').select('id, updated_at').eq('role', 'admin').limit(1).maybeSingle()
-        );
-        if (!adminErr && adminData) {
-          targetReceiverId = adminData.id;
-          targetLastSeen = adminData.updated_at;
-        }
-      } else {
-        // Fetch assigned doctor as the receiver for medical inquiries
-        const { data: userProfile, error: profileErr } = await executeQuery<{ assigned_doctor_id: string }>(
-          supabase.from('profiles').select('assigned_doctor_id').eq('id', currentUserId).maybeSingle()
-        );
-        
-        if (!profileErr && userProfile?.assigned_doctor_id) {
-           const { data: doctorData } = await executeQuery<{ id: string; updated_at: string }>(
-             supabase.from('profiles').select('id, updated_at').eq('id', userProfile.assigned_doctor_id).maybeSingle()
-           );
-           if (doctorData) {
-              targetReceiverId = doctorData.id;
-              targetLastSeen = doctorData.updated_at;
-           }
-        }
+      const { data: receiverData, error: rpcErr } = await executeQuery<{ receiver_id: string; last_seen: string }>(
+        supabase.rpc('get_chat_receiver', { p_inquiry_id: inquiryId, p_current_uid: currentUserId })
+      );
+
+      if (!rpcErr && receiverData) {
+        targetReceiverId = receiverData.receiver_id;
+        targetLastSeen = receiverData.last_seen;
       }
 
-      if (targetReceiverId && currentUserId) {
-        setReceiverId(targetReceiverId);
-        setLastSeen(targetLastSeen);
-        
-        let query = supabase
-            .from('messages')
-            .select('id, sender_id, receiver_id, content, attachment_url, attachment_type, recipient_type, inquiry_id, is_read, created_at');
-            
-        if (inquiryId === 'support') {
-            query = query.eq('recipient_type', 'admin').or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${targetReceiverId}),and(sender_id.eq.${targetReceiverId},receiver_id.eq.${currentUserId})`);
-        } else {
-            query = query.eq('inquiry_id', inquiryId);
-        }
+      setReceiverId(targetReceiverId);
+      setLastSeen(targetLastSeen);
 
-        const { data: messagesData, error: msgsErr } = await executeQuery<Message[]>(
-            query.order('created_at', { ascending: false }).limit(30)
-        );
-          
-        if (msgsErr) throw msgsErr;
+      let query = supabase
+          .from('messages')
+          .select('id, sender_id, receiver_id, content, attachment_url, attachment_type, recipient_type, inquiry_id, is_read, created_at');
 
-        if (messagesData) {
-          setMessages(messagesData);
-          if (messagesData.length < 30) setHasMore(false);
-        }
+      if (inquiryId === 'support') {
+          query = query.eq('recipient_type', 'admin').or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`);
+      } else {
+          query = query.eq('inquiry_id', inquiryId);
+      }
 
-        // Fire and forget read update (don't await to save time)
+      const { data: messagesData, error: msgsErr } = await executeQuery<Message[]>(
+          query.order('created_at', { ascending: false }).limit(30)
+      );
+
+      if (msgsErr) {
+        logger.error('[useChatPagination] Error querying messages:', msgsErr);
+        throw msgsErr;
+      }
+
+      if (messagesData) {
+        setMessages(messagesData);
+        if (messagesData.length < 30) setHasMore(false);
+      }
+
+      if (targetReceiverId) {
         executeQuery(
           supabase.from('messages').update({ is_read: true }).eq('receiver_id', currentUserId).eq('sender_id', targetReceiverId).eq('is_read', false)
         );
       }
     } catch (err: unknown) {
-      logger.error('Failed to open chat:', err);
+      logger.error('[useChatPagination] Failed to open chat:', err);
       showToast.error('فشل تحميل الرسائل، يرجى التحقق من اتصالك بالإنترنت');
     } finally {
       setLoading(false);
@@ -92,10 +75,9 @@ export function useChatPagination(inquiryId: string, currentUserId: string | und
   }, [inquiryId, currentUserId]);
 
   const loadMoreMessages = useCallback(async () => {
-    if (!hasMore || loadingMore || !receiverId || !currentUserId) return;
+    if (!hasMore || loadingMore || !currentUserId) return;
     setLoadingMore(true);
     try {
-      // 🔴 M1-FIX: read cursor from ref, not from closure — no stale data
       const lastMessage = lastMessageRef.current;
       if (!lastMessage) return;
 
@@ -103,9 +85,9 @@ export function useChatPagination(inquiryId: string, currentUserId: string | und
           .from('messages')
           .select('id, sender_id, receiver_id, content, attachment_url, attachment_type, recipient_type, inquiry_id, is_read, created_at')
           .lt('created_at', lastMessage.created_at);
-          
+
       if (inquiryId === 'support') {
-          query = query.eq('recipient_type', 'admin').or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${receiverId}),and(sender_id.eq.${receiverId},receiver_id.eq.${currentUserId})`);
+          query = query.eq('recipient_type', 'admin').or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`);
       } else {
           query = query.eq('inquiry_id', inquiryId);
       }
@@ -123,13 +105,12 @@ export function useChatPagination(inquiryId: string, currentUserId: string | und
         setHasMore(false);
       }
     } catch (err: unknown) {
-      logger.error('Failed to load older messages:', err);
+      logger.error('[useChatPagination] Failed to load older messages:', err);
       showToast.error('فشل تحميل الرسائل القديمة');
     } finally {
       setLoadingMore(false);
     }
-  // messages removed from deps — cursor is read via lastMessageRef instead
-  }, [hasMore, loadingMore, receiverId, currentUserId, inquiryId]);
+  }, [hasMore, loadingMore, currentUserId, inquiryId]);
 
   return { messages, setMessages, receiverId, lastSeen, loading, loadingMore, hasMore, openChat, loadMoreMessages };
 }

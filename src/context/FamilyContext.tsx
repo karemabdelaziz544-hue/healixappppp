@@ -11,6 +11,8 @@ interface FamilyContextType {
   /** 🔴 AUDIT 8 FIX: Now returns Promise<void> matching async contract */
   switchProfile: (profileId: string) => Promise<void>;
   refreshFamily: () => void;
+  /** Optimistically updates currentProfile in local state without DB re-fetch */
+  optimisticUpdateProfile: (patch: Partial<Profile>) => void;
   loadingFamily: boolean;
   /** 🔴 AUDIT 8 FIX: Surfaced error state for retry UI */
   familyError: Error | null;
@@ -22,7 +24,7 @@ export const FamilyProvider = ({ children }: { children: React.ReactNode }) => {
   const { session } = useAuth();
   const userId = session?.user?.id;
   
-  const { currentProfile, familyMembers, switchProfile, fetchFamily, loadingFamily, familyError } = useFamilyOrchestration(userId);
+  const { currentProfile, familyMembers, switchProfile, fetchFamily, loadingFamily, familyError, optimisticUpdateProfile } = useFamilyOrchestration(userId);
 
   return (
     <FamilyContext.Provider value={{
@@ -31,6 +33,7 @@ export const FamilyProvider = ({ children }: { children: React.ReactNode }) => {
       familyMembers,
       switchProfile,
       refreshFamily: fetchFamily,
+      optimisticUpdateProfile,
       loadingFamily,
       familyError,
     }}>

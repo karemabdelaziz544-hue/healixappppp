@@ -4,10 +4,13 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+const APP_URL = Deno.env.get('APP_URL');
+const allowedOrigin = APP_URL ?? null;
+
 const corsHeaders: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  ...(allowedOrigin ? { 'Access-Control-Allow-Origin': allowedOrigin } : { 'Access-Control-Allow-Origin': '*' }),
 };
 
 // Allowed file extension patterns and mime-types
@@ -106,9 +109,26 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // 5. Validate MIME Type
+    // 5. Validate MIME Type & Magic Bytes Binary Header
     if (!ALLOWED_MIME_TYPES.includes(file.type)) {
       return new Response(JSON.stringify({ error: `File type not supported: ${file.type || 'unknown'}` }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Inspect first 8 bytes of binary file header (File Validation Layer)
+    const headerBuffer = await file.slice(0, 8).arrayBuffer();
+    const headerBytes = new Uint8Array(headerBuffer);
+    const isPng = headerBytes[0] === 0x89 && headerBytes[1] === 0x50 && headerBytes[2] === 0x4E;
+    const isJpg = headerBytes[0] === 0xFF && headerBytes[1] === 0xD8 && headerBytes[2] === 0xFF;
+    const isPdf = headerBytes[0] === 0x25 && headerBytes[1] === 0x50 && headerBytes[2] === 0x44;
+    const isRiffWebp = headerBytes[0] === 0x52 && headerBytes[1] === 0x49 && headerBytes[2] === 0x46;
+    const isOgg = headerBytes[0] === 0x4F && headerBytes[1] === 0x67 && headerBytes[2] === 0x67;
+    const isDoc = file.type.includes('officedocument') || file.type.includes('msword') || file.type.startsWith('text/');
+
+    if (!isPng && !isJpg && !isPdf && !isRiffWebp && !isOgg && !isDoc) {
+      return new Response(JSON.stringify({ error: 'محتوى الملف لا يطابق الامتداد المصرّح به (فشل فحص الأمان لمحتوى الملف)' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

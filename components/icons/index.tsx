@@ -354,3 +354,23 @@ export const InfoIcon: React.FC<IconProps> = ({ size = 16, color = AppColors.out
   </Svg>
 );
 
+// 27. Lock Icon
+export const LockIcon: React.FC<IconProps> = ({ size = 14, color = AppColors.outline, style }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={style}>
+    <Rect x="5" y="11" width="14" height="10" rx="2" stroke={color} strokeWidth="1.8" />
+    <Path d="M8 11V7C8 4.79 9.79 3 12 3C14.21 3 16 4.79 16 7V11" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+  </Svg>
+);
+
+// 28. Gym Dumbbell / Fitness Icon
+export const DumbbellIcon: React.FC<IconProps> = ({ size = 20, color = AppColors.primary, style }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={style}>
+    <Path
+      d="M2 10V14M5 8V16M7 6V18M7 12H17M17 6V18M19 8V16M22 10V14"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);

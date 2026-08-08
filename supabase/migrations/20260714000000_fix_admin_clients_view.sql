@@ -25,8 +25,6 @@ CREATE OR REPLACE VIEW public.admin_clients_view AS
 SELECT 
   p.id,
   p.avatar_url,
-  p.created_at,
-  p.email,
   p.full_name,
   p.manager_id,
   m.full_name AS manager_name,

@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, StyleSheet, Image } from 'react-native';
 import { Text } from '@/components/AppText';
 import { AppColors, AppFontFamily, AppRadius, AppSpacing } from '@/constants/AppTheme';
-
+import { SparklesIcon } from '@/components/icons';
 import { useFamily } from '@/src/context/FamilyContext';
+import { HELI_BRAND } from '../constants/heliBrand';
 
 export const AIWelcome = React.memo(() => {
   const { currentProfile } = useFamily();
@@ -13,29 +13,24 @@ export const AIWelcome = React.memo(() => {
   return (
     <View style={styles.cardContainer}>
       <View style={styles.iconCircle}>
-        <Ionicons name="sparkles" size={32} color={AppColors.accent} />
+        <Image source={HELI_BRAND.ui.avatarImage} style={styles.avatarWelcomeImage} resizeMode="cover" />
       </View>
-      <Text style={styles.title}>{firstName ? `أهلاً بك، ${firstName} 👋` : 'مرحبًا بك في Healix AI'}</Text>
-      <Text style={styles.subtitle}>أنا مساعدك الصحي الذكي</Text>
-      <Text style={styles.description}>
-        أستطيع مساعدتك في الإجابة عن أسئلتك المتعلقة بالتغذية، والسعرات الحرارية، والأنظمة الغذائية، والعادات الصحية، وكل ما يساعدك على تحقيق أهدافك الصحية.
+
+      <Text style={styles.title}>
+        {firstName ? `أهلاً بك، ${firstName} 👋` : HELI_BRAND.chatScreen.welcomeGreeting}
       </Text>
-      
-      <View style={styles.divider} />
-      
-      <View style={styles.featuresRow}>
-        <View style={styles.featureItem}>
-          <Ionicons name="restaurant-outline" size={18} color={AppColors.primary} />
-          <Text style={styles.featureText}>أنظمة غذائية</Text>
-        </View>
-        <View style={styles.featureItem}>
-          <Ionicons name="flame-outline" size={18} color={AppColors.primary} />
-          <Text style={styles.featureText}>سعرات حرارية</Text>
-        </View>
-        <View style={styles.featureItem}>
-          <Ionicons name="heart-outline" size={18} color={AppColors.primary} />
-          <Text style={styles.featureText}>عادات صحية</Text>
-        </View>
+      <Text style={styles.subtitle}>
+        {HELI_BRAND.chatScreen.welcomeNamePrefix} {HELI_BRAND.chatScreen.welcomeSubtitle}
+      </Text>
+      <Text style={styles.descriptionHeader}>{HELI_BRAND.chatScreen.welcomeDescription}</Text>
+
+      <View style={styles.capabilitiesList}>
+        {HELI_BRAND.chatScreen.welcomeCapabilities.map((capability, index) => (
+          <View key={index} style={styles.capabilityRow}>
+            <View style={styles.bulletDot} />
+            <Text style={styles.capabilityText}>{capability}</Text>
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -62,12 +57,16 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: AppColors.accentLight,
-    justifyContent: 'center',
-    alignItems: 'center',
+    overflow: 'hidden',
     marginBottom: AppSpacing.lg,
-    borderWidth: 1,
-    borderColor: AppColors.accentBorder,
+    borderWidth: 1.5,
+    borderColor: 'rgba(242, 110, 17, 0.25)',
+    backgroundColor: '#F9FAF8',
+  },
+  avatarWelcomeImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 32,
   },
   title: {
     fontSize: 20,
@@ -78,42 +77,42 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
-    fontFamily: AppFontFamily.medium,
-    color: AppColors.accent,
+    fontFamily: AppFontFamily.bold,
+    color: '#F26E11',
     textAlign: 'center',
     marginBottom: AppSpacing.md,
   },
-  description: {
-    fontSize: 14,
-    fontFamily: AppFontFamily.regular,
+  descriptionHeader: {
+    fontSize: 13,
+    fontFamily: AppFontFamily.medium,
     color: AppColors.textSecondary,
     textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: AppSpacing.sm,
+    marginBottom: AppSpacing.md,
   },
-  divider: {
+  capabilitiesList: {
     width: '100%',
-    height: 1,
-    backgroundColor: AppColors.borderLight,
-    marginVertical: AppSpacing.xl,
+    gap: 8,
+    marginTop: 4,
   },
-  featuresRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-  },
-  featureItem: {
+  capabilityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: AppColors.primaryLight,
-    paddingHorizontal: AppSpacing.md,
-    paddingVertical: AppSpacing.sm,
-    borderRadius: AppRadius.lg,
+    gap: 10,
+    backgroundColor: 'rgba(42, 77, 68, 0.04)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
-  featureText: {
-    fontSize: 12,
+  bulletDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#F26E11',
+  },
+  capabilityText: {
+    fontSize: 13,
     fontFamily: AppFontFamily.medium,
     color: AppColors.primary,
+    writingDirection: 'rtl',
   },
 });

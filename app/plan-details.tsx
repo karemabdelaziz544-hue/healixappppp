@@ -7,7 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../src/lib/supabase';
 import { logger } from '../src/lib/logger';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
-import ExpiredState from '../components/ExpiredState';
+import { useEntitlements } from '../src/features/subscriptions/useEntitlements';
+import { PremiumGate } from '../src/components/PremiumGate';
 import Skeleton from '../components/Skeleton';
 import { useSubscriptionGuard } from '../hooks/useSubscriptionGuard';
 import { useFamily } from '../src/context/FamilyContext';
@@ -289,8 +290,72 @@ export default function PlanDetailsScreen() {
     );
   }
 
-  if (!isSubscribed) {
-    return <ExpiredState />;
+  const { canUse, userRole } = useEntitlements();
+  const [showGate, setShowGate] = useState(false);
+  const isPremiumOrPro = canUse('NUTRITION_PLAN') || canUse('WORKOUT_PLAN') || userRole === 'admin' || userRole === 'doctor';
+
+  if (!isPremiumOrPro) {
+    if (showGate) {
+      return (
+        <SafeAreaView style={styles.container}>
+          <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity onPress={() => setShowGate(false)}>
+              <Ionicons name="close" size={28} color="#1F2937" />
+            </TouchableOpacity>
+          </View>
+          <PremiumGate featureId="NUTRITION_PLAN" screenName="plan-details" />
+        </SafeAreaView>
+      );
+    }
+
+    return (
+      <SafeAreaView style={styles.container}>
+        <FadeInView delay={100} style={[styles.header, { flexDirection: 'row', alignItems: 'center', gap: 12, justifyContent: 'flex-start' }]}>
+          <AnimatedButton onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-forward" size={24} color="#2A4D44" />
+          </AnimatedButton>
+          <View style={styles.headerTitleBox}>
+            <Text style={styles.headerTitle}>{planTitle || 'الخطة الطبية'}</Text>
+            <Text style={styles.headerSubtitle}>خطة مجهزة خاصة بك</Text>
+          </View>
+        </FadeInView>
+
+        <View style={{ flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ width: '100%', backgroundColor: '#FFF', borderRadius: 24, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB', elevation: 4 }}>
+            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#FEF3C7', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+              <Ionicons name="restaurant-outline" size={32} color="#D97706" />
+            </View>
+
+            <Text style={{ fontFamily: AppFontFamily.bold, fontSize: 18, color: '#111827', textAlign: 'center', marginBottom: 8 }}>
+              {planTitle || 'نظامك المخصص جاهز 📋'}
+            </Text>
+
+            <Text style={{ fontFamily: AppFontFamily.medium, fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 20, lineHeight: 22 }}>
+              قام فريقنا الطبي بصياغة هذا النظام خصيصاً لحالتك الصحية وأهدافك البدنية.
+            </Text>
+
+            <View style={{ width: '100%', backgroundColor: '#F9FAFB', borderRadius: 12, padding: 14, marginBottom: 20, gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="calendar-outline" size={16} color="#4B5563" />
+                <Text style={{ fontFamily: AppFontFamily.medium, fontSize: 13, color: '#374151' }}>
+                  عدد الأيام: {dayNames.length || 30} يوم
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="medkit-outline" size={16} color="#4B5563" />
+                <Text style={{ fontFamily: AppFontFamily.medium, fontSize: 13, color: '#374151' }}>
+                  إشراف طبي متكامل ومتابعة شخصية
+                </Text>
+              </View>
+            </View>
+
+            <AnimatedButton style={{ width: '100%', height: 50, backgroundColor: '#059669', borderRadius: 12, justifyContent: 'center', alignItems: 'center' }} onPress={() => setShowGate(true)}>
+              <Text style={{ fontFamily: AppFontFamily.bold, fontSize: 16, color: '#FFF' }}>عرض تفاصيل النظام 🔒</Text>
+            </AnimatedButton>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   // Width for stats cards in a 2x2 grid

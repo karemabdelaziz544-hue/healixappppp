@@ -1,12 +1,12 @@
 import { Text, TextInput } from '@/components/AppText';
 import React, { memo, useState, useMemo } from 'react';
-import { View, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';;
+import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MedicalTabProps } from './medical.types';
 import { medicalStyles as styles } from './medicalStyles';
 import type { ClientDocument } from '../../types';
 import { useDocuments } from './hooks/useDocuments';
-import { AppColors, AppRadius, AppFontSize, AppFontFamily } from '../../../constants/AppTheme';
+import { AppColors, AppRadius, AppFontFamily } from '../../../constants/AppTheme';
 import { AnimatedButton } from '../../../components/animations/AnimatedButton';
 import { SlideInView } from '../../../components/animations/SlideInView';
 
@@ -15,8 +15,7 @@ interface DocumentsTabProps extends MedicalTabProps {
   onRefresh: () => Promise<void>;
 }
 
-// 🌟 Memoize DocumentCard for performance
-const DocumentCard = memo(({ doc, onView, index }: { doc: ClientDocument, onView: (url: string) => void, index: number }) => (
+const DocumentCard = memo(({ doc, onView, index }: { doc: ClientDocument; onView: (url: string) => void; index: number }) => (
   <SlideInView delay={100 + index * 50} direction="up" style={styles.docCard}>
     <View style={styles.docIconBox}>
       <Ionicons name="document-text" size={24} color="#3B82F6" />
@@ -37,7 +36,7 @@ export default function DocumentsTab({ userId, docs, uploading, setUploading, on
 
   const filteredDocs = useMemo(() => {
     if (!searchQuery) return docs;
-    return docs.filter(doc => 
+    return docs.filter(doc =>
       doc.file_name?.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [docs, searchQuery]);
@@ -98,18 +97,16 @@ const localStyles = StyleSheet.create({
     borderRadius: AppRadius.md,
     paddingHorizontal: 12,
     height: 44,
-    marginBottom: 20,
+    marginVertical: 12,
   },
   searchIcon: {
-    marginStart: 8,
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: AppFontSize.md,
-    color: AppColors.textPrimary,
-    fontFamily: AppFontFamily.regular,
-    textAlign: 'left',
     height: '100%',
+    fontFamily: AppFontFamily.regular,
+    fontSize: 14,
+    color: AppColors.textPrimary,
   },
 });
-

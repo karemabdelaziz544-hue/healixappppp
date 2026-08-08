@@ -14,6 +14,63 @@ const corsHeaders: Record<string, string> = {
   ...(allowedOrigin ? { 'Access-Control-Allow-Origin': allowedOrigin } : { 'Access-Control-Allow-Origin': '*' }),
 };
 
+const userRateLimits = new Map<string, { count: number; resetAt: number }>();
+
+async function checkRateLimitDB(
+  dbClient: any,
+  userId: string,
+  maxRequests: number,
+  windowMs = 60_000
+): Promise<boolean> {
+  const now = Date.now();
+  const record = userRateLimits.get(userId);
+
+  // Fast in-memory rejection if current isolate already tracked overflow
+  if (record && now <= record.resetAt && record.count >= maxRequests) {
+    return false;
+  }
+
+  // DB sliding window check using indexed ai_usage_logs
+  try {
+    const windowStart = new Date(now - windowMs).toISOString();
+    const { count, error } = await dbClient
+      .from('ai_usage_logs')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('created_at', windowStart);
+
+    if (!error && count !== null) {
+      if (count >= maxRequests) {
+        userRateLimits.set(userId, { count, resetAt: now + windowMs });
+        return false;
+      }
+      userRateLimits.set(userId, { count: count + 1, resetAt: now + windowMs });
+      return true;
+    }
+  } catch (err) {
+    console.warn('[healix-ai] DB rate limit query failed, falling back to local memory:', err);
+  }
+
+  // Fallback to local in-memory window
+  if (!record || now > record.resetAt) {
+    userRateLimits.set(userId, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (record.count >= maxRequests) {
+    return false;
+  }
+  record.count++;
+  return true;
+}
+
+function sanitizeInput(text: string): string {
+  if (typeof text !== 'string') return '';
+  return text
+    .replace(/(?:system:|\[SYSTEM INSTRUCTION\]|ignore previous instructions|override system prompt)/gi, '')
+    .slice(0, 1500)
+    .trim();
+}
+
 function safeErrorResponse(error: unknown, statusOverride?: number): Response {
   console.error('[healix-ai] Error:', error instanceof Error ? error.stack ?? error.message : error);
   const message = 'حدث خطأ غير متوقع أثناء الاتصال بالمساعد الذكي. يرجى المحاولة لاحقاً.';
@@ -46,7 +103,7 @@ Deno.serve(async (req: Request) => {
       { global: { headers: { Authorization: authHeader } } }
     );
     const { data: { user }, error: userError } = await userClient.auth.getUser();
-    
+
     if (userError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized access' }), {
         status: 401,
@@ -55,12 +112,24 @@ Deno.serve(async (req: Request) => {
     }
 
     const userId = user.id;
-    let targetUserId = userId;
 
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const dbClient = serviceRoleKey
       ? createClient(Deno.env.get('SUPABASE_URL') ?? '', serviceRoleKey)
       : userClient;
+
+    // ——— 1.5 Rate Limiting Guard (DB + Memory) ———
+    const maxRequests = mode === 'dashboard_coach' ? 4 : 12;
+    const isAllowed = await checkRateLimitDB(dbClient, userId, maxRequests, 60_000);
+    if (!isAllowed) {
+      console.warn(`[healix-ai] Rate limit hit for user ${userId} in mode ${mode}`);
+      return new Response(JSON.stringify({ error: 'لقد تجاوزت حد الطلبات المسموح به. يرجى الانتظار دقيقة وتكرار المحاولة.' }), {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    let targetUserId = userId;
 
     // دعم الحسابات الفرعية العائلية: التأكد من أن البروفايل المطلوب يتبع للمدير الحالي
     if (profileId && profileId !== userId) {
@@ -72,6 +141,11 @@ Deno.serve(async (req: Request) => {
 
       if (profileCheck && (profileCheck.id === userId || profileCheck.manager_id === userId)) {
         targetUserId = profileId;
+      } else {
+        return new Response(JSON.stringify({ error: 'غير مصرح لك بالوصول إلى بيانات هذا البروفايل' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
     }
 
@@ -120,6 +194,7 @@ Deno.serve(async (req: Request) => {
           .select('id, day_name, content, task_type, order_index')
           .eq('plan_id', activePlanData.id)
           .order('order_index', { ascending: true })
+          .limit(100)
       );
 
       if (activePlanTasks && activePlanTasks.length > 0) {
@@ -180,7 +255,7 @@ Deno.serve(async (req: Request) => {
         const expectedDate = new Date(todayForStreak);
         expectedDate.setDate(expectedDate.getDate() - i);
         const hasCompletedTasks = Array.isArray(dailyLogsData[i].completed_tasks) && dailyLogsData[i].completed_tasks.length > 0;
-        
+
         if (logDate.getTime() !== expectedDate.getTime() || !hasCompletedTasks) break;
         streak++;
       }
@@ -216,7 +291,7 @@ Only answer using the active profile's health data.
       medicalContext += `* معلومات شخصية:\n`;
       medicalContext += `  - الاسم: ${profileData.full_name || 'غير محدد'}\n`;
       if (profileData.gender) medicalContext += `  - الجنس: ${profileData.gender === 'male' ? 'ذكر' : 'أنثى'}\n`;
-      
+
       if (profileData.birth_date) {
         const birthDate = new Date(profileData.birth_date);
         const today = new Date();
@@ -225,10 +300,10 @@ Only answer using the active profile's health data.
         if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
         medicalContext += `  - العمر: ${age} سنة\n`;
       }
-      
+
       if (profileData.height) medicalContext += `  - الطول: ${profileData.height} سم\n`;
       if (profileData.weight) medicalContext += `  - الوزن الحالي: ${profileData.weight} كجم\n`;
-      
+
       if (profileData.weight && profileData.height) {
         const heightM = profileData.height / 100;
         const bmi = (profileData.weight / (heightM * heightM)).toFixed(1);
@@ -303,16 +378,27 @@ Only answer using the active profile's health data.
       throw new Error('GROQ_API_KEY secret is not configured in Supabase');
     }
 
-    const basePrompt = mode === 'dashboard_coach' ? DASHBOARD_COACH_PROMPT : CHAT_ASSISTANT_PROMPT;
-    const maxTokensLimit = mode === 'dashboard_coach' ? 150 : 350;
+    const sanitizedMessages = (Array.isArray(messages) ? messages : [])
+      .slice(-10)
+      .map((m: any) => ({
+        role: m?.role === 'assistant' ? 'assistant' : 'user',
+        content: sanitizeInput(m?.content || ''),
+      }))
+      .filter((m: any) => m.content.length > 0);
 
-    // ——— 7. دمج موجه النظام مع رسائل الدردشة الحالية ———
+    // ——— 7. تحديد الموجه الصحيح ومحدودية التوكنز حسب الوضع (mode) ———
+    // dashboard_coach: رسائل قصيرة محفزة (حد 400 توكن)
+    // chat_assistant: دردشة طبية موسعة (حد 1500 توكن)
+    const basePrompt = mode === 'dashboard_coach' ? DASHBOARD_COACH_PROMPT : CHAT_ASSISTANT_PROMPT;
+    const maxTokensLimit = mode === 'dashboard_coach' ? 400 : 1500;
+
+    // ——— 8. دمج موجه النظام مع رسائل الدردشة الحالية ———
     const groqMessages = [
       { role: 'system', content: `${basePrompt}${medicalContext}` },
-      ...messages
+      ...sanitizedMessages
     ];
 
-    // ——— 8. إرسال المحادثة لـ Groq Completions ———
+    // ——— 9. إرسال المحادثة لـ Groq Completions ———
     const groqController = new AbortController();
     const groqTimeout = setTimeout(() => groqController.abort(), 25_000); // 25s timeout
 
@@ -355,12 +441,48 @@ Only answer using the active profile's health data.
       );
     }
 
+    const MODEL_PRICING: Record<string, { promptPer1M: number; completionPer1M: number }> = {
+      'llama-3.3-70b-versatile': { promptPer1M: 0.59, completionPer1M: 0.79 },
+      'llama-3.2-90b-vision-preview': { promptPer1M: 0.90, completionPer1M: 0.90 },
+      'llama-3.1-8b-instant': { promptPer1M: 0.05, completionPer1M: 0.08 },
+    };
+
+    const startTime = Date.now();
+    const correlationId = req.headers.get('x-correlation-id') || `req_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
+
     const groqJson = await groqRes.json();
+    const responseTimeMs = Date.now() - startTime;
+    const tokensIn = groqJson?.usage?.prompt_tokens || 0;
+    const tokensOut = groqJson?.usage?.completion_tokens || 0;
+
+    const rates = MODEL_PRICING[GROQ_MODEL] || { promptPer1M: 0.50, completionPer1M: 0.50 };
+    const estimatedCost = Number((((tokensIn / 1_000_000) * rates.promptPer1M) + ((tokensOut / 1_000_000) * rates.completionPer1M)).toFixed(6));
+
+    // Log AI usage asynchronously to database
+    dbClient.from('ai_usage_logs').insert({
+      user_id: userId,
+      profile_id: targetUserId,
+      mode: mode,
+      model: GROQ_MODEL,
+      tokens_in: tokensIn,
+      tokens_out: tokensOut,
+      cost: estimatedCost,
+      response_time_ms: responseTimeMs,
+      cache_hit: false,
+      correlation_id: correlationId,
+    }).then(({ error: logErr }) => {
+      if (logErr) console.warn('[healix-ai] Failed to log AI usage:', logErr.message);
+    }).catch(err => console.warn('[healix-ai] AI usage log exception:', err));
+
     return new Response(
-      JSON.stringify(groqJson),
+      JSON.stringify({ ...groqJson, correlationId }),
       {
         status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+          'x-correlation-id': correlationId,
+        },
       }
     );
   } catch (error: unknown) {

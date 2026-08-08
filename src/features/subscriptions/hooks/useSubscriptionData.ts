@@ -30,7 +30,7 @@ export function usePaymentHistory(userId: string | undefined) {
     try {
       const columns = 'id,user_id,amount,expected_amount,declared_transferred_amount,admin_confirmed_amount,plan_type,status,receipt_url,renewal_metadata,previous_request_id,attempt_group_id,rejection_reason,admin_notes,reviewed_at,invoice_number,created_at,payment_type,requested_family_quota,keep_member_ids';
       const { data, error } = await executeQuery<PaymentRequest[]>(
-        supabase.from('payment_requests').select(columns).eq('user_id', userId).order('created_at', { ascending: false }), { isIdempotent: true },
+        supabase.from('payment_requests').select(columns).eq('user_id', userId).order('created_at', { ascending: false }).limit(50), { isIdempotent: true },
       );
       if (error) throw error;
       const requests = data ?? [];
@@ -47,7 +47,7 @@ export function usePaymentHistory(userId: string | undefined) {
 
   useEffect(() => {
     if (!userId) return;
-    const channel = supabase.channel(`payment-requests-${userId}-${Date.now()}`)
+    const channel = supabase.channel(`payment-requests-${userId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_requests', filter: `user_id=eq.${userId}` }, fetchData)
       .subscribe();
     return () => { supabase.removeChannel(channel); };

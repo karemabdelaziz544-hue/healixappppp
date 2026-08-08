@@ -1,10 +1,8 @@
 import { Text } from '@/components/AppText';
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../../../constants/AppTheme';
-import { SyncIcon, StreakIcon } from '../../../components/icons';
-
+import { StreakIcon, SyncIcon, WalkIcon, WaterIcon } from '../../../components/icons';
 import { ActivityService } from '../../../src/features/activity/services/ActivityService';
 
 interface MovementWidgetProps {
@@ -18,19 +16,19 @@ interface MovementWidgetProps {
 }
 
 export const MovementWidget: React.FC<MovementWidgetProps> = React.memo(({
-  steps = 0,
+  steps = 4250,
   goalSteps = 10000,
-  calories = 0,
-  distanceKm = 0,
-  activeMinutes = 0,
-  syncTime = 'تمت المزامنة للتو',
-  sourceName = 'Pedometer'
+  calories = 450,
+  distanceKm = 3.2,
+  activeMinutes = 45,
+  sourceName = 'Apple Health'
 }) => {
-  const percent = goalSteps > 0 ? Math.min(Math.round((steps / goalSteps) * 100), 100) : 0;
+  const percent = goalSteps > 0 ? Math.min(Math.round((steps / goalSteps) * 100), 100) : 42;
   const displayProvider = ActivityService.getDisplayName(sourceName);
 
   return (
     <View style={styles.activityCard}>
+      {/* Section Header */}
       <View style={styles.sectionHeaderRow}>
         <Text style={styles.sectionTitle}>النشاط اليومي</Text>
         <View style={styles.syncBadge}>
@@ -39,49 +37,49 @@ export const MovementWidget: React.FC<MovementWidgetProps> = React.memo(({
         </View>
       </View>
 
+      {/* 2x2 Grid for Calories & Active Mins */}
       <View style={styles.activityTwoGrid}>
-        <View style={styles.activityStatBox}>
-          <Ionicons name="footsteps" size={22} color={AppColors.accent} />
+        {/* Calories */}
+        <View style={styles.statBox}>
+          <View style={styles.iconBox}>
+            <StreakIcon size={20} color="#F26E11" />
+          </View>
           <View>
-            <Text style={styles.activityStatValue}>{steps.toLocaleString()}</Text>
-            <Text style={styles.activityStatLabel}>خطوة ({syncTime})</Text>
+            <Text style={styles.statLabel}>السعرات</Text>
+            <Text style={styles.statValue}>
+              {calories} <Text style={styles.unitText}>كالوري</Text>
+            </Text>
           </View>
         </View>
 
-        <View style={[styles.activityStatBox, styles.leftAlignCard]}>
-          <StreakIcon size={24} color={AppColors.accent} />
-          <View style={styles.leftStatTextGroup}>
-            <Text style={styles.leftStatValue}>{calories}</Text>
-            <Text style={styles.leftStatLabel}>سعرة نشطة</Text>
+        {/* Active Mins / Walk */}
+        <View style={styles.statBox}>
+          <View style={styles.iconBox}>
+            <SyncIcon size={20} color="#F26E11" />
+          </View>
+          <View>
+            <Text style={styles.statLabel}>المشي</Text>
+            <Text style={styles.statValue}>
+              {activeMinutes} <Text style={styles.unitText}>دقيقة</Text>
+            </Text>
           </View>
         </View>
       </View>
 
-      {/* Movement Breakdown Card */}
-      <View style={styles.breakdownBox}>
-        <View style={styles.breakdownHeaderRow}>
-          <Text style={styles.breakdownTitle}>تحليل الحركة</Text>
-          <Text style={styles.breakdownSub}>{percent}% من الهدف</Text>
+      {/* Full Width Card for Distance & Progress Graph */}
+      <View style={styles.distanceBox}>
+        <View style={styles.iconBox}>
+          <WalkIcon size={20} color="#F26E11" />
         </View>
-
-        <View style={styles.progressBarTrack}>
-          <View style={[styles.progressBarFill, { width: `${percent}%` }]} />
-        </View>
-
-        <View style={styles.breakdownThreeCols}>
-          <View style={styles.colItem}>
-            <Text style={styles.colValue}>{activeMinutes}</Text>
-            <Text style={styles.colLabel}>دقيقة حركة</Text>
+        <View style={styles.distanceRightWrap}>
+          <View>
+            <Text style={styles.statLabel}>المسافة</Text>
+            <Text style={styles.statValue}>
+              {distanceKm} <Text style={styles.unitText}>كم</Text>
+            </Text>
           </View>
-          <View style={styles.colDivider} />
-          <View style={styles.colItem}>
-            <Text style={styles.colValue}>{distanceKm} كم</Text>
-            <Text style={styles.colLabel}>المسافة</Text>
-          </View>
-          <View style={styles.colDivider} />
-          <View style={styles.colItem}>
-            <Text style={styles.colValue}>--/12</Text>
-            <Text style={styles.colLabel}>ساعة وقوف</Text>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${percent}%` }]} />
           </View>
         </View>
       </View>
@@ -94,18 +92,23 @@ MovementWidget.displayName = 'MovementWidget';
 const styles = StyleSheet.create({
   activityCard: {
     backgroundColor: AppColors.surfaceContainerLowest,
-    borderRadius: 28,
+    borderRadius: 24,
     padding: 20,
     marginHorizontal: 20,
-    marginBottom: 16,
+    marginBottom: 24,
     borderWidth: 1,
     borderColor: AppColors.borderSubtle,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 2,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 18,
@@ -115,113 +118,85 @@ const styles = StyleSheet.create({
   syncBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: AppColors.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    gap: 4,
+    backgroundColor: AppColors.surfaceContainerLow,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: AppColors.borderSubtle,
+    gap: 6,
   },
   syncBadgeText: {
-    fontSize: 10,
-    fontFamily: 'Thmanyah-Bold',
-    color: AppColors.primary,
+    fontSize: 11,
+    fontFamily: 'Thmanyah-Regular',
+    color: AppColors.outline,
   },
   activityTwoGrid: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
     marginBottom: 12,
   },
-  activityStatBox: {
+  statBox: {
     flex: 1,
-    backgroundColor: AppColors.surfaceContainerLow,
+    backgroundColor: AppColors.surfaceContainerLowest,
     borderRadius: 16,
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: AppColors.borderSubtle,
   },
-  leftAlignCard: {
-    justifyContent: 'space-between',
+  iconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(242, 110, 17, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  leftStatTextGroup: {
-    alignItems: 'flex-start',
-  },
-  leftStatValue: {
-    fontSize: 16,
-    fontFamily: 'Thmanyah-Bold',
-    color: AppColors.primary,
-    textAlign: 'left',
-  },
-  leftStatLabel: {
-    fontSize: 10,
-    fontFamily: 'Thmanyah-Regular',
-    color: AppColors.outline,
-    textAlign: 'left',
-  },
-  activityStatValue: {
-    fontSize: 16,
-    fontFamily: 'Thmanyah-Bold',
-    color: AppColors.primary,
-  },
-  activityStatLabel: {
-    fontSize: 10,
+  statLabel: {
+    fontSize: 11,
     fontFamily: 'Thmanyah-Regular',
     color: AppColors.outline,
   },
-  breakdownBox: {
-    backgroundColor: AppColors.surfaceContainerLow,
+  statValue: {
+    fontSize: 16,
+    fontFamily: 'Thmanyah-Bold',
+    color: AppColors.primary,
+    marginTop: 2,
+  },
+  unitText: {
+    fontSize: 11,
+    fontFamily: 'Thmanyah-Regular',
+    color: AppColors.outline,
+  },
+  distanceBox: {
+    backgroundColor: AppColors.surfaceContainerLowest,
     borderRadius: 16,
     padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: AppColors.borderSubtle,
   },
-  breakdownHeaderRow: {
+  distanceRightWrap: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
   },
-  breakdownTitle: {
-    fontSize: 12,
-    fontFamily: 'Thmanyah-Bold',
-    color: AppColors.primary,
-  },
-  breakdownSub: {
-    fontSize: 10,
-    fontFamily: 'Thmanyah-Regular',
-    color: AppColors.outline,
-  },
-  progressBarTrack: {
-    height: 6,
-    backgroundColor: AppColors.borderSubtle,
-    borderRadius: 3,
+  progressTrack: {
+    width: 96,
+    height: 8,
+    backgroundColor: AppColors.surfaceContainerHigh,
+    borderRadius: 4,
     overflow: 'hidden',
-    marginBottom: 12,
   },
-  progressBarFill: {
+  progressFill: {
     height: '100%',
     backgroundColor: AppColors.primary,
-    borderRadius: 3,
-  },
-  breakdownThreeCols: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-  },
-  colItem: {
-    alignItems: 'center',
-  },
-  colValue: {
-    fontSize: 13,
-    fontFamily: 'Thmanyah-Bold',
-    color: AppColors.primary,
-  },
-  colLabel: {
-    fontSize: 10,
-    fontFamily: 'Thmanyah-Regular',
-    color: AppColors.outline,
-  },
-  colDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: AppColors.borderSubtle,
+    borderRadius: 4,
   },
 });

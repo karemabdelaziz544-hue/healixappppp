@@ -1,11 +1,27 @@
 // src/lib/validateEnv.ts
 
 export function validateEnv() {
-  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://bruafdfakvdreagfeqau.supabase.co';
-  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJydWFmZGZha3ZkcmVhZ2ZlcWF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0ODAzNTYsImV4cCI6MjA4MDA1NjM1Nn0.bIFFTG3McJhYZJYNmhn_24099ahNNdb8oxPsLOGwtZ8';
+  const rawUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const rawKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+  const urlStatus = rawUrl ? 'Found' : 'MISSING';
+  const keyStatus = rawKey ? 'Found' : 'MISSING';
+
+  const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
+
+  if (!rawUrl || !rawKey) {
+    const errorMsg = `[validateEnv] Configuration Error — URL: ${urlStatus}, Key: ${keyStatus}`;
+
+    if (!isDev) {
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    } else {
+      console.error(errorMsg);
+    }
+  }
 
   return {
-    supabaseUrl,
-    supabaseAnonKey,
+    supabaseUrl: rawUrl || 'https://placeholder.supabase.co',
+    supabaseAnonKey: rawKey || 'placeholder-key',
   };
 }

@@ -24,12 +24,16 @@ import { AppColors } from '../../constants/AppTheme';
  * 'expired'         → ExpiredState
  * 'onboarding'      → AssistantOnboardingView
  */
+import { WelcomeJourneyCarousel } from '../../src/features/subscriptions/components/WelcomeJourneyCarousel';
+import { useEntitlements } from '../../src/features/subscriptions/useEntitlements';
+
 export default function DashboardController() {
   const { userLifecycleState, isGuardLoading } = useSubscriptionGuard();
   const { currentProfile } = useFamily();
+  const { isPremium } = useEntitlements();
 
   // 🛡️ حماية من الـ Loading Flash — لا نعرض أي شاشة حتى يكتمل التحميل
-  if (isGuardLoading || userLifecycleState === 'loading' || !currentProfile) {
+  if (isGuardLoading || userLifecycleState === 'loading') {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: AppColors.background }}>
         <View style={{ paddingHorizontal: 24, paddingTop: 20 }}>
@@ -42,39 +46,14 @@ export default function DashboardController() {
     );
   }
 
-  // 🔥 عملاء نشطين + الأدمن والدكتور → الداشبورد الكامل
-  if (
-    userLifecycleState === 'admin_or_doctor' || 
-    userLifecycleState === 'active' || 
-    userLifecycleState === 'expiring_soon'
-  ) {
-    return <MainDashboardView />;
-  }
-
-  // 💰 عميل جديد لم يدفع → شاشة الباقات
-  if (userLifecycleState === 'lead') {
-    return <PaywallView />;
-  }
-
-  // ⏰ اشتراك منتهي → شاشة التجديد
-  if (userLifecycleState === 'expired') {
-    return <ExpiredState />;
-  }
-
-  if (userLifecycleState === 'payment_pending') return <SubscriptionPendingView state="pending_review" />;
-  if (userLifecycleState === 'payment_rejected') return <SubscriptionPendingView rejected />;
-  if (userLifecycleState === 'renewing') return <SubscriptionPendingView state="renewing" />;
-  if (userLifecycleState === 'upgrade_pending') return <SubscriptionPendingView state="upgrade_pending" />;
-  if (userLifecycleState === 'downgrade_pending') return <SubscriptionPendingView state="downgrade_pending" />;
-  
-  if (userLifecycleState === 'cancelled' || userLifecycleState === 'sub_excluded') {
-    return <ExpiredState />;
-  }
-
-  // 📋 عميل دفع ولم يكمل بياناته → مساعد التهيئة
   if (userLifecycleState === 'onboarding') {
     return <AssistantOnboardingView />;
   }
 
-  return null;
+  return (
+    <>
+      <MainDashboardView />
+      <WelcomeJourneyCarousel userId={currentProfile?.id} isPremium={isPremium} />
+    </>
+  );
 }

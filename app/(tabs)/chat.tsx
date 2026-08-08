@@ -10,6 +10,9 @@ import { useSubscriptionGuard } from '../../hooks/useSubscriptionGuard';
 import { useFamily } from '../../src/context/FamilyContext';
 import { executeQuery } from '../../src/lib/apiClient';
 import { supabase } from '../../src/lib/supabase';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useEntitlements } from '../../src/features/subscriptions/useEntitlements';
+import { PremiumGate } from '../../src/components/PremiumGate';
 import type { Inquiry } from '../../src/types';
 
 // Categories mapping for icons and localized names
@@ -33,6 +36,7 @@ const STATUS_MAP: Record<string, { label: string, color: string, bg: string }> =
 export default function InquiriesDashboardScreen() {
   const { currentProfile } = useFamily();
   const currentUserId = currentProfile?.id;
+  const { canUse, userRole } = useEntitlements();
   const { userLifecycleState, isGuardLoading } = useSubscriptionGuard();
   const router = useRouter();
 
@@ -46,9 +50,10 @@ export default function InquiriesDashboardScreen() {
     try {
       const { data, error } = await executeQuery<Inquiry[]>(
         supabase.from('inquiries')
-          .select('*')
+          .select('id, user_id, type, status, subject, description, priority, is_resolved, assigned_doctor_id, created_at, updated_at')
           .eq('user_id', currentUserId)
           .order('updated_at', { ascending: false })
+          .limit(50)
       );
       if (!error && data) {
         setInquiries(data);
@@ -72,28 +77,16 @@ export default function InquiriesDashboardScreen() {
     fetchInquiries();
   };
 
-  if (isGuardLoading || !currentProfile) {
+  if (isGuardLoading || userLifecycleState === 'loading') {
     return <ActivityIndicator size="large" color={AppColors.primary} style={{ flex: 1, marginTop: 50 }} />;
   }
 
-  // 🔒 Lead — مقفول
-  if (userLifecycleState === 'lead') {
+  if (!canUse('DOCTOR_CHAT') && userRole !== 'admin' && userRole !== 'doctor') {
     return (
-      <LockedTabView
-        icon="chatbubbles"
-        iconColor="#8B5CF6"
-        iconBg="#EDE9FE"
-        title="اشترك لمراسلة الكوتش 💬"
-        subtitle="سجل اشتراكك في Healix لتتمكن من التواصل المباشر مع الكوتش الطبي والحصول على المتابعة الشخصية."
-        buttonText="اشترك الآن"
-        onPress={() => router.push('/subscriptions')}
-      />
+      <SafeAreaView style={{ flex: 1, backgroundColor: AppColors.background }}>
+        <PremiumGate featureId="DOCTOR_CHAT" screenName="ChatScreen" />
+      </SafeAreaView>
     );
-  }
-
-  // 🔒 Expired — مقفول بالكامل
-  if (userLifecycleState === 'expired') {
-    return <ExpiredState />;
   }
 
   // 🔒 Onboarding — مقفول

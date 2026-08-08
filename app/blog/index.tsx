@@ -103,11 +103,12 @@ export default function BlogListScreen() {
     try {
       const { data, error } = await supabase
         .from('articles')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('id, title, excerpt, image_url, category, author_name, read_time, created_at')
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (error) throw error;
-      setArticles(data || []);
+      setArticles((data || []) as any);
     } catch (err: any) {
       showToast.error('خطأ في تحميل المقالات');
     } finally {

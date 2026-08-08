@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import * as Haptics from 'expo-haptics';
 import { AIMessage, Conversation } from '../types';
 import { healixAIService } from '../services/healixAIService';
@@ -15,11 +15,24 @@ export const useHealixAI = () => {
     messages: [],
     createdAt: new Date().toISOString(),
   });
-  
+
   const [loading, setLoading] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const activeProfileRef = useRef<string | undefined>(profileId);
+
+  useEffect(() => {
+    activeProfileRef.current = profileId;
+  }, [profileId]);
 
   // Load and switch profile-isolated chat history when active profile changes
   useEffect(() => {
+    // Cancel any in-flight requests from previous profile session
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setLoading(false);
+
     if (!profileId) return;
 
     let isMounted = true;
@@ -37,6 +50,10 @@ export const useHealixAI = () => {
 
     return () => {
       isMounted = false;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
     };
   }, [profileId]);
 
@@ -64,10 +81,22 @@ export const useHealixAI = () => {
 
     setLoading(true);
 
+    // Prepare AbortController for request cancellation
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       // Fetch latest messages to construct the API request
       const replyContent = await healixAIService.generateResponse(updatedWithUser, profileId);
-      
+
+      // Prevent state update if request was aborted or profile switched mid-flight
+      if (controller.signal.aborted || activeProfileRef.current !== profileId) {
+        return;
+      }
+
       const assistantMessage: AIMessage = {
         id: `ai-${Date.now()}`,
         role: 'assistant',
@@ -86,12 +115,18 @@ export const useHealixAI = () => {
       }));
       await AppCache.set(`healix_ai_chat_${profileId}`, updatedWithAI);
     } catch (error: any) {
+      if (error?.name === 'AbortError' || controller.signal.aborted) {
+        return;
+      }
       console.error('[useHealixAI] Error generating response:', error);
       // Trigger error haptic
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       showToast.error(error.message || 'عذراً، فشل الاتصال بالمساعد الذكي.');
     } finally {
-      setLoading(false);
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+        setLoading(false);
+      }
     }
   }, [conversation.messages, loading, profileId]);
 

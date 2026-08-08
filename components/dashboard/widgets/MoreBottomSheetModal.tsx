@@ -12,8 +12,11 @@ import {
   WorkoutIcon,
   SparklesIcon,
   MealIcon,
-  PieChartIcon
+  PieChartIcon,
+  LockIcon
 } from '../../../components/icons';
+import { useEntitlements } from '../../../src/features/subscriptions/useEntitlements';
+import type { FeatureId } from '../../../src/features/subscriptions/featureRegistry';
 
 interface MoreBottomSheetModalProps {
   visible: boolean;
@@ -29,6 +32,7 @@ interface SystemToolItem {
   route?: string;
   action?: 'water';
   highlight?: boolean;
+  featureId?: FeatureId;
 }
 
 export const MoreBottomSheetModal: React.FC<MoreBottomSheetModalProps> = React.memo(({
@@ -37,21 +41,43 @@ export const MoreBottomSheetModal: React.FC<MoreBottomSheetModalProps> = React.m
   onLogWaterPress
 }) => {
   const router = useRouter();
+  const { canUse, userRole } = useEntitlements();
+
+  const isPremium = userRole === 'admin' || userRole === 'doctor' || canUse('NUTRITION_PLAN');
+
+  const getFeatureId = (itemId: string): FeatureId | null => {
+    if (itemId === 'ai_coach') return 'AI_CHAT';
+    if (itemId === 'contact_doctor') return 'DOCTOR_CHAT';
+    if (itemId === 'workouts') return 'WORKOUT_PLAN';
+    if (itemId === 'inbody_stats') return 'AI_INBODY_ANALYSIS';
+    if (itemId === 'nutrition_plan') return 'NUTRITION_PLAN';
+    return null;
+  };
+
+  const isItemLocked = (itemId: string): boolean => {
+    if (isPremium) return false;
+    const featId = getFeatureId(itemId);
+    if (!featId) return false;
+    return !canUse(featId);
+  };
 
   const handleItemPress = useCallback((item: SystemToolItem) => {
     onClose();
-    if (item.action === 'water' && onLogWaterPress) {
+    const featId = getFeatureId(item.id);
+    if (!isPremium && featId && !canUse(featId)) {
+      router.push(`/subscriptions?returnUrl=/(tabs)&featureId=${featId}` as any);
+    } else if (item.action === 'water' && onLogWaterPress) {
       onLogWaterPress();
     } else if (item.route) {
       router.push(item.route as any);
     }
-  }, [onClose, onLogWaterPress, router]);
+  }, [onClose, onLogWaterPress, router, isPremium, canUse]);
 
   const toolsList: SystemToolItem[] = [
     {
       id: 'ai_coach',
-      title: 'كوتش هيليكس الذكي',
-      subtitle: 'استشارة فورية وتوجيه مخصص',
+      title: 'تحدث مع هيلي',
+      subtitle: 'رفيقك الصحي للاستشارة والتحليل',
       icon: <SparklesIcon size={22} color={AppColors.white} />,
       route: '/healix-ai',
       highlight: true
@@ -129,26 +155,40 @@ export const MoreBottomSheetModal: React.FC<MoreBottomSheetModalProps> = React.m
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.toolsGrid}
           >
-            {toolsList.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={[styles.toolCard, item.highlight && styles.toolCardHighlight]}
-                onPress={() => handleItemPress(item)}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.iconBox, item.highlight && styles.iconBoxHighlight]}>
-                  {item.icon}
-                </View>
-                <View style={styles.toolTextGroup}>
-                  <Text style={[styles.toolTitle, item.highlight && styles.toolTitleHighlight]} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <Text style={[styles.toolSubtitle, item.highlight && styles.toolSubtitleHighlight]} numberOfLines={2}>
-                    {item.subtitle}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+            {toolsList.map((item) => {
+              const locked = isItemLocked(item.id);
+
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.toolCard,
+                    item.highlight && styles.toolCardHighlight,
+                    locked && styles.toolCardLocked
+                  ]}
+                  onPress={() => handleItemPress(item)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.iconBox, item.highlight && styles.iconBoxHighlight]}>
+                    {item.icon}
+                    {locked && (
+                      <View style={styles.lockBadgeIcon}>
+                        <LockIcon size={10} color={AppColors.outline} />
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.toolTextGroup}>
+                    <Text style={[styles.toolTitle, item.highlight && styles.toolTitleHighlight]} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={[styles.toolSubtitle, item.highlight && styles.toolSubtitleHighlight]} numberOfLines={2}>
+                      {item.subtitle}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
 
           <TouchableOpacity style={styles.modalCloseBtn} onPress={onClose} activeOpacity={0.85}>
@@ -222,6 +262,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    position: 'relative',
+  },
+  toolCardLocked: {
+    opacity: 0.75,
+  },
+  lockBadgeIcon: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: AppColors.surfaceContainerHigh,
+    borderWidth: 1,
+    borderColor: AppColors.borderSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   toolCardHighlight: {
     backgroundColor: AppColors.accent,

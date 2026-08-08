@@ -57,12 +57,12 @@ export default function EventBookingScreen() {
       try {
         const { data, error } = await supabase
           .from('events')
-          .select('*')
+          .select('id, title, subtitle, image_url, event_date, location, points_reward, max_attendees, price')
           .eq('id', id)
           .maybeSingle();
 
         if (error) throw error;
-        setEvent(data);
+        setEvent(data as any);
       } catch (err: any) {
         showToast.error('فشل تحميل تفاصيل الفعالية');
         router.back();

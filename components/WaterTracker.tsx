@@ -57,7 +57,7 @@ export default function WaterTracker() {
           { isIdempotent: true }
         ),
         executeQuery<{ amount: number }[]>(
-          supabase.from('water_tracking').select('amount').eq('user_id', userId).gte('recorded_at', today.toISOString()),
+          supabase.from('water_tracking').select('amount').eq('user_id', userId).gte('recorded_at', today.toISOString()).limit(50),
           { isIdempotent: true }
         ),
       ]);

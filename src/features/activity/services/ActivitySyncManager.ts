@@ -65,11 +65,20 @@ export class ActivitySyncManager {
     logger.log(`[ActivitySyncManager] Started tracking steps using provider (${ActivityService.getActiveProviderName()}) for user: ${userId} (Steps: ${this.localSteps})`);
   }
 
+  private static lastRefreshTime = 0;
+  private static readonly REFRESH_THROTTLE_MS = 3000; // 3 seconds minimum throttle
+
   /**
    * Refreshes the absolute step count for today from active provider.
    */
-  private static async refreshSteps(): Promise<void> {
+  private static async refreshSteps(force = false): Promise<void> {
     if (!this.userId || !this.activeDate) return;
+
+    const nowMs = Date.now();
+    if (!force && nowMs - this.lastRefreshTime < this.REFRESH_THROTTLE_MS) {
+      return;
+    }
+    this.lastRefreshTime = nowMs;
 
     try {
       const midnight = new Date();
@@ -90,6 +99,7 @@ export class ActivitySyncManager {
 
   /**
    * One-time 30-day historical synchronization on initial authorization.
+   * Processes days in controlled batches of 5 to avoid API rate limits or race conditions.
    */
   private static async syncHistorical30DaysIfNeeded(userId: string): Promise<void> {
     try {
@@ -105,39 +115,48 @@ export class ActivitySyncManager {
       const goals = await ActivityRepository.fetchActivityGoal(userId);
       const today = new Date();
 
+      // Fetch all steps serially or in small batches to not overwhelm HealthKit, but accumulate for a single DB upsert
+      const bulkRecords: Array<any> = [];
+
       for (let i = 1; i <= 30; i++) {
-        const dayStart = new Date(today);
-        dayStart.setDate(today.getDate() - i);
-        dayStart.setHours(0, 0, 0, 0);
+        try {
+          const dayStart = new Date(today);
+          dayStart.setDate(today.getDate() - i);
+          dayStart.setHours(0, 0, 0, 0);
 
-        const dayEnd = new Date(dayStart);
-        dayEnd.setHours(23, 59, 59, 999);
+          const dayEnd = new Date(dayStart);
+          dayEnd.setHours(23, 59, 59, 999);
 
-        const dayDateStr = dayStart.toISOString().split('T')[0];
-        const steps = await ActivityService.getStepsForPeriod(dayStart, dayEnd);
+          const dayDateStr = dayStart.toISOString().split('T')[0];
+          const steps = await ActivityService.getStepsForPeriod(dayStart, dayEnd);
 
-        if (steps > 0) {
-          const strideLengthMeters = 0.76;
-          const caloriesPerStep = 0.04;
-          const activeMinutes = Math.round(steps / 100);
+          if (steps > 0) {
+            const strideLengthMeters = 0.76;
+            const caloriesPerStep = 0.04;
+            const activeMinutes = Math.round(steps / 100);
 
-          const progress: Partial<ActivityProgress> = {
-            steps,
-            distance: Number(((steps * strideLengthMeters) / 1000).toFixed(2)),
-            active_minutes: activeMinutes,
-            calories: Number((steps * caloriesPerStep).toFixed(1)),
-            walking_minutes: activeMinutes,
-            source: ActivityService.getActiveProviderName() as any
-          };
-
-          await ActivityRepository.saveDailyActivity(
-            userId,
-            dayDateStr,
-            progress,
-            goals.daily_steps,
-            goals.daily_minutes
-          );
+            bulkRecords.push({
+              user_id: userId,
+              date: dayDateStr,
+              steps,
+              distance: Number(((steps * strideLengthMeters) / 1000).toFixed(2)),
+              active_minutes: activeMinutes,
+              calories: Number((steps * caloriesPerStep).toFixed(1)),
+              walking_minutes: activeMinutes,
+              running_minutes: 0,
+              cycling_minutes: 0,
+              goal_steps: goals.daily_steps,
+              goal_minutes: goals.daily_minutes,
+              source: ActivityService.getActiveProviderName() as string
+            });
+          }
+        } catch (dayErr) {
+          logger.warn(`[ActivitySyncManager] Day ${i} historical sync warning:`, dayErr);
         }
+      }
+
+      if (bulkRecords.length > 0) {
+        await ActivityRepository.saveDailyActivityBatch(bulkRecords);
       }
 
       await AsyncStorage.setItem(syncFlagKey, 'true');

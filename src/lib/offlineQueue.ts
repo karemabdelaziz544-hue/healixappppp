@@ -12,7 +12,10 @@ export interface OfflineMutation {
   userId: string;
   payload: any;
   timestamp: number;
+  retryCount?: number;
 }
+
+const MAX_OFFLINE_RETRIES = 5;
 
 export const OfflineQueue = {
   /**
@@ -51,6 +54,7 @@ export const OfflineQueue = {
         userId,
         payload,
         timestamp: Date.now(),
+        retryCount: 0,
       };
       
       // Deduplicate task toggles for the same task/date to prevent double-processing redundant state changes
@@ -95,15 +99,46 @@ export const OfflineQueue = {
       logger.log(`[OfflineQueue] Synchronizing ${queue.length} offline mutations...`);
       const remaining: OfflineMutation[] = [];
 
+      // Fetch all profile IDs managed by or owned by the current authenticated account
+      const currentUserId = session.user.id;
+      const { data: userProfiles } = await supabase
+        .from('profiles')
+        .select('id')
+        .or(`id.eq.${currentUserId},manager_id.eq.${currentUserId}`);
+
+      const allowedProfileIds = new Set<string>(
+        (userProfiles || []).map(p => p.id)
+      );
+      allowedProfileIds.add(currentUserId);
+
       for (const mutation of queue) {
+        // Cross-Profile Authorization Check (FINDING-003)
+        if (!allowedProfileIds.has(mutation.userId)) {
+          logger.error(
+            `[OfflineQueue] SECURITY ALERT: Dropping queued mutation ${mutation.id} because mutation.userId (${mutation.userId}) does not belong to active account (${currentUserId}) or managed sub-profiles.`
+          );
+          continue; // Drop/quarantine mutation safely without adding to remaining
+        }
+
+        const retries = (mutation.retryCount || 0) + 1;
+        mutation.retryCount = retries;
+
         try {
           const success = await this.processMutation(mutation);
           if (!success) {
-            remaining.push(mutation);
+            if (retries >= MAX_OFFLINE_RETRIES) {
+              logger.error(`[OfflineQueue] Dropping mutation ${mutation.id} after exceeding max retries (${MAX_OFFLINE_RETRIES})`);
+            } else {
+              remaining.push(mutation);
+            }
           }
         } catch (err) {
-          logger.error(`[OfflineQueue] Error processing mutation ${mutation.id}:`, err);
-          remaining.push(mutation);
+          logger.error(`[OfflineQueue] Error processing mutation ${mutation.id} (attempt ${retries}):`, err);
+          if (retries < MAX_OFFLINE_RETRIES) {
+            remaining.push(mutation);
+          } else {
+            logger.error(`[OfflineQueue] Dropping failing mutation ${mutation.id} after ${retries} attempts.`);
+          }
         }
       }
 
@@ -185,11 +220,13 @@ export const OfflineQueue = {
         }
       }
 
+      const validReceiverId = (receiverId && receiverId !== '00000000-0000-0000-0000-000000000000') ? receiverId : null;
+
       const { error } = await executeQuery(
         supabase.from('messages').insert({
           id: messageId,
           sender_id: mutation.userId,
-          receiver_id: receiverId,
+          receiver_id: validReceiverId,
           content: content,
           attachment_url: attachmentPath,
           attachment_type: attachmentType,
@@ -200,7 +237,15 @@ export const OfflineQueue = {
         }),
         { retries: 2, isIdempotent: false }
       );
-      return !error;
+      if (error) {
+        if ((error as any).code === '23505' || (error as any).message?.includes('duplicate key')) {
+          logger.log(`[OfflineQueue] Message ${messageId} already exists in DB, marking sync complete.`);
+          return true;
+        }
+        logger.error('[OfflineQueue] chat message insert error:', error);
+        return false;
+      }
+      return true;
     }
 
     if (mutation.type === 'health_log') {

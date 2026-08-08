@@ -14,6 +14,9 @@ import { resolveSubscriptionState } from '../src/features/subscriptions/resolveS
 import { AnimatedButton } from '../components/animations/AnimatedButton';
 import { FadeInView } from '../components/animations/FadeInView';
 import { SlideInView } from '../components/animations/SlideInView';
+import { Modal } from 'react-native';
+import { useEntitlements } from '../src/features/subscriptions/useEntitlements';
+import { PremiumGate } from '../src/components/PremiumGate';
 import { getCachedSignedUrl } from '../src/lib/storageCache';
 
 const toEnglishDigits = (str: string): string => {
@@ -25,11 +28,16 @@ const toEnglishDigits = (str: string): string => {
     .replace(/[۰-۹]/g, (w) => persianDigits.indexOf(w).toString());
 };
 
+import { FamilyActivationWizardModal } from '../src/features/family/components/FamilyActivationWizardModal';
+
 export default function FamilyScreen() {
   const router = useRouter();
   const { familyMembers, currentProfile, switchProfile, refreshFamily, accountProfileId } = useFamily();
   
+  const { canUse, userRole } = useEntitlements();
+  const [subAccountModalMember, setSubAccountModalMember] = useState<any>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Decomposed details hook for manager quota
@@ -222,12 +230,13 @@ export default function FamilyScreen() {
           
           {/* Quota Banner */}
           {isSubscribed && !currentProfile?.manager_id && (
-            <View style={styles.quotaBanner}>
-              <Ionicons name="people-outline" size={20} color="#2A4B46" />
-              <Text style={styles.quotaText}>
-                الحد المسموح به: تم استخدام {slotsUsed} من أصل {familyQuota} مقاعد بالباقة
+            <TouchableOpacity style={styles.quotaBanner} onPress={() => setShowWizard(true)} activeOpacity={0.85}>
+              <Ionicons name="key-outline" size={20} color="#2A4B46" />
+              <Text style={[styles.quotaText, { flex: 1 }]}>
+                حالة التراخيص: {slotsUsed} / {familyQuota} Activated 🟢 (اضغط لإدارة التفعيل)
               </Text>
-            </View>
+              <Ionicons name="chevron-forward" size={18} color="#2A4B46" />
+            </TouchableOpacity>
           )}
 
           {/* Action Header */}
@@ -402,7 +411,9 @@ export default function FamilyScreen() {
                       <AnimatedButton 
                         style={[styles.switchBtn, isLocked && { backgroundColor: '#FEE2E2' }]} 
                         onPress={() => { 
-                          if (isLocked) {
+                          if (!isMain && !canUse('SUB_ACCOUNTS') && userRole !== 'admin' && userRole !== 'doctor') {
+                            setSubAccountModalMember(member);
+                          } else if (isLocked) {
                             showToast.info('هذا الحساب غير مفعل حالياً. يرجى تجديد الباقة أو إضافته لتفعيله.');
                           } else {
                             switchProfile(member.id); 
@@ -439,6 +450,50 @@ export default function FamilyScreen() {
 
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {subAccountModalMember && (
+        <Modal transparent visible animationType="fade" onRequestClose={() => setSubAccountModalMember(null)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <View style={{ width: '100%', backgroundColor: '#FFF', borderRadius: 24, padding: 24, alignItems: 'center' }}>
+              <TouchableOpacity style={{ alignSelf: 'flex-start', marginBottom: 12 }} onPress={() => setSubAccountModalMember(null)}>
+                <Ionicons name="close" size={28} color="#4B5563" />
+              </TouchableOpacity>
+              <View style={{ backgroundColor: '#D1FAE5', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, marginBottom: 12 }}>
+                <Text style={{ fontFamily: 'Thmanyah-Bold', fontSize: 12, color: '#065F46' }}>الحساب الفرعي جاهز ✔️</Text>
+              </View>
+              <Text style={{ fontFamily: 'Thmanyah-Bold', fontSize: 18, color: '#111827', textAlign: 'center', marginBottom: 8 }}>
+                لقد قمت بإنشاء حساب {subAccountModalMember.full_name} بنجاح
+              </Text>
+              <Text style={{ fontFamily: 'Thmanyah-Medium', fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 16, lineHeight: 22 }}>
+                اشترك الآن لتفعيل هذا الحساب وإرسال: النظام الغذائي، برنامج التمارين، الملف الطبي، المتابعة مع الدكتور، والذكاء الاصطناعي.
+              </Text>
+              <View style={{ width: '100%', backgroundColor: '#F3F4F6', borderRadius: 12, padding: 12, marginBottom: 20, alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Thmanyah-Bold', fontSize: 13, color: '#374151' }}>
+                  عدد الحسابات المنشأة: {familyMembers.length}
+                </Text>
+              </View>
+              <AnimatedButton
+                style={{ width: '100%', height: 48, backgroundColor: '#EA580C', borderRadius: 12, justifyContent: 'center', alignItems: 'center' }}
+                onPress={() => {
+                  setSubAccountModalMember(null);
+                  router.push('/subscriptions?returnUrl=/family&featureId=SUB_ACCOUNTS' as any);
+                }}
+              >
+                <Text style={{ fontFamily: 'Thmanyah-Bold', fontSize: 15, color: '#FFF' }}>اشترك الآن لتفعيل الحسابات الفرعية 🔒</Text>
+              </AnimatedButton>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Family Activation Wizard Modal */}
+      <FamilyActivationWizardModal
+        visible={showWizard}
+        onClose={() => setShowWizard(false)}
+        familyMembers={familyMembers}
+        purchasedLicenses={familyQuota}
+        onRefresh={async () => { await refreshFamily(); }}
+      />
     </SafeAreaView>
   );
 }

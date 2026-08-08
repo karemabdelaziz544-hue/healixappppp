@@ -68,7 +68,7 @@ export class ActivityRepository {
     try {
       const { data, error } = await executeQuery<any>(
         supabase.from('activity_logs')
-          .select('*')
+          .select('steps, distance, active_minutes, calories, walking_minutes, running_minutes, cycling_minutes, source')
           .eq('user_id', userId)
           .eq('date', date)
           .maybeSingle(),
@@ -140,6 +140,42 @@ export class ActivityRepository {
         logger.warn('[ActivityRepository] Save daily activity warning (offline or RLS policy):', e?.message || e);
       } else {
         logger.error('[ActivityRepository] failed to save daily activity:', e);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Bulk persist daily activity progress inside activity_logs table.
+   */
+  static async saveDailyActivityBatch(
+    records: Array<{
+      user_id: string,
+      date: string,
+      steps: number,
+      distance: number,
+      active_minutes: number,
+      calories: number,
+      walking_minutes: number,
+      running_minutes: number,
+      cycling_minutes: number,
+      goal_steps: number,
+      goal_minutes: number,
+      source: string
+    }>
+  ): Promise<void> {
+    if (records.length === 0) return;
+    try {
+      const { error } = await executeQuery(
+        supabase.from('activity_logs')
+          .upsert(records, { onConflict: 'user_id,date' })
+      );
+      if (error) throw error;
+    } catch (e: any) {
+      if (e?.code === 'NETWORK' || e?.code === 'FORBIDDEN') {
+        logger.warn('[ActivityRepository] Save daily activity batch warning (offline or RLS policy):', e?.message || e);
+      } else {
+        logger.error('[ActivityRepository] failed to save daily activity batch:', e);
       }
       throw e;
     }

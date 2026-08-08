@@ -190,7 +190,7 @@ export default function ArticleDetailsScreen() {
       try {
         const { data: art, error } = await supabase
           .from('articles')
-          .select('*')
+          .select('id, title, excerpt, content, image_url, category, author_name, read_time, created_at, tags')
           .eq('id', id)
           .maybeSingle();
 
@@ -200,11 +200,11 @@ export default function ArticleDetailsScreen() {
         if (art) {
           const { data: rel } = await supabase
             .from('articles')
-            .select('*')
+            .select('id, title, excerpt, image_url, category, author_name, read_time, created_at')
             .neq('id', id)
             .order('created_at', { ascending: false })
             .limit(4);
-          setRelated(rel || []);
+          setRelated((rel || []) as any);
         }
       } catch (err: any) {
         showToast.error('خطأ في تحميل المقال');

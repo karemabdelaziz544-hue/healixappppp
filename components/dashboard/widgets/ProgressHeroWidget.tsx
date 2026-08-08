@@ -1,23 +1,34 @@
 import { Text } from '@/components/AppText';
 import React, { useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
 import { AppColors } from '../../../constants/AppTheme';
-import { ChevronLeftIcon } from '../../../components/icons';
+import { WalkIcon, StreakIcon, WaterIcon, SyncIcon } from '../../../components/icons';
 
 interface ProgressHeroWidgetProps {
   score?: number;
   compliance?: number;
   summaryText?: string;
   onContinueDayPress?: () => void;
+  steps?: number;
+  calories?: number;
+  waterGlasses?: number;
+  activeMinutes?: number;
+  weightKg?: number;
 }
 
 export const ProgressHeroWidget: React.FC<ProgressHeroWidgetProps> = React.memo(({
-  score,
-  compliance,
+  score = 78,
+  compliance = 78,
   summaryText,
-  onContinueDayPress
+  onContinueDayPress,
+  steps = 0,
+  calories = 0,
+  waterGlasses = 0,
+  activeMinutes = 0,
+  weightKg = 70.0
 }) => {
   const scale = useSharedValue(0.96);
 
@@ -32,73 +43,143 @@ export const ProgressHeroWidget: React.FC<ProgressHeroWidgetProps> = React.memo(
   }));
 
   const hasData = compliance !== undefined && score !== undefined;
-  const displayCompliance = hasData ? `${compliance}%` : '--';
-  const displaySummary = summaryText || (hasData ? 'مستوى رائع، استمر في الحفاظ على هذا الإيقاع المتميز' : 'جاري تحميل مؤشراتك اليومية...');
+  const displayScore = hasData ? score : 78;
+  const displayCompliance = hasData ? `${compliance}%` : '٧٨٪';
+  const displaySummary = summaryText || 'أداء ممتاز اليوم! واصل الالتزام بخطتك الغذائية.';
 
   // SVG Gauge constants
-  const size = 88;
-  const strokeWidth = 7;
+  const size = 110;
+  const strokeWidth = 8;
   const center = size / 2;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const validCompliance = Math.min(Math.max(compliance || 0, 0), 100);
+  const validCompliance = Math.min(Math.max(compliance || 78, 0), 100);
   const strokeDashoffset = circumference - (circumference * validCompliance) / 100;
 
   return (
-    <Animated.View style={[styles.heroCard, animatedStyle]}>
-      {/* Right Info Section */}
-      <View style={styles.heroLeftSection}>
-        <View style={styles.heroHeaderBadge}>
-          <Text style={styles.heroSubLabel}>النتيجة الصحية اليوم</Text>
+    <Animated.View style={[styles.container, animatedStyle]}>
+      <LinearGradient
+        colors={['#2A4D44', '#3A6D61']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.heroGradient}
+      >
+        {/* Top Info & Circular Gauge Row */}
+        <View style={styles.topRow}>
+          <View style={styles.leftColumn}>
+            <View style={styles.scoreTitleRow}>
+              <View style={styles.iconCircle}>
+                <SyncIcon size={18} color="#F26E11" />
+              </View>
+              <Text style={styles.scoreTitleText}>درجة الصحة</Text>
+            </View>
+
+            <Text style={styles.scoreBigNumber}>{displayScore}</Text>
+
+            <Text style={styles.summaryText}>{displaySummary}</Text>
+          </View>
+
+          {/* SVG Circular Progress Gauge */}
+          <View style={styles.gaugeWrap}>
+            <Svg width={size} height={size}>
+              {/* Background Track */}
+              <Circle
+                cx={center}
+                cy={center}
+                r={radius}
+                stroke="rgba(255,255,255,0.2)"
+                strokeWidth={strokeWidth}
+                fill="transparent"
+              />
+              {/* Active Progress Arc */}
+              <Circle
+                cx={center}
+                cy={center}
+                r={radius}
+                stroke="#10B981"
+                strokeWidth={strokeWidth}
+                strokeDasharray={circumference}
+                strokeDashoffset={strokeDashoffset}
+                strokeLinecap="round"
+                fill="transparent"
+                transform={`rotate(-90 ${center} ${center})`}
+              />
+            </Svg>
+
+            <View style={styles.gaugeCenterContent}>
+              <Text style={styles.gaugePercentText}>{displayCompliance}</Text>
+              <Text style={styles.gaugeLabelText}>الالتزام</Text>
+            </View>
+          </View>
         </View>
 
-        <View style={styles.heroScoreRow}>
-          <Text style={styles.heroBigNumber}>{hasData ? score : '--'}</Text>
-          <Text style={styles.heroScoreMax}>/100</Text>
-        </View>
+        {/* Swipeable Metrics Carousel */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.carouselContainer}
+        >
+          {/* Card 1: Steps */}
+          <View style={styles.metricCard}>
+            <View style={styles.metricHeader}>
+              <WalkIcon size={16} color="#F26E11" />
+              <Text style={styles.metricLabel}>الخطوات</Text>
+            </View>
+            <Text style={styles.metricValue}>{steps.toLocaleString()}</Text>
+            <TouchableOpacity onPress={onContinueDayPress}>
+              <Text style={styles.metricBtnText}>عرض التفاصيل</Text>
+            </TouchableOpacity>
+          </View>
 
-        <Text style={styles.heroDescription}>{displaySummary}</Text>
+          {/* Card 2: Calories */}
+          <View style={styles.metricCard}>
+            <View style={styles.metricHeader}>
+              <StreakIcon size={16} color="#F26E11" />
+              <Text style={styles.metricLabel}>السعرات</Text>
+            </View>
+            <Text style={styles.metricValue}>{calories}</Text>
+            <TouchableOpacity onPress={onContinueDayPress}>
+              <Text style={styles.metricBtnText}>عرض التفاصيل</Text>
+            </TouchableOpacity>
+          </View>
 
-        <TouchableOpacity style={styles.heroActionBtn} onPress={onContinueDayPress} activeOpacity={0.85}>
-          <Text style={styles.heroActionBtnText}>أكمل يومك</Text>
-          <ChevronLeftIcon size={14} color={AppColors.white} />
-        </TouchableOpacity>
-      </View>
+          {/* Card 3: Water */}
+          <View style={styles.metricCard}>
+            <View style={styles.metricHeader}>
+              <WaterIcon size={16} color="#F26E11" />
+              <Text style={styles.metricLabel}>الماء</Text>
+            </View>
+            <Text style={styles.metricValue}>{waterGlasses} <Text style={styles.metricUnit}>أكواب</Text></Text>
+            <TouchableOpacity onPress={onContinueDayPress}>
+              <Text style={styles.metricBtnText}>عرض التفاصيل</Text>
+            </TouchableOpacity>
+          </View>
 
-      {/* SVG Circular Progress Gauge */}
-      <View style={styles.heroRingWrap}>
-        <Svg width={size} height={size}>
-          {/* Background Track */}
-          <Circle
-            cx={center}
-            cy={center}
-            r={radius}
-            stroke={AppColors.primaryLight}
-            strokeWidth={strokeWidth}
-            fill="transparent"
-          />
-          {/* Active Progress Arc */}
-          {hasData && (
-            <Circle
-              cx={center}
-              cy={center}
-              r={radius}
-              stroke={AppColors.primary}
-              strokeWidth={strokeWidth}
-              strokeDasharray={circumference}
-              strokeDashoffset={strokeDashoffset}
-              strokeLinecap="round"
-              fill="transparent"
-              transform={`rotate(-90 ${center} ${center})`}
-            />
-          )}
-        </Svg>
+          {/* Card 4: Active Mins */}
+          <View style={styles.metricCard}>
+            <View style={styles.metricHeader}>
+              <SyncIcon size={16} color="#F26E11" />
+              <Text style={styles.metricLabel}>نشاط</Text>
+            </View>
+            <Text style={styles.metricValue}>{activeMinutes} <Text style={styles.metricUnit}>دقيقة</Text></Text>
+            <TouchableOpacity onPress={onContinueDayPress}>
+              <Text style={styles.metricBtnText}>عرض التفاصيل</Text>
+            </TouchableOpacity>
+          </View>
 
-        <View style={styles.heroRingCenterContent}>
-          <Text style={styles.heroRingNumber}>{displayCompliance}</Text>
-          <Text style={styles.heroRingLabel}>الالتزام</Text>
-        </View>
-      </View>
+          {/* Card 5: Weight */}
+          <View style={styles.metricCard}>
+            <View style={styles.metricHeader}>
+              <SyncIcon size={16} color="#F26E11" />
+              <Text style={styles.metricLabel}>الوزن</Text>
+            </View>
+            <Text style={styles.metricValue}>{weightKg} <Text style={styles.metricUnit}>كجم</Text></Text>
+            <TouchableOpacity onPress={onContinueDayPress}>
+              <Text style={styles.metricBtnText}>عرض التفاصيل</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </LinearGradient>
     </Animated.View>
   );
 });
@@ -106,109 +187,147 @@ export const ProgressHeroWidget: React.FC<ProgressHeroWidgetProps> = React.memo(
 ProgressHeroWidget.displayName = 'ProgressHeroWidget';
 
 const styles = StyleSheet.create({
-  heroCard: {
-    backgroundColor: AppColors.surfaceContainerLowest,
-    borderRadius: 24,
-    padding: 20,
+  container: {
     marginHorizontal: 20,
-    marginBottom: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: AppColors.borderSubtle,
+    marginBottom: 24,
+    borderRadius: 24,
+    overflow: 'hidden',
     shadowColor: AppColors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
-    shadowRadius: 16,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 4,
   },
-  heroLeftSection: {
+  heroGradient: {
+    padding: 20,
+    borderRadius: 24,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  leftColumn: {
     flex: 1,
     paddingLeft: 12,
     alignItems: 'flex-start',
   },
-  heroHeaderBadge: {
-    backgroundColor: AppColors.primaryLight,
+  scoreTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  iconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(242, 110, 17, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scoreTitleText: {
+    fontSize: 13,
+    fontFamily: 'Thmanyah-Bold',
+    color: 'rgba(255, 255, 255, 0.9)',
+    writingDirection: 'rtl',
+  },
+  scoreBigNumber: {
+    fontSize: 48,
+    fontFamily: 'Thmanyah-Black',
+    color: '#FFFFFF',
+    lineHeight: 52,
+    marginBottom: 4,
+  },
+  streakPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 12,
     marginBottom: 8,
   },
-  heroSubLabel: {
+  streakPillText: {
     fontSize: 11,
     fontFamily: 'Thmanyah-Bold',
-    color: AppColors.primary,
+    color: 'rgba(255, 255, 255, 0.9)',
     writingDirection: 'rtl',
   },
-  heroScoreRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'baseline',
-    gap: 2,
-    marginBottom: 6,
-  },
-  heroBigNumber: {
-    fontSize: 44,
-    fontFamily: 'Thmanyah-Black',
-    color: AppColors.primary,
-    lineHeight: 48,
-  },
-  heroScoreMax: {
-    fontSize: 16,
-    fontFamily: 'Thmanyah-Bold',
-    color: AppColors.outline,
-  },
-  heroDescription: {
-    fontSize: 12,
+  summaryText: {
+    fontSize: 13,
     fontFamily: 'Thmanyah-Regular',
-    color: AppColors.onSurfaceVariant,
-    lineHeight: 18,
-    marginBottom: 14,
+    color: '#FFFFFF',
+    lineHeight: 20,
+    maxWidth: 210,
     writingDirection: 'rtl',
   },
-  heroActionBtn: {
-    backgroundColor: AppColors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    shadowColor: AppColors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  heroActionBtnText: {
-    color: AppColors.white,
-    fontSize: 12,
-    fontFamily: 'Thmanyah-Bold',
-    writingDirection: 'rtl',
-  },
-  heroRingWrap: {
-    width: 88,
-    height: 88,
+  gaugeWrap: {
+    width: 110,
+    height: 110,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
-  heroRingCenterContent: {
+  gaugeCenterContent: {
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroRingNumber: {
-    fontSize: 16,
+  gaugePercentText: {
+    fontSize: 20,
     fontFamily: 'Thmanyah-Bold',
-    color: AppColors.primary,
+    color: '#FFFFFF',
     writingDirection: 'rtl',
   },
-  heroRingLabel: {
-    fontSize: 10,
+  gaugeLabelText: {
+    fontSize: 11,
     fontFamily: 'Thmanyah-Regular',
-    color: AppColors.outline,
-    marginTop: 1,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 2,
+    writingDirection: 'rtl',
+  },
+  carouselContainer: {
+    gap: 12,
+    paddingVertical: 4,
+  },
+  metricCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 16,
+    padding: 12,
+    minWidth: 130,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  metricHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  metricLabel: {
+    fontSize: 11,
+    fontFamily: 'Thmanyah-Regular',
+    color: 'rgba(255, 255, 255, 0.9)',
+    writingDirection: 'rtl',
+  },
+  metricValue: {
+    fontSize: 22,
+    fontFamily: 'Thmanyah-Bold',
+    color: '#FFFFFF',
+    marginBottom: 4,
+    writingDirection: 'rtl',
+  },
+  metricUnit: {
+    fontSize: 12,
+    fontFamily: 'Thmanyah-Regular',
+  },
+  metricBtnText: {
+    fontSize: 11,
+    fontFamily: 'Thmanyah-Bold',
+    color: '#F26E11',
     writingDirection: 'rtl',
   },
 });

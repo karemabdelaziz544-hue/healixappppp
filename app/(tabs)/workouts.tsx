@@ -19,6 +19,9 @@ import { FadeInView } from '../../components/animations/FadeInView';
 import { SlideInView } from '../../components/animations/SlideInView';
 import { SkeletonLoader } from '../../components/animations/SkeletonLoader';
 
+import { useEntitlements } from '../../src/features/subscriptions/useEntitlements';
+import { PremiumGate } from '../../src/components/PremiumGate';
+
 const { width } = Dimensions.get('window');
 
 // Premium Vitality Brand Colors
@@ -77,6 +80,7 @@ export default function WorkoutsScreen() {
   const { currentProfile } = useFamily();
   const userId = currentProfile?.id;
   const { userLifecycleState, isGuardLoading } = useSubscriptionGuard();
+  const { canUse, userRole } = useEntitlements();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -101,7 +105,7 @@ export default function WorkoutsScreen() {
       // 1. Fetch user's active plan
       const { data: planData } = await supabase
         .from('plans')
-        .select('*')
+        .select('id, title, plan_type, status, created_at, start_date, end_date')
         .eq('user_id', userId)
         .eq('status', 'active')
         .eq('plan_type', 'workout')
@@ -115,17 +119,18 @@ export default function WorkoutsScreen() {
         setLoading(false);
         return;
       }
-      setActivePlan(planData);
+      setActivePlan(planData as any);
 
       // 2. Fetch all plan tasks of type 'workout'
       const { data: allTasks } = await supabase
         .from('plan_tasks')
-        .select('*')
+        .select('id, plan_id, title, task_type, content, order_index, time_of_day, target_day_num, target_weekday, duration_mins, calories_burned, video_url')
         .eq('plan_id', planData.id)
         .eq('task_type', 'workout')
-        .order('order_index', { ascending: true });
+        .order('order_index', { ascending: true })
+        .limit(50);
 
-      const workoutTasks = (allTasks || []) as PlanTask[];
+      const workoutTasks = (allTasks || []) as any as PlanTask[];
 
       // 3. Fetch completion status logs for the selected date
       const { data: logs } = await supabase
@@ -303,39 +308,19 @@ export default function WorkoutsScreen() {
   const totalCount = workouts.length;
   const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
-  // 🔒 Lead check
-  if (!isGuardLoading && userLifecycleState === 'lead') {
+  // 🔒 Freemium Check — Lock Workout Program for Free users
+  if (!canUse('WORKOUT_PLAN') && userRole !== 'admin' && userRole !== 'doctor') {
     return (
-      <LockedTabView
-        icon="fitness"
-        iconColor={VITALITY_COLORS.accentOrange}
-        iconBg="#FDF2E9"
-        title="افتح مكتبة التمارين المخصصة"
-        subtitle="اشترك الآن للحصول على خطط تمارين رياضية مخصصة لحالتك الصحية وأهدافك البدنية تحت إشراف طبي كامل."
-        buttonText="اشترك الآن"
-        onPress={() => router.push('/subscriptions')}
-      />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <View style={styles.headerTitleContainer}>
+            <Ionicons name="barbell" size={24} color={VITALITY_COLORS.primaryDark} style={styles.headerTitleIcon} />
+            <Text style={styles.headerTitle}>تماريني اليومية</Text>
+          </View>
+        </View>
+        <PremiumGate featureId="WORKOUT_PLAN" screenName="WorkoutsScreen" />
+      </SafeAreaView>
     );
-  }
-
-  // 🔒 Onboarding check
-  if (!isGuardLoading && userLifecycleState === 'onboarding') {
-    return (
-      <LockedTabView
-        icon="clipboard"
-        iconColor={VITALITY_COLORS.primaryDark}
-        iconBg="#EBF5F2"
-        title="صمم خطتك الرياضية"
-        subtitle="يرجى إكمال بياناتك الطبية والبدنية ليتمكن فريقنا الطبي والرياضي من صياغة تمارينك اليومية."
-        buttonText="اذهب للملف الشخصي"
-        onPress={() => router.push('/(tabs)')}
-      />
-    );
-  }
-
-  // ⏰ Expired check
-  if (!isGuardLoading && userLifecycleState === 'expired') {
-    return <ExpiredState />;
   }
 
   return (

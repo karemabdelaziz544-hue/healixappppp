@@ -4,8 +4,8 @@ import { AIMessage } from '../types';
 
 export const healixAIService = {
   generateResponse: async (messages: AIMessage[], profileId?: string): Promise<string> => {
-    // Format messages for the Groq API structure: user / assistant
-    const formattedMessages = messages.map(m => ({
+    // Format last 10 messages for the Groq API structure (sliding memory window)
+    const formattedMessages = messages.slice(-10).map(m => ({
       role: m.role,
       content: m.content
     }));

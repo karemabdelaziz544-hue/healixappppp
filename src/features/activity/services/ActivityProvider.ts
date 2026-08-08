@@ -154,7 +154,6 @@ export class AppleHealthActivityProvider implements ActivityProvider {
 
       const result = await Pedometer.getStepCountAsync(start, end);
       const steps = result?.steps || 0;
-      logger.log(`[AppleHealthActivityProvider] getStepsForPeriod returned ${steps} steps`);
       return steps;
     } catch (e) {
       logger.error('[AppleHealthActivityProvider] failed getting steps:', e);

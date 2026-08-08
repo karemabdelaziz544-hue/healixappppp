@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFamily } from '../src/context/FamilyContext';
 import { useRouter } from 'expo-router';
 import Skeleton from '../components/Skeleton';
-import { SubscriptionConfig } from '../constants/subscriptionConfig';
+import { BILLING_DURATIONS, BillingDurationKey, MAX_ADDITIONAL_LICENSES, SubscriptionConfig } from '../constants/subscriptionConfig';
 import { usePaymentHistory, useSubscriptionDetails } from '../src/features/subscriptions/hooks/useSubscriptionData';
 import { AnimatedButton } from '../components/animations/AnimatedButton';
 import { FadeInView } from '../components/animations/FadeInView';
@@ -41,14 +41,21 @@ const CARD_SHADOW = {
   elevation: 3,
 };
 
+import { useLocalSearchParams } from 'expo-router';
+
 export default function SubscriptionsScreen() {
   const router = useRouter();
+  const { returnUrl, featureId } = useLocalSearchParams<{ returnUrl?: string; featureId?: string }>();
   const insets = useSafeAreaInsets();
   
   const { currentProfile, familyMembers, accountProfileId } = useFamily();
   const userId = accountProfileId;
   const subMembers = familyMembers.filter(m => m.manager_id === userId);
   const subAccountsCount = subMembers.length;
+
+  // Phase 4 Duration & Licensing Selection
+  const [selectedDuration, setSelectedDuration] = React.useState<BillingDurationKey>('MONTHLY');
+  const [additionalLicenses, setAdditionalLicenses] = React.useState<number>(0);
 
   // Use decomposed hooks
   const { loading: historyLoading, refreshing, history, pendingRequest, onRefresh } = usePaymentHistory(userId);
@@ -70,9 +77,8 @@ export default function SubscriptionsScreen() {
   const activeMemberCount = details?.included_member_count ?? subAccountsCount;
 
   // Determine shown cost
-  const displayedTotalPrice = pendingRequest
-    ? pendingRequest.amount
-    : SubscriptionConfig.estimateTotal(familyQuota);
+  const calculatedPrice = SubscriptionConfig.calculateTotalPrice(selectedDuration, additionalLicenses);
+  const displayedTotalPrice = pendingRequest ? pendingRequest.amount : calculatedPrice;
 
   // Invoice Bottom Sheet state
   const [invoiceModalVisible, setInvoiceModalVisible] = React.useState(false);
@@ -162,7 +168,18 @@ export default function SubscriptionsScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
+        <TouchableOpacity
+          onPress={() => {
+            if (returnUrl) {
+              router.replace(returnUrl as any);
+            } else if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(tabs)');
+            }
+          }}
+          style={styles.headerBackBtn}
+        >
           <Ionicons name="arrow-forward" size={24} color={C.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>اشتراكي</Text>
@@ -222,6 +239,65 @@ export default function SubscriptionsScreen() {
               <Text style={styles.quickStatusLabel}>التجديد</Text>
               <Text style={styles.quickStatusValue}>{formatDateShort(currentProfile?.subscription_end_date)}</Text>
             </View>
+          </View>
+        </View>
+
+        {/* ─── Phase 4 Duration Selector ─── */}
+        <View style={styles.durationSection}>
+          <Text style={styles.sectionHeaderTitle}>اختر مدة اشتراكك في Healix Premium ✨</Text>
+          <View style={styles.durationGrid}>
+            {(Object.keys(BILLING_DURATIONS) as BillingDurationKey[]).map((key) => {
+              const item = BILLING_DURATIONS[key];
+              const isSelected = selectedDuration === key;
+              return (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.durationCard, isSelected && styles.durationCardSelected]}
+                  onPress={() => setSelectedDuration(key)}
+                  activeOpacity={0.85}
+                >
+                  {item.discountBadge && (
+                    <View style={styles.discountBadgeWrap}>
+                      <Text style={styles.discountBadgeText}>{item.discountBadge}</Text>
+                    </View>
+                  )}
+                  <Text style={[styles.durationCardLabel, isSelected && styles.durationCardLabelSelected]}>
+                    {item.label}
+                  </Text>
+                  <Text style={[styles.durationCardPrice, isSelected && styles.durationCardPriceSelected]}>
+                    {SubscriptionConfig.formatPrice(item.basePrice)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* ─── Phase 4 Additional Family License Stepper ─── */}
+        <View style={styles.stepperSection}>
+          <View style={styles.stepperHeaderRow}>
+            <View style={{ flex: 1, alignItems: 'flex-start' }}>
+              <Text style={styles.stepperTitle}>تراخيص العائلة الإضافية 👨‍👩‍👧</Text>
+              <Text style={styles.stepperSub}>الحساب الرئيسي مشمول دائماً. يمكنك إضافة حتى {MAX_ADDITIONAL_LICENSES} حسابات فرعية.</Text>
+            </View>
+          </View>
+
+          <View style={styles.stepperControlRow}>
+            {[0, 1, 2, 3].map((num) => {
+              const isSelected = additionalLicenses === num;
+              return (
+                <TouchableOpacity
+                  key={num}
+                  style={[styles.stepperNumBtn, isSelected && styles.stepperNumBtnSelected]}
+                  onPress={() => setAdditionalLicenses(num)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.stepperNumText, isSelected && styles.stepperNumTextSelected]}>
+                    {num === 0 ? '0 (الرئيسي فقط)' : `+${num} فرد`}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
@@ -644,6 +720,212 @@ const styles = StyleSheet.create({
   modalDivider: { height: 1, backgroundColor: C.surfaceContainerLow },
   pendingStatusBadge: { backgroundColor: C.warningBg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   pendingStatusText: { fontSize: 11, fontWeight: '700', color: C.warningText },
+
+  // Trust Banner
+  trustBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FEF3C7',
+    padding: 14,
+    borderRadius: 16,
+    marginVertical: 16,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  trustBannerText: {
+    fontSize: 13,
+    fontFamily: 'Thmanyah-Bold',
+    color: '#92400E',
+    textAlign: 'center',
+  },
+
+  // Benefits Section
+  benefitsSection: {
+    marginVertical: 16,
+  },
+  sectionHeaderTitle: {
+    fontSize: 18,
+    fontFamily: 'Thmanyah-Bold',
+    color: C.primary,
+    marginBottom: 14,
+    textAlign: 'right',
+  },
+  benefitGrid: {
+    gap: 12,
+  },
+  benefitCard: {
+    backgroundColor: C.cardSurface,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: C.surfaceContainerLow,
+    alignItems: 'flex-start',
+    ...CARD_SHADOW,
+  },
+  benefitCardIcon: {
+    fontSize: 28,
+    marginBottom: 8,
+  },
+  benefitCardTitle: {
+    fontSize: 15,
+    fontFamily: 'Thmanyah-Bold',
+    color: C.primary,
+    marginBottom: 4,
+  },
+  benefitCardDesc: {
+    fontSize: 12,
+    fontFamily: 'Thmanyah-Regular',
+    color: C.onSurfaceVariant,
+    lineHeight: 18,
+    textAlign: 'right',
+  },
+
+  // Comparison Matrix Table
+  matrixSection: {
+    marginVertical: 16,
+  },
+  matrixTable: {
+    backgroundColor: C.cardSurface,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: C.surfaceContainerLow,
+    ...CARD_SHADOW,
+  },
+  matrixRowHeader: {
+    flexDirection: 'row',
+    backgroundColor: C.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+  },
+  matrixRow: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  matrixRowAlt: {
+    backgroundColor: '#F9FAFB',
+  },
+  matrixCell: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 12,
+    fontFamily: 'Thmanyah-Regular',
+    color: C.primary,
+  },
+  matrixCellTitle: {
+    flex: 2,
+    textAlign: 'right',
+    fontFamily: 'Thmanyah-Bold',
+  },
+  // Phase 4 Duration Cards
+  durationSection: {
+    marginBottom: 16,
+  },
+  durationGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  durationCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: C.cardSurface,
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  durationCardSelected: {
+    backgroundColor: '#ECFDF5',
+    borderColor: C.primary,
+  },
+  discountBadgeWrap: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginBottom: 6,
+  },
+  discountBadgeText: {
+    fontSize: 10,
+    fontFamily: 'Thmanyah-Bold',
+    color: '#FFFFFF',
+  },
+  durationCardLabel: {
+    fontSize: 13,
+    fontFamily: 'Thmanyah-Bold',
+    color: '#374151',
+    marginBottom: 4,
+  },
+  durationCardLabelSelected: {
+    color: C.primary,
+  },
+  durationCardPrice: {
+    fontSize: 14,
+    fontFamily: 'Thmanyah-Bold',
+    color: '#111827',
+  },
+  durationCardPriceSelected: {
+    color: C.primary,
+  },
+
+  // Phase 4 Stepper
+  stepperSection: {
+    backgroundColor: C.cardSurface,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: C.surfaceContainerLow,
+    ...CARD_SHADOW,
+  },
+  stepperHeaderRow: {
+    marginBottom: 12,
+  },
+  stepperTitle: {
+    fontSize: 15,
+    fontFamily: 'Thmanyah-Bold',
+    color: C.primary,
+    marginBottom: 2,
+  },
+  stepperSub: {
+    fontSize: 11,
+    fontFamily: 'Thmanyah-Regular',
+    color: C.onSurfaceVariant,
+    lineHeight: 16,
+  },
+  stepperControlRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  stepperNumBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  stepperNumBtnSelected: {
+    backgroundColor: C.primary,
+    borderColor: C.primary,
+  },
+  stepperNumText: {
+    fontSize: 12,
+    fontFamily: 'Thmanyah-Bold',
+    color: '#374151',
+  },
+  stepperNumTextSelected: {
+    color: '#FFFFFF',
+  },
   modalCloseBtn: { marginTop: 24, backgroundColor: C.surfaceContainerLow, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
   modalCloseBtnText: { fontSize: 14, fontWeight: '700', color: C.primary },
 });

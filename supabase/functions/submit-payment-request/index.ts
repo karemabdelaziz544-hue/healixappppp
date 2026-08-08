@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
     const extension = extensionByMime[input.contentType];
 
     const { data: profile, error: profileError } = await userClient
-      .from('profiles').select('id').or(`auth_user_id.eq.${user.id},id.eq.${user.id}`).is('manager_id', null).maybeSingle();
+      .from('profiles').select('id').eq('id', user.id).is('manager_id', null).maybeSingle();
     if (profileError || !profile) return response({ error: 'تعذر التحقق من الحساب.' }, 403);
 
     receiptPath = `receipts/${profile.id}/${crypto.randomUUID()}.${extension}`;

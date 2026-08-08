@@ -32,16 +32,12 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
-const getEnvVar = (name: string, fallback: string): string => {
-  const val = process.env[name];
-  if (typeof val === 'string' && val.trim().length > 0) {
-    return val.trim();
-  }
-  return fallback;
+export const generateCorrelationId = (): string => {
+  return `req_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 9)}`;
 };
 
-const supabaseUrl = getEnvVar('EXPO_PUBLIC_SUPABASE_URL', 'https://bruafdfakvdreagfeqau.supabase.co');
-const supabaseAnonKey = getEnvVar('EXPO_PUBLIC_SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJydWFmZGZha3ZkcmVhZ2ZlcWF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0ODAzNTYsImV4cCI6MjA4MDA1NjM1Nn0.bIFFTG3McJhYZJYNmhn_24099ahNNdb8oxPsLOGwtZ8');
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
 /**
  * XHR-based fetch fallback.

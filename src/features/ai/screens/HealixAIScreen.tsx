@@ -21,11 +21,34 @@ import { AITypingIndicator } from '../components/AITypingIndicator';
 import { showToast } from '@/components/AppToast';
 import { AIMessage } from '../types';
 
+import { useEntitlements } from '@/src/features/subscriptions/useEntitlements';
+import { PremiumGate } from '@/src/components/PremiumGate';
+
+import { HELI_BRAND } from '../constants/heliBrand';
+
 export default function HealixAIScreen() {
   const router = useRouter();
+  const { canUse, userRole } = useEntitlements();
   const { conversation, loading, sendMessage } = useHealixAI();
   const [inputText, setInputText] = React.useState('');
   const flatListRef = useRef<FlatList>(null);
+
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)');
+    }
+  }, [router]);
+
+  if (!canUse('AI_CHAT') && userRole !== 'admin' && userRole !== 'doctor') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <AIHeader onBack={handleBack} />
+        <PremiumGate featureId="AI_CHAT" screenName="HealixAIScreen" />
+      </SafeAreaView>
+    );
+  }
 
   const handleSend = useCallback(() => {
     if (!inputText.trim()) return;
@@ -40,14 +63,6 @@ export default function HealixAIScreen() {
   const handleAttachmentPress = useCallback(() => {
     showToast.error('سيتم دعم إرسال الصور قريبًا');
   }, []);
-
-  const handleBack = useCallback(() => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/(tabs)');
-    }
-  }, [router]);
 
   const renderItem = useCallback(({ item }: { item: AIMessage }) => {
     return <AIMessageBubble message={item} />;
@@ -110,7 +125,7 @@ export default function HealixAIScreen() {
 
             <TextInput
               style={styles.textInput}
-              placeholder="اسألني عن التغذية أو السعرات..."
+              placeholder={HELI_BRAND.chatScreen.inputPlaceholder}
               placeholderTextColor={AppColors.textMuted}
               value={inputText}
               onChangeText={setInputText}

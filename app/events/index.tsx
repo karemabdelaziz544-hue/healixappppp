@@ -147,23 +147,25 @@ export default function EventsListScreen() {
       // Fetch visible events
       const { data: evData, error: evErr } = await supabase
         .from('events')
-        .select('*')
+        .select('id, title, subtitle, image_url, event_date, location, points_reward, max_attendees, is_visible')
         .eq('is_visible', true)
-        .order('event_date', { ascending: true });
+        .order('event_date', { ascending: true })
+        .limit(50);
 
       if (evErr) throw evErr;
-      setEvents(evData || []);
+      setEvents((evData || []) as any);
 
       if (user) {
         // Fetch user bookings
         const { data: bkData, error: bkErr } = await supabase
           .from('event_bookings')
-          .select('*, event:events(*)')
+          .select('id, event_id, status, created_at, event:events(id, title, event_date, location, image_url)')
           .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(50);
 
         if (bkErr) throw bkErr;
-        setMyBookings(bkData || []);
+        setMyBookings((bkData || []) as any);
       }
     } catch (err: any) {
       showToast.error('حدث خطأ أثناء تحميل الفعاليات');

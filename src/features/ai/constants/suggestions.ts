@@ -1,10 +1,3 @@
-export const SUGGESTED_QUESTIONS = [
-  'كم احتياجي من السعرات؟',
-  'اقترح لي وجبة صحية',
-  'كيف أزيد البروتين؟',
-  'هل الفاكهة مسموحة في الدايت؟',
-  'كيف أقلل الجوع؟',
-  'كيف أحافظ على وزني؟',
-  'أفضل سناك صحي',
-  'هل الأرز يزيد الوزن؟'
-];
+import { HELI_BRAND } from './heliBrand';
+
+export const SUGGESTED_QUESTIONS = HELI_BRAND.chatScreen.quickSuggestions;

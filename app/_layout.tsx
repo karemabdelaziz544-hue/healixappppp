@@ -68,6 +68,8 @@ function AppLayoutContent() {
   );
 }
 
+import { EntitlementProvider } from '../src/features/subscriptions/EntitlementProvider';
+
 function RootLayout() {
   const [fontsLoaded] = useFonts({
     'Thmanyah-Light': require('../assets/fonts/thmanyahsans-Light.otf'),
@@ -85,7 +87,9 @@ function RootLayout() {
     <ErrorBoundary>
       <AuthProvider>
         <FamilyProvider>
-          <AppLayoutContent />
+          <EntitlementProvider>
+            <AppLayoutContent />
+          </EntitlementProvider>
         </FamilyProvider>
       </AuthProvider>
       <AppToastProvider />

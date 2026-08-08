@@ -3,7 +3,7 @@ import { Text, TextInput } from '@/components/AppText';
  * InBodyTab — قياسات الـ InBody والرسوم البيانية
  */
 import { Ionicons } from '@expo/vector-icons';
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import { ActivityIndicator, Dimensions, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';;
 import { LineChart } from 'react-native-chart-kit';
 import type { InbodyRecord } from '../../types';
@@ -48,7 +48,12 @@ const HistoryCard = memo(({ record, onPress, index }: { record: InbodyRecord, on
   );
 });
 
+import { useEntitlements } from '../subscriptions/useEntitlements';
+import { PremiumGate } from '../../components/PremiumGate';
+
 export default function InBodyTab({ userId, inbodyRecords, uploading, setUploading, onRefresh }: InBodyTabProps) {
+  const { canUse, userRole } = useEntitlements();
+  const [showInbodyAiGate, setShowInbodyAiGate] = useState(false);
   const { state, actions } = useInBody(userId, inbodyRecords, onRefresh, setUploading);
 
   const {
@@ -110,7 +115,17 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
       {/* --- أزرار الإضافة --- */}
       {!showForm && (
         <FadeInView delay={300} style={styles.actionRow}>
-          <AnimatedButton style={[styles.actionBtn, { borderColor: '#F97316', backgroundColor: '#FFF7ED' }]} onPress={handleAnalyzeImage} disabled={analyzing}>
+          <AnimatedButton
+            style={[styles.actionBtn, { borderColor: '#F97316', backgroundColor: '#FFF7ED' }]}
+            onPress={() => {
+              if (!canUse('AI_INBODY_ANALYSIS') && userRole !== 'admin' && userRole !== 'doctor') {
+                setShowInbodyAiGate(true);
+              } else {
+                handleAnalyzeImage();
+              }
+            }}
+            disabled={analyzing}
+          >
             {analyzing ? <ActivityIndicator color="#F97316" /> : <Ionicons name="color-wand" size={28} color="#F97316" />}
             <Text style={[styles.actionBtnText, { color: '#F97316' }]}>{analyzing ? 'جاري التحليل...' : 'قراءة ذكية للورقة'}</Text>
           </AnimatedButton>
@@ -120,6 +135,18 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
           </AnimatedButton>
         </FadeInView>
       )}
+
+      {/* Modal for AI InBody Analysis Premium Gate */}
+      <Modal transparent visible={showInbodyAiGate} animationType="fade" onRequestClose={() => setShowInbodyAiGate(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ width: '100%', backgroundColor: '#FFF', borderRadius: 24, padding: 24, alignItems: 'center' }}>
+            <TouchableOpacity style={{ alignSelf: 'flex-start', marginBottom: 12 }} onPress={() => setShowInbodyAiGate(false)}>
+              <Ionicons name="close" size={28} color="#4B5563" />
+            </TouchableOpacity>
+            <PremiumGate featureId="AI_INBODY_ANALYSIS" screenName="InBodyTab" />
+          </View>
+        </View>
+      </Modal>
 
       {/* --- فورم الإضافة --- */}
       {showForm && (
@@ -206,10 +233,16 @@ export default function InBodyTab({ userId, inbodyRecords, uploading, setUploadi
 
                 {/* التقرير الذكي */}
                 {selectedRecord.ai_summary ? (
-                  <View style={localStyles.modalReportBox}>
-                    <Text style={localStyles.modalReportTitle}><Ionicons name="sparkles" color="#F97316" /> التقرير والتحليل الذكي</Text>
-                    <Text style={localStyles.modalReportText}>{selectedRecord.ai_summary}</Text>
-                  </View>
+                  canUse('AI_INBODY_ANALYSIS') || userRole === 'admin' || userRole === 'doctor' ? (
+                    <View style={localStyles.modalReportBox}>
+                      <Text style={localStyles.modalReportTitle}><Ionicons name="sparkles" color="#F97316" /> التقرير والتحليل الذكي</Text>
+                      <Text style={localStyles.modalReportText}>{selectedRecord.ai_summary}</Text>
+                    </View>
+                  ) : (
+                    <View style={{ marginTop: 12 }}>
+                      <PremiumGate featureId="AI_INBODY_ANALYSIS" screenName="InBodyTab" />
+                    </View>
+                  )
                 ) : (
                   <Text style={localStyles.noReportText}>لا يوجد تقرير ذكي مسجل لهذا القياس.</Text>
                 )}
